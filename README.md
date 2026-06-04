@@ -32,6 +32,11 @@ The installer walks you through every step interactively:
 | 5    | `.env` merge — writes keys to `~/.hermes/.env` (chmod 600) |
 | 6    | Optional autostart — drops `voice-live-autostart.json` so the bridge joins on gateway boot |
 
+**Scripted / CI mode:** add `--yes` (or `-y`) to auto-answer all prompts with defaults:
+```bash
+python3 installer/install.py --yes
+```
+
 No external CLI deps. Only requires `rich` (already in the Hermes venv). Pure stdlib otherwise.
 
 ---
