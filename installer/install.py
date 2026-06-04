@@ -167,8 +167,9 @@ KEY_SPECS: list[KeySpec] = [
 class UI:
     """Thin console wrapper. Uses rich if available, else plain text."""
 
-    def __init__(self) -> None:
+    def __init__(self, auto_yes: bool = False) -> None:
         self.has_rich = HAS_RICH
+        self.auto_yes = auto_yes
         if self.has_rich:
             self.console = Console()
         self.answers: dict[str, str] = {}
@@ -231,6 +232,9 @@ class UI:
 
     # -- input --
     def prompt(self, question: str, default: str = "", secret: bool = False) -> str:
+        if self.auto_yes:
+            self.ok(f"{question} → [{default!r}] (auto)")
+            return default
         if secret:
             if self.has_rich:
                 return Prompt.ask(f"[cyan]{question}[/cyan]", password=True, default=default)
@@ -241,6 +245,9 @@ class UI:
         return raw or default
 
     def confirm(self, question: str, default: bool = True) -> bool:
+        if self.auto_yes:
+            self.ok(f"{question} → {'yes' if default else 'no'} (auto)")
+            return default
         if self.has_rich:
             return Confirm.ask(f"[cyan]{question}[/cyan]", default=default)
         raw = input(f"{question} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
@@ -250,6 +257,10 @@ class UI:
 
     def menu(self, question: str, options: list[tuple[str, str]]) -> str:
         """Pick one of `options`, where each is (key, label). Returns key."""
+        if self.auto_yes:
+            choice = options[0][0]
+            self.ok(f"{question} → {choice} (auto)")
+            return choice
         if self.has_rich:
             t = Table(show_header=False, box=None)
             t.add_column("k", style="cyan", no_wrap=True)
@@ -689,7 +700,13 @@ def step_summary(ui: UI, preflight: dict[str, Any], install: dict[str, Any],
 # ============================================================================
 
 def main() -> int:
-    ui = UI()
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--yes", "-y", action="store_true",
+                    help="Non-interactive mode: use defaults for all prompts")
+    args = ap.parse_args()
+
+    ui = UI(auto_yes=args.yes)
     ui.banner()
 
     if not Path("plugin").exists():
