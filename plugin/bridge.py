@@ -1,0 +1,2336 @@
+"""
+Discord Voice Live Bridge — In-Process Bridge
+=============================================
+Bypasses the Hermes agent turn loop. The Discord VoiceClient still lives in
+the gateway process, so this bridge runs as an asyncio task on that process
+and keeps all audio queues non-blocking for the main event loop.
+
+Pipeline:
+  Discord Voice → Opus Decode → 48kHz Stereo PCM
+    → Downsample → 16kHz Mono PCM
+    → Base64 → Gemini WSS (realtimeInput)
+    → Gemini WSS (serverContent.inlineData)
+    → 24kHz Mono PCM → Upsample → 48kHz Stereo PCM
+    → Discord AudioSource (thread-safe queue)
+
+CRITICAL: discord.py calls AudioSource.read() from a native thread.
+ALL queues between asyncio and read() MUST be threading.Queue, not asyncio.Queue.
+"""
+
+import ast
+import asyncio
+import base64
+import html
+import json
+import logging
+import os
+import queue
+import random
+import re
+import subprocess
+import sys
+import time
+import wave
+from http import HTTPStatus
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+from urllib.request import Request, urlopen
+from typing import Any, Optional, Dict, List, Callable
+
+import numpy as np
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("voice-live")
+
+# ── Gemini Live API Constants ──────────────────────────────────────────────
+GEMINI_WS_URL = (
+    "wss://generativelanguage.googleapis.com/ws/"
+    "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-live-preview")
+GEMINI_MODEL_FALLBACKS = [
+    model.strip()
+    for model in os.getenv(
+        "GEMINI_LIVE_MODEL_FALLBACKS",
+        "gemini-3.1-flash-live-preview,"
+        "gemini-2.5-flash-native-audio-preview-12-2025,"
+        "gemini-2.5-flash-native-audio-preview-09-2025",
+    ).split(",")
+    if model.strip()
+]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Aoede")
+INITIAL_GREETING = os.getenv(
+    "DISCORD_VOICE_LIVE_GREETING",
+    "I'm here.",
+)
+
+# Discord user IDs allowed to speak to the bot. Empty = allow all non-bot users.
+# Comma-separated list of Discord user IDs. e.g. "123456789,987654321"
+_ALLOWED_SPEAKER_IDS_RAW = os.getenv("DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS", "")
+ALLOWED_SPEAKER_IDS: Optional[List[int]] = (
+    [int(uid.strip()) for uid in _ALLOWED_SPEAKER_IDS_RAW.split(",") if uid.strip().isdigit()]
+    if _ALLOWED_SPEAKER_IDS_RAW.strip()
+    else None
+)
+
+# ── Audio Constants ────────────────────────────────────────────────────────
+DISCORD_SR = 48000
+DISCORD_CH = 2
+GEMINI_IN_SR = 16000
+GEMINI_IN_CH = 1
+GEMINI_OUT_SR = 24000
+GEMINI_OUT_CH = 1
+SAMPLE_WIDTH = 2
+FRAME_MS = 20
+FRAME_SIZE = int(DISCORD_SR * FRAME_MS / 1000) * DISCORD_CH * SAMPLE_WIDTH
+OUTPUT_PREROLL_MS = int(os.getenv("DISCORD_VOICE_LIVE_OUTPUT_PREROLL_MS", "320"))
+OUTPUT_FADE_IN_MS = int(os.getenv("DISCORD_VOICE_LIVE_OUTPUT_FADE_IN_MS", "0"))
+OUTPUT_READ_WAIT_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_OUTPUT_READ_WAIT_SECONDS", "0.005"))
+OUTPUT_TAIL_PAD_MS = int(os.getenv("DISCORD_VOICE_LIVE_OUTPUT_TAIL_PAD_MS", "240"))
+OUTPUT_CLEAR_ON_INTERRUPT = os.getenv(
+    "DISCORD_VOICE_LIVE_CLEAR_ON_INTERRUPT",
+    "true",
+).lower() in {"1", "true", "yes", "on"}
+AUTO_LEAVE_QUIET_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS", "900"))
+AUTO_LEAVE_MIN_UPTIME_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS", "120"))
+VOICE_LEAVE_PHRASES = tuple(
+    phrase.strip().lower()
+    for phrase in os.getenv(
+        "DISCORD_VOICE_LIVE_LEAVE_PHRASES",
+        "leave voice,disconnect from voice,end voice,stop voice,leave the call,disconnect,goodbye hermes,bye,hang up,exit voice",
+    ).split(",")
+    if phrase.strip()
+)
+
+# ── Idle prompt ("are you still there?") ─────────────────────────────────
+IDLE_PROMPT_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS", "120"))
+IDLE_PROMPT_GRACE_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS", "60"))
+IDLE_PROMPT_TEXT = os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT", "Are you still there?")
+
+# Gemini Live accepts video frames, but the documented low-cost path is capped at 1fps.
+VIDEO_ENABLED = os.getenv("DISCORD_VOICE_LIVE_VIDEO_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+VIDEO_MAX_FPS = min(float(os.getenv("DISCORD_VOICE_LIVE_VIDEO_MAX_FPS", "1")), 1.0)
+VIDEO_WHEN_RECENT_AUDIO_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS", "8"))
+VIDEO_MAX_BYTES = int(os.getenv("DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES", str(512 * 1024)))
+TYPING_SOUND_ENABLED = os.getenv("DISCORD_VOICE_LIVE_TYPING_SOUND", "true").lower() in {"1", "true", "yes", "on"}
+TYPING_SFX_PATH = os.getenv("DISCORD_VOICE_LIVE_TYPING_SFX", "").strip()
+TYPING_SFX_VOLUME = float(os.getenv("DISCORD_VOICE_LIVE_TYPING_SFX_VOLUME", "0.35"))
+TYPING_SYNTH_FALLBACK = os.getenv(
+    "DISCORD_VOICE_LIVE_TYPING_SYNTH_FALLBACK", "false"
+).lower() in {"1", "true", "yes", "on"}
+NOTES_DIR = Path(os.getenv("DISCORD_VOICE_LIVE_NOTES_DIR", str(Path.home() / ".hermes" / "voice-live-notes")))
+
+# ── Voice Tool Integration ────────────────────────────────────────────────
+SPOTIFY_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_SPOTIFY_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+WEB_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_WEB_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+
+# ── Honcho context injection ──────────────────────────────
+HONCHO_CONTEXT_ENABLED = os.getenv(
+    "VOICE_LIVE_HONCHO_CONTEXT", "true"
+).lower() in {"1", "true", "yes", "on"}
+HONCHO_CONTEXT_MAX_CHARS = int(os.getenv("VOICE_LIVE_HONCHO_MAX_CHARS", "1200"))
+
+# ── Peer name ───────────────────────────────────────────────
+default_user_id = os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
+HONCHO_PEER_NAME = os.getenv("VOICE_LIVE_HONCHO_PEER", os.getenv("HONCHO_PEER_NAME", default_user_id or "user"))
+
+BASE_SYSTEM_PROMPT = (
+    "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, ask clarifying questions, and turn vague talk into concrete next steps. You are allowed to challenge weak ideas directly but constructively. The system saves transcripts for later notes, so do not claim you cannot take notes. Ask frequent short clarifying questions — who owns this, deadline, priority, missing context. Prefer one focused question at a time. Keep replies short and natural. Do not announce that you are connected or ready unless asked. If speech is unclear, ask a brief clarification instead of guessing. Avoid repeating yourself."
+    "\n\n"
+    "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time."
+    "\n\n"
+    "TOOL BEHAVIOUR: When you need to run a tool (Spotify, web search, etc.), you will hear a brief typing click sound while it executes. This is normal — it means the tool is working. Tools run in background threads and will not freeze or delay the conversation. Wait for the result, then respond naturally. Do not apologise for using tools."
+)
+
+async def _build_honcho_context() -> str:
+    """Fetch peer representation + card from Honcho for the system prompt.
+
+    Uses the honcho client SDK (from honcho.client import Honcho) to avoid
+    __init__.py export issues. Falls back to HTTP if SDK is unavailable.
+    """
+    if not HONCHO_CONTEXT_ENABLED:
+        return ""
+    try:
+        import json
+        from pathlib import Path
+
+        honcho_json = Path.home() / ".hermes" / "honcho.json"
+        if not honcho_json.exists():
+            return ""
+        with open(honcho_json, "r") as f:
+            data = json.load(f)
+
+        host = data.get("hosts", {}).get("hermes", {})
+        base_url = host.get("baseUrl") or data.get("baseUrl") or data.get("base_url") or "http://127.0.0.1:8000"
+        workspace = host.get("workspace") or data.get("workspace") or data.get("app_id") or "hermes"
+        # Allow honcho.json to override the env-derived peer name
+        peer_name = (
+            host.get("peerName")
+            or data.get("peerName")
+            or host.get("peer_name")
+            or data.get("peer_name")
+            or HONCHO_PEER_NAME
+            or "user"
+        )
+        api_key = host.get("apiKey") or data.get("apiKey") or data.get("api_key")
+
+        # 1. Try SDK first (from honcho.client to bypass __init__ shadow)
+        try:
+            from honcho.client import Honcho
+
+            if not api_key:
+                return ""
+
+            h = Honcho(workspace_id=workspace, base_url=base_url, api_key=api_key)
+            peer = h.peer(id=peer_name)
+
+            repr_text = ""
+            try:
+                repr_text = peer.representation() or ""
+            except Exception:
+                pass
+
+            card = []
+            try:
+                card = peer.get_card() or []
+            except Exception:
+                pass
+
+            parts = []
+            if repr_text:
+                parts.append(repr_text)
+            if card:
+                parts.append("Known facts about the user:\n" + "\n".join(f"- {c}" for c in card))
+            combined = "\n\n".join(parts)[:HONCHO_CONTEXT_MAX_CHARS]
+            if combined:
+                return f"\n\n--- USER MEMORY CONTEXT ---\n{combined}\n--- END CONTEXT ---"
+            return ""
+
+        except ImportError:
+            # SDK not available — fall through to HTTP fallback
+            pass
+
+        # 2. HTTP fallback (for cases where SDK import fails)
+        try:
+            import httpx
+        except ImportError:
+            return ""
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client:
+            # List workspaces (v3 uses POST)
+            ws_resp = await client.post("/v3/workspaces/list", headers=headers, json={})
+            if ws_resp.status_code == 401:
+                logger.warning("Honcho context injection: 401 — check honcho.json apiKey")
+                return ""
+            ws_resp.raise_for_status()
+            workspaces = ws_resp.json()
+            ws_id = None
+            items = workspaces.get("items", []) if isinstance(workspaces, dict) else workspaces
+            for ws in items:
+                if ws.get("name") == workspace or ws.get("id") == workspace:
+                    ws_id = ws.get("id")
+                    break
+            if not ws_id and items:
+                ws_id = items[0].get("id")
+            if not ws_id:
+                return ""
+
+            # List peers (v3 uses POST)
+            peer_resp = await client.post(
+                f"/v3/workspaces/{ws_id}/peers/list",
+                headers=headers,
+                json={},
+            )
+            peer_resp.raise_for_status()
+            peers = peer_resp.json()
+            peer_id = None
+            peer_items = peers.get("items", []) if isinstance(peers, dict) else peers
+            for p in peer_items:
+                if p.get("id") == peer_name:
+                    peer_id = p.get("id")
+                    break
+            if not peer_id:
+                return ""
+
+            # Fetch representation
+            repr_text = ""
+            try:
+                repr_resp = await client.get(
+                    f"/v3/workspaces/{ws_id}/peers/{peer_id}/representation",
+                    headers=headers,
+                )
+                if repr_resp.status_code == 200:
+                    repr_data = repr_resp.json()
+                    repr_text = repr_data.get("representation", "") or ""
+            except Exception:
+                pass
+
+            # Fetch card (conclusions)
+            card = []
+            try:
+                card_resp = await client.get(
+                    f"/v3/workspaces/{ws_id}/peers/{peer_id}/conclusions",
+                    headers=headers,
+                )
+                if card_resp.status_code == 200:
+                    card_data = card_resp.json()
+                    card_items = card_data if isinstance(card_data, list) else card_data.get("items", [])
+                    card = [item.get("conclusion", "") for item in card_items if item.get("conclusion")]
+            except Exception:
+                pass
+
+        parts = []
+        if repr_text:
+            parts.append(repr_text)
+        if card:
+            parts.append("Known facts about the user:\n" + "\n".join(f"- {c}" for c in card))
+        combined = "\n\n".join(parts)[:HONCHO_CONTEXT_MAX_CHARS]
+        if combined:
+            return f"\n\n--- USER MEMORY CONTEXT ---\n{combined}\n--- END CONTEXT ---"
+        return ""
+
+    except Exception as exc:
+        logger.warning("Honcho context injection failed: %s", exc)
+        return ""
+
+
+_SPOTIFY_FUNCTION_DECLARATIONS = [
+    {
+        "name": "spotify_play",
+        "description": "Start or resume Spotify playback. Optionally provide track URIs, a playlist/album URI, or a device ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "uris": {"type": "array", "items": {"type": "string"}, "description": "Track URIs to play directly"},
+                "context_uri": {"type": "string", "description": "Playlist or album URI to play"},
+                "device_id": {"type": "string", "description": "Target Spotify device ID"},
+            },
+        },
+    },
+    {
+        "name": "spotify_pause",
+        "description": "Pause Spotify playback.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "spotify_next",
+        "description": "Skip to the next track.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "spotify_previous",
+        "description": "Go to the previous track.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "spotify_get_state",
+        "description": "Get the current Spotify playback state: what's playing, volume, active device, progress.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "spotify_set_volume",
+        "description": "Set Spotify playback volume (0-100).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "volume_percent": {"type": "integer", "description": "Volume from 0 to 100"},
+            },
+            "required": ["volume_percent"],
+        },
+    },
+    {
+        "name": "spotify_search",
+        "description": "Search Spotify catalog for tracks, albums, artists, or playlists.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query text"},
+                "types": {"type": "array", "items": {"type": "string"}, "description": "One or more of: track, album, artist, playlist, show, episode"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "spotify_add_to_queue",
+        "description": "Add a track to the Spotify queue by its URI.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "uri": {"type": "string", "description": "Spotify track URI to add"},
+            },
+            "required": ["uri"],
+        },
+    },
+]
+
+_WEB_FUNCTION_DECLARATIONS = [
+    {
+        "name": "web_search",
+        "description": "Search the web for current information, facts, news, products, or research topics. Returns URLs, titles, and descriptions. Use this when answering time-sensitive questions or verifying current information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query"},
+                "limit": {"type": "integer", "description": "Maximum results to return (default 5)"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "web_extract",
+        "description": "Extract full content from specific web pages. Use after web_search to read a full article or page content.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "urls": {"type": "array", "items": {"type": "string"}, "description": "List of page URLs to extract"},
+            },
+            "required": ["urls"],
+        },
+    },
+]
+
+_LOCAL_FUNCTION_DECLARATIONS = [
+    {
+        "name": "local_weather",
+        "description": "Get current weather for a location. Defaults to Amsterdam, NL if no location provided. Returns temperature, conditions, wind.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City name or lat,lon. Defaults to Amsterdam."},
+            },
+        },
+    },
+    {
+        "name": "local_translate",
+        "description": "Translate text between languages. Auto-detects source if not specified. Supports Dutch, Romanian, English, Spanish.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to translate"},
+                "target_language": {"type": "string", "description": "Target language code or name: en, nl, ro, es"},
+                "source_language": {"type": "string", "description": "Optional source language. Auto-detected if omitted."},
+            },
+            "required": ["text", "target_language"],
+        },
+    },
+    {
+        "name": "local_time",
+        "description": "Get current time for a timezone or city. Defaults to local system time in Europe/Amsterdam.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "timezone": {"type": "string", "description": "Timezone like Europe/Amsterdam, UTC, or city."},
+            },
+        },
+    },
+    {
+        "name": "local_remind",
+        "description": "Store a voice reminder locally or list upcoming reminders. Action 'add' appends a note with optional minutes delay. Action 'list' shows stored reminders. Read-only append, never deletes anything.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["add", "list"], "description": "add or list"},
+                "text": {"type": "string", "description": "Reminder text (required for add)"},
+                "minutes": {"type": "integer", "description": "Minutes from now (optional, for add)"},
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "local_email",
+        "description": "List recent unread emails via Himalaya CLI. Returns sender, subject, date in a spoken-friendly list.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of emails to list (default 5)"},
+            },
+        },
+    },
+    {
+        "name": "local_systemd",
+        "description": "Check systemd user services status. Lists active services or checks a specific one. Read-only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Specific service name, e.g. hermes-gateway. If omitted, lists all active user services."},
+            },
+        },
+    },
+    {
+        "name": "local_docker",
+        "description": "List running Docker containers with names and status. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "local_tailscale",
+        "description": "Show Tailscale tailnet peers and their online status. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "local_notes",
+        "description": "Search voice call notes and transcripts for keywords. Returns matching entries with timestamps.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Keyword or phrase to search"},
+                "limit": {"type": "integer", "description": "Max results (default 5)"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "local_disk",
+        "description": "Check disk space usage for mounted filesystems. Returns human-readable usage. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "local_calc",
+        "description": "Evaluate a safe mathematical expression: + - * / ** parentheses sqrt abs sin cos log round. Returns numeric result.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string", "description": "Math expression, e.g. 500 * 1.21 or sqrt(256) + abs(-10)"},
+            },
+            "required": ["expression"],
+        },
+    },
+    {
+        "name": "local_uptime",
+        "description": "Get system uptime, load averages, and memory summary. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "local_news",
+        "description": "Get a brief summary of recent news headlines. Uses web search internally. Topic defaults to tech.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "News topic: AI, tech, general. Defaults to tech."},
+                "limit": {"type": "integer", "description": "Headlines to return (default 5)"},
+            },
+        },
+    },
+    {
+        "name": "local_youtube",
+        "description": "Search YouTube for videos by query. Returns titles and URLs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "limit": {"type": "integer", "description": "Results (default 5)"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "local_honcho",
+        "description": "Search personal memory and facts stored in Honcho. Look up past decisions, preferences, configurations, or identities. Returns matching memory excerpts.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Memory query or keyword to search"},
+                "limit": {"type": "integer", "description": "Max memory excerpts (default 5)"},
+            },
+            "required": ["query"],
+        },
+    },
+]
+
+LOCAL_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_LOCAL_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+
+
+def _ensure_hermes_agent_path() -> None:
+    hermes_agent = Path.home() / ".hermes" / "hermes-agent"
+    if str(hermes_agent) not in sys.path:
+        sys.path.insert(0, str(hermes_agent))
+
+
+def _run_spotify_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a Spotify tool call and return a dict for Gemini toolResponse."""
+    try:
+        import plugins.spotify.tools as spotify_tools
+    except Exception:
+        _ensure_hermes_agent_path()
+        try:
+            import plugins.spotify.tools as spotify_tools  # type: ignore[no-redef]
+        except Exception as exc:
+            logger.warning("Spotify tools import failed: %s", exc)
+            return {"error": f"Spotify tools not available: {exc}"}
+
+    try:
+        if name == "spotify_play":
+            result = spotify_tools._handle_spotify_playback({
+                "action": "play",
+                "uris": args.get("uris"),
+                "context_uri": args.get("context_uri"),
+                "device_id": args.get("device_id"),
+            })
+        elif name == "spotify_pause":
+            result = spotify_tools._handle_spotify_playback({"action": "pause"})
+        elif name == "spotify_next":
+            result = spotify_tools._handle_spotify_playback({"action": "next"})
+        elif name == "spotify_previous":
+            result = spotify_tools._handle_spotify_playback({"action": "previous"})
+        elif name == "spotify_get_state":
+            result = spotify_tools._handle_spotify_playback({"action": "get_state"})
+        elif name == "spotify_set_volume":
+            result = spotify_tools._handle_spotify_playback({
+                "action": "set_volume",
+                "volume_percent": args.get("volume_percent"),
+            })
+        elif name == "spotify_search":
+            result = spotify_tools._handle_spotify_search({
+                "query": args.get("query"),
+                "types": args.get("types", ["track"]),
+            })
+        elif name == "spotify_add_to_queue":
+            result = spotify_tools._handle_spotify_queue({
+                "action": "add",
+                "uri": args.get("uri"),
+                "device_id": args.get("device_id"),
+            })
+        else:
+            return {"error": f"Unknown Spotify tool: {name}"}
+
+        try:
+            parsed = json.loads(result)
+            if isinstance(parsed, dict) and parsed.get("error"):
+                return {"error": parsed["error"]}
+            return {"result": parsed}
+        except Exception:
+            return {"result": result}
+    except Exception as exc:
+        logger.exception("Spotify tool %s failed", name)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+_VOICE_DOMAIN_ALIASES = {
+    "cortesera.eu": "corticera.eu",
+    "cortesera.com": "corticera.eu",
+    "cortisera.eu": "corticera.eu",
+    "cortisera.com": "corticera.eu",
+    "cordisera.eu": "corticera.eu",
+    "cordisera.com": "corticera.eu",
+    "torticera.eu": "corticera.eu",
+    "torticera.com": "corticera.eu",
+}
+
+
+def _normalize_voice_web_text(value: str) -> str:
+    """Fix common voice-ASR variants for domains before web tool dispatch."""
+    text = str(value or "")
+    for alias, target in _VOICE_DOMAIN_ALIASES.items():
+        text = re.sub(rf"(?i)\b{re.escape(alias)}\b", target, text)
+    text = re.sub(
+        r"(?ix)\b[ct]\s*o\s*r\s*t\s*i\s*c\s*e\s*r\s*a\s*\.?\s*e\s*u\b",
+        "corticera.eu",
+        text,
+    )
+    text = re.sub(r"(?i)\bcorticera\s+eu\b", "corticera.eu", text)
+    return text
+
+
+def _normalize_voice_web_args(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(args or {})
+    if name == "web_search":
+        normalized["query"] = _normalize_voice_web_text(str(normalized.get("query", "")))
+    elif name == "web_extract":
+        urls = normalized.get("urls", [])
+        if isinstance(urls, str):
+            urls = [urls]
+        if isinstance(urls, list):
+            normalized["urls"] = [_normalize_voice_web_text(str(url)) for url in urls]
+    return normalized
+
+
+def _basic_extract_url(url: str) -> Dict[str, Any]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return {"url": url, "title": "", "content": "", "error": "Invalid HTTP URL"}
+    req = Request(
+        url,
+        headers={
+            "User-Agent": "HermesVoiceLive/1.0 (+https://github.com/NousResearch/hermes-agent)",
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.2",
+        },
+    )
+    with urlopen(req, timeout=12) as resp:
+        raw = resp.read(500_000)
+        content_type = resp.headers.get("content-type", "")
+    charset_match = re.search(r"charset=([\w.-]+)", content_type, re.I)
+    encoding = charset_match.group(1) if charset_match else "utf-8"
+    text = raw.decode(encoding, errors="replace")
+    title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", text)
+    title = html.unescape(re.sub(r"\s+", " ", title_match.group(1)).strip()) if title_match else ""
+    text = re.sub(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?s)<!--.*?-->", " ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    content = text.strip()[:20_000]
+    return {"url": url, "title": title, "content": content}
+
+
+def _basic_web_extract(urls: Any) -> Dict[str, Any]:
+    if isinstance(urls, str):
+        urls = [urls]
+    if not isinstance(urls, list):
+        return {"error": "web_extract fallback expected a list of URLs"}
+    results = []
+    for url in urls[:5]:
+        try:
+            results.append(_basic_extract_url(str(url)))
+        except Exception as exc:
+            results.append({"url": str(url), "title": "", "content": "", "error": f"{type(exc).__name__}: {exc}"})
+    return {"result": {"success": True, "data": {"pages": results}, "results": results}}
+
+
+def _run_web_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a web search/extract tool call and return a dict for Gemini toolResponse."""
+    _ensure_hermes_agent_path()
+    try:
+        import tools.web_tools as web_tools
+    except Exception as exc:
+        logger.warning("Web tools import failed: %s", exc)
+        return {"error": f"Web tools not available: {exc}"}
+    try:
+        if name == "web_search":
+            result = web_tools.web_search_tool(query=args.get("query", ""), limit=args.get("limit", 5))
+        elif name == "web_extract":
+            result = asyncio.run(web_tools.web_extract_tool(urls=args.get("urls", [])))
+        else:
+            return {"error": f"Unknown web tool: {name}"}
+        try:
+            parsed = json.loads(result)
+            if isinstance(parsed, dict) and parsed.get("success") is False:
+                if name == "web_extract" and "No web extract provider configured" in str(parsed.get("error", "")):
+                    logger.warning("Web extract provider unavailable; using basic HTTP fallback")
+                    return _basic_web_extract(args.get("urls", []))
+                return {"error": parsed.get("error", "web tool failed")}
+            return {"result": parsed}
+        except Exception:
+            return {"result": result}
+    except Exception as exc:
+        logger.exception("Web tool %s failed", name)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ── Safe math expression evaluator for local_calc ──────────────────────────
+class _CalcVisitor:
+    """Restricted AST evaluator for local_calc: only safe math ops."""
+    ALLOWED_NAMES = {
+        "sqrt": __import__("math").sqrt,
+        "abs": abs,
+        "sin": __import__("math").sin,
+        "cos": __import__("math").cos,
+        "log": __import__("math").log,
+        "round": round,
+        "min": min,
+        "max": max,
+    }
+
+    def visit(self, node):
+        if isinstance(node, ast.Num):
+            return node.n
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.BinOp):
+            left = self.visit(node.left)
+            right = self.visit(node.right)
+            if isinstance(node.op, ast.Add): return left + right
+            if isinstance(node.op, ast.Sub): return left - right
+            if isinstance(node.op, ast.Mult): return left * right
+            if isinstance(node.op, ast.Div):
+                if right == 0: raise ValueError("Division by zero")
+                return left / right
+            if isinstance(node.op, ast.Pow): return left ** right
+            raise ValueError("Unsupported binary operator")
+        if isinstance(node, ast.UnaryOp):
+            operand = self.visit(node.operand)
+            if operand is None:
+                raise ValueError("Invalid operand")
+            if isinstance(node.op, ast.UAdd): return +operand
+            if isinstance(node.op, ast.USub): return -operand
+            raise ValueError("Unsupported unary operator")
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only named function calls allowed")
+            fn = self.ALLOWED_NAMES.get(node.func.id)
+            if fn is None:
+                raise ValueError(f"Function '{node.func.id}' not allowed")
+            args = [self.visit(a) for a in node.args]
+            return fn(*args)
+        if isinstance(node, ast.Name):
+            if node.id in ("pi", "e", "tau"):
+                import math
+                return getattr(math, node.id)
+            raise ValueError(f"Name '{node.id}' not allowed")
+        if isinstance(node, ast.Expr):
+            return self.visit(node.value)
+        raise ValueError("Unsupported expression")
+
+
+def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a safe local helper tool and return a dict for Gemini toolResponse.
+
+    All tools are read-only or append-only. No destructive operations.
+    """
+    try:
+        if name == "local_weather":
+            location = args.get("location", "Amsterdam")
+            try:
+                import requests
+            except Exception:
+                return {"error": "requests not installed"}
+            geo_url = "https://geocoding-api.open-meteo.com/v1/search"
+            params = {"name": location, "count": 1, "format": "json"}
+            try:
+                r = requests.get(geo_url, params=params, timeout=10)
+                r.raise_for_status()
+                results = r.json().get("results", [])
+                if not results:
+                    return {"error": f"Location '{location}' not found"}
+                lat = results[0]["latitude"]
+                lon = results[0]["longitude"]
+                city = results[0].get("name", location)
+                weather_url = "https://api.open-meteo.com/v1/forecast"
+                wp = {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current_weather": "true",
+                    "timezone": "auto",
+                }
+                wr = requests.get(weather_url, params=wp, timeout=10)
+                wr.raise_for_status()
+                cw = wr.json().get("current_weather", {})
+                temp = cw.get("temperature")
+                wind = cw.get("windspeed")
+                code = cw.get("weathercode")
+                conditions = {
+                    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+                    45: "Fog", 48: "Depositing rime fog",
+                    51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+                    61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+                    71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+                    80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
+                    95: "Thunderstorm",
+                }.get(code, "Unknown conditions")
+                return {"result": {
+                    "location": city,
+                    "temperature_c": temp,
+                    "wind_kph": wind,
+                    "conditions": conditions,
+                }}
+            except Exception as exc:
+                logger.exception("Weather fetch failed")
+                return {"error": f"Weather fetch failed: {exc}"}
+
+        elif name == "local_translate":
+            text = args.get("text", "")
+            target = args.get("target_language", "en").lower()
+            source = args.get("source_language", "")
+            try:
+                from deep_translator import GoogleTranslator
+                # Map language names to codes if needed
+                lang_map = {"dutch": "nl", "romanian": "ro", "english": "en", "spanish": "es", "german": "de", "french": "fr", "italian": "it"}
+                target = lang_map.get(target, target)
+                source = lang_map.get(source, source) if source else "auto"
+                kwargs = {"target": target}
+                if source and source != "auto":
+                    kwargs["source"] = source
+                result = GoogleTranslator(**kwargs).translate(text)
+                return {"result": {"translation": result, "source_detected": source or "auto", "target": target}}
+            except Exception as exc:
+                logger.warning("translate tool failed: %s", exc)
+                return {"error": f"translate unavailable (deep_translator needed): {exc}"}
+
+        elif name == "local_time":
+            tz = args.get("timezone", "Europe/Amsterdam")
+            try:
+                from zoneinfo import ZoneInfo
+                from datetime import datetime
+                dt = datetime.now(ZoneInfo(tz))
+                return {"result": {"time": dt.strftime("%H:%M"), "date": dt.strftime("%Y-%m-%d"), "day": dt.strftime("%A"), "timezone": tz}}
+            except Exception:
+                try:
+                    import pytz
+                    from datetime import datetime
+                    dt = datetime.now(pytz.timezone(tz))
+                    return {"result": {"time": dt.strftime("%H:%M"), "date": dt.strftime("%Y-%m-%d"), "day": dt.strftime("%A"), "timezone": tz}}
+                except Exception as exc:
+                    return {"error": f"Timezone lookup failed: {exc}"}
+
+        elif name == "local_remind":
+            action = args.get("action", "list")
+            reminders_path = Path.home() / ".hermes" / "voice-reminders.jsonl"
+            if action == "add":
+                reminder = {
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "text": args.get("text", ""),
+                    "minutes": args.get("minutes"),
+                }
+                try:
+                    reminders_path.parent.mkdir(parents=True, exist_ok=True)
+                    with reminders_path.open("a", encoding="utf-8") as fh:
+                        fh.write(json.dumps(reminder, ensure_ascii=False) + "\n")
+                    return {"result": {"status": "saved", "text": reminder["text"]}}
+                except Exception as exc:
+                    return {"error": f"Reminder save failed: {exc}"}
+            else:
+                try:
+                    if not reminders_path.exists():
+                        return {"result": {"count": 0, "reminders": []}}
+                    lines = reminders_path.read_text(encoding="utf-8").strip().splitlines()
+                    recents = [json.loads(line) for line in lines[-20:]]
+                    return {"result": {"count": len(recents), "reminders": recents}}
+                except Exception as exc:
+                    return {"error": f"Reminder list failed: {exc}"}
+
+        elif name == "local_email":
+            limit = args.get("limit", 5)
+            try:
+                cmd = [
+                    "himalaya",
+                    "--quiet",
+                    "-o",
+                    "json",
+                    "envelope",
+                    "list",
+                    "--page-size",
+                    str(limit),
+                ]
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if out.returncode != 0:
+                    return {"error": f"himalaya error: {out.stderr[:200]}"}
+                data = json.loads(out.stdout)
+                emails = []
+                messages = data if isinstance(data, list) else data.get("response", data.get("results", []))
+                for msg in messages:
+                    sender = msg.get("from", {})
+                    if isinstance(sender, list):
+                        sender = sender[0] if sender else {}
+                    emails.append({
+                        "id": msg.get("id"),
+                        "from": sender.get("addr") or sender.get("address") or sender.get("name") or "unknown",
+                        "subject": msg.get("subject", "(no subject)"),
+                        "date": msg.get("date"),
+                    })
+                return {"result": {"emails": emails}}
+            except Exception as exc:
+                logger.exception("Email list failed")
+                return {"error": f"Email tool failed: {exc}"}
+
+        elif name == "local_systemd":
+            svc = args.get("service")
+            try:
+                if svc:
+                    cmd = ["systemctl", "--user", "status", svc, "--no-pager", "-o", "cat"]
+                else:
+                    cmd = ["systemctl", "--user", "list-units", "--type=service", "--state=running", "--no-pager", "--plain"]
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                return {"result": {"output": out.stdout[-2000:] or out.stderr[:500]}}
+            except Exception as exc:
+                return {"error": f"systemd check failed: {exc}"}
+
+        elif name == "local_docker":
+            try:
+                out = subprocess.run(
+                    ["docker", "ps", "--format", "json"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if out.returncode != 0:
+                    return {"error": f"docker error: {out.stderr[:200]}"}
+                containers = []
+                for line in out.stdout.strip().splitlines():
+                    c = json.loads(line)
+                    containers.append({
+                        "name": c.get("Names", "").split(",")[0],
+                        "image": c.get("Image"),
+                        "status": c.get("Status"),
+                        "ports": c.get("Ports"),
+                    })
+                return {"result": {"containers": containers}}
+            except Exception as exc:
+                return {"error": f"Docker check failed: {exc}"}
+
+        elif name == "local_tailscale":
+            try:
+                out = subprocess.run(
+                    ["tailscale", "status", "--json"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if out.returncode != 0:
+                    return {"error": f"tailscale error: {out.stderr[:200]}"}
+                data = json.loads(out.stdout)
+                peers = []
+                for name, node in data.get("Peer", {}).items():
+                    peers.append({
+                        "name": name,
+                        "online": node.get("Online", False),
+                        "ip": node.get("TailscaleIPs", []),
+                        "os": node.get("OS"),
+                    })
+                return {"result": {"self": data.get("Self", {}).get("HostName"), "peers": peers}}
+            except Exception as exc:
+                return {"error": f"Tailscale check failed: {exc}"}
+
+        elif name == "local_notes":
+            query = args.get("query", "").lower()
+            limit = args.get("limit", 5)
+            try:
+                matches = []
+                for f in NOTES_DIR.glob("*.jsonl"):
+                    if not f.is_file():
+                        continue
+                    for line in f.read_text(encoding="utf-8").strip().splitlines():
+                        if not line:
+                            continue
+                        obj = json.loads(line)
+                        text = json.dumps(obj, ensure_ascii=False).lower()
+                        if query in text:
+                            matches.append({"file": f.name, "event": obj})
+                return {"result": {"matches": matches[:limit]}}
+            except Exception as exc:
+                return {"error": f"Notes search failed: {exc}"}
+
+        elif name == "local_disk":
+            try:
+                import shutil
+                usage = shutil.disk_usage("/")
+                gb_total = usage.total / (1024**3)
+                gb_used = usage.used / (1024**3)
+                gb_free = usage.free / (1024**3)
+                pct = round(usage.used / usage.total * 100, 1)
+                return {"result": {"total_gb": round(gb_total, 1), "used_gb": round(gb_used, 1), "free_gb": round(gb_free, 1), "percent_used": pct}}
+            except Exception as exc:
+                return {"error": f"Disk check failed: {exc}"}
+
+        elif name == "local_calc":
+            expr = args.get("expression", "")
+            if not expr:
+                return {"error": "Empty expression"}
+            try:
+                tree = ast.parse(expr, mode="eval")
+                result = _CalcVisitor().visit(tree.body)
+                return {"result": {"expression": expr, "value": result}}
+            except Exception as exc:
+                return {"error": f"Calculation error: {exc}"}
+
+        elif name == "local_uptime":
+            try:
+                with open("/proc/uptime", "r") as fh:
+                    up_sec = float(fh.read().split()[0])
+                up_h = int(up_sec // 3600)
+                up_m = int((up_sec % 3600) // 60)
+                with open("/proc/loadavg", "r") as fh:
+                    load = fh.read().split()[:3]
+                mem_info = {}
+                with open("/proc/meminfo", "r") as fh:
+                    for line in fh:
+                        if line.startswith("MemTotal:"):
+                            mem_info["total_mb"] = int(line.split()[1]) // 1024
+                        elif line.startswith("MemAvailable:"):
+                            mem_info["available_mb"] = int(line.split()[1]) // 1024
+                return {"result": {"uptime": f"{up_h}h {up_m}m", "load": load, "memory_mb": mem_info}}
+            except Exception as exc:
+                return {"error": f"Uptime read failed: {exc}"}
+
+        elif name == "local_news":
+            topic = args.get("topic", "tech")
+            limit = args.get("limit", 5)
+            _ensure_hermes_agent_path()
+            try:
+                from tools.web_tools import web_search_tool
+                result = web_search_tool(
+                    query=f"latest {topic} news {time.strftime('%Y')}",
+                    limit=max(limit, 10),
+                )
+                # Terse voice-friendly results
+                lines = []
+                if isinstance(result, dict):
+                    for item in result.get("data", {}).get("web", result.get("results", []))[:limit]:
+                        lines.append(f"{item.get('title', 'untitled')} — {item.get('source', item.get('url', 'link'))}")
+                return {"result": {"headlines": lines, "topic": topic}}
+            except Exception as exc:
+                return {"error": f"News lookup failed: {exc}"}
+
+        elif name == "local_youtube":
+            query = args.get("query", "")
+            limit = args.get("limit", 5)
+            _ensure_hermes_agent_path()
+            try:
+                from tools.web_tools import web_search_tool
+                result = web_search_tool(
+                    query=f"site:youtube.com {query}",
+                    limit=max(limit, 10),
+                )
+                lines = []
+                seen = set()
+                for item in result.get("data", {}).get("web", result.get("results", []))[:limit + 5]:
+                    url = item.get("url", "")
+                    if "youtube.com/watch" in url and url not in seen:
+                        seen.add(url)
+                        lines.append(f"{item.get('title', 'untitled')} — {url}")
+                    if len(lines) >= limit:
+                        break
+                return {"result": {"videos": lines}}
+            except Exception as exc:
+                return {"error": f"YouTube search failed: {exc}"}
+
+        elif name == "local_honcho":
+            query = args.get("query", "")
+            limit = args.get("limit", 5)
+            try:
+                import requests
+                r = requests.get(
+                    "http://127.0.0.1:8000/api/v1/search",
+                    params={"query": query, "limit": limit, "peer": "user"},
+                    timeout=10,
+                )
+                r.raise_for_status()
+                data = r.json()
+                excerpts = [item.get("text", "") for item in data.get("results", [])]
+                return {"result": {"excerpts": excerpts[:limit]}}
+            except Exception as exc:
+                return {"error": f"Honcho search failed: {exc}"}
+
+        else:
+            return {"error": f"Unknown local tool: {name}"}
+
+    except Exception as exc:
+        logger.exception("Local tool %s failed", name)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _put_drop_oldest(q: "queue.Queue[Optional[bytes]]", item: Optional[bytes]) -> None:
+    try:
+        q.put_nowait(item)
+        return
+    except queue.Full:
+        pass
+    try:
+        q.get_nowait()
+    except queue.Empty:
+        pass
+    try:
+        q.put_nowait(item)
+    except queue.Full:
+        pass
+
+
+def _resample_pcm(data: bytes, src_rate: int, src_ch: int, dst_rate: int, dst_ch: int) -> bytes:
+    if not data:
+        return b""
+    raw = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+    if src_ch == 2 and dst_ch == 1:
+        raw = raw.reshape(-1, 2).mean(axis=1)
+    elif src_ch == 1 and dst_ch == 2:
+        raw = np.repeat(raw, 2)
+    if src_rate != dst_rate:
+        src_len = len(raw)
+        dst_len = int(src_len * dst_rate / src_rate)
+        raw = np.interp(np.linspace(0, src_len - 1, dst_len), np.arange(src_len), raw)
+    raw = np.clip(raw, -32768, 32767).astype(np.int16)
+    return raw.tobytes()
+
+
+def downsample_for_gemini(pcm_48k_stereo: bytes) -> bytes:
+    return _resample_pcm(pcm_48k_stereo, DISCORD_SR, DISCORD_CH, GEMINI_IN_SR, GEMINI_IN_CH)
+
+
+def upsample_for_discord(pcm_24k_mono: bytes) -> bytes:
+    return _resample_pcm(pcm_24k_mono, GEMINI_OUT_SR, GEMINI_OUT_CH, DISCORD_SR, DISCORD_CH)
+
+
+def _silence_pcm(sample_rate: int, channels: int, ms: int) -> bytes:
+    samples = int(sample_rate * ms / 1000) * channels
+    return b"\x00" * samples * SAMPLE_WIDTH
+
+
+def _fade_in_pcm_24k_mono(pcm: bytes, fade_ms: int) -> bytes:
+    if not pcm or fade_ms <= 0:
+        return pcm
+    raw = np.frombuffer(pcm, dtype=np.int16).astype(np.float32)
+    fade_samples = min(len(raw), int(GEMINI_OUT_SR * fade_ms / 1000))
+    if fade_samples <= 1:
+        return pcm
+    raw[:fade_samples] *= np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
+    return np.clip(raw, -32768, 32767).astype(np.int16).tobytes()
+
+
+_TYPING_SFX_CACHE: Optional[bytes] = None
+_TYPING_SFX_WARNED = False
+
+
+def _scale_pcm16(pcm: bytes, volume: float) -> bytes:
+    if not pcm or volume == 1.0:
+        return pcm
+    raw = np.frombuffer(pcm, dtype=np.int16).astype(np.float32)
+    raw *= max(0.0, volume)
+    return np.clip(raw, -32768, 32767).astype(np.int16).tobytes()
+
+
+def _load_typing_sfx_pcm() -> Optional[bytes]:
+    """Load an actual WAV keyboard SFX as 24 kHz mono PCM16."""
+    global _TYPING_SFX_CACHE, _TYPING_SFX_WARNED
+    if _TYPING_SFX_CACHE is not None:
+        return _TYPING_SFX_CACHE
+    if not TYPING_SFX_PATH:
+        return None
+    path = Path(TYPING_SFX_PATH).expanduser()
+    try:
+        with wave.open(str(path), "rb") as wf:
+            channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            sample_rate = wf.getframerate()
+            frames = wf.readframes(wf.getnframes())
+        if sample_width != SAMPLE_WIDTH:
+            raise ValueError(f"expected 16-bit WAV, got {sample_width * 8}-bit")
+        pcm = _resample_pcm(frames, sample_rate, channels, GEMINI_OUT_SR, GEMINI_OUT_CH)
+        if len(pcm) > int(GEMINI_OUT_SR * 0.35) * SAMPLE_WIDTH:
+            pcm = pcm[: int(GEMINI_OUT_SR * 0.35) * SAMPLE_WIDTH]
+        _TYPING_SFX_CACHE = _scale_pcm16(pcm, TYPING_SFX_VOLUME)
+        logger.info("VoiceLive: loaded typing SFX from %s", path)
+        return _TYPING_SFX_CACHE
+    except Exception as exc:
+        if not _TYPING_SFX_WARNED:
+            logger.warning("VoiceLive: typing SFX load failed (%s): %s", path, exc)
+            _TYPING_SFX_WARNED = True
+        return None
+
+
+def generate_typing_pcm() -> bytes:
+    """Return a real keyboard SFX when configured; synthetic fallback is opt-in."""
+    sfx = _load_typing_sfx_pcm()
+    if sfx:
+        return sfx
+    if not TYPING_SYNTH_FALLBACK:
+        return b""
+
+    sr = GEMINI_OUT_SR  # 24000
+    duration_sec = 0.015 + random.random() * 0.010  # 15-25 ms total
+    samples = int(sr * duration_sec)
+    t = np.arange(samples, dtype=np.float64) / sr
+
+    # Low-passed fallback tap: no high tick, so it will not read as a beep.
+    thud_freq = 160 + random.randint(0, 90)
+    thud = np.sin(2 * np.pi * thud_freq * t)
+    thud_env = np.exp(-t / (duration_sec * 0.28))
+    thud *= thud_env
+
+    noise = np.random.default_rng().normal(0.0, 0.025, samples)
+    noise *= np.exp(-t / (duration_sec * 0.18))
+    click = thud + noise
+    max_val = np.max(np.abs(click))
+    if max_val > 0:
+        click = click / max_val * 0.035 * 32767.0
+    click = np.clip(click, -32768, 32767).astype(np.int16)
+    return click.tobytes()
+
+
+def _has_speech_energy(pcm_48k_stereo: bytes) -> bool:
+    if not pcm_48k_stereo:
+        return False
+    raw = np.frombuffer(pcm_48k_stereo, dtype=np.int16).astype(np.float32)
+    if raw.size == 0:
+        return False
+    rms = float(np.sqrt(np.mean(raw * raw)))
+    return rms >= 120.0
+
+
+try:
+    import discord as _discord_audio
+    _AudioSourceBase = _discord_audio.AudioSource
+except Exception:
+    _AudioSourceBase = object
+
+
+class LiveAudioSource(_AudioSourceBase):
+    def __init__(self):
+        try:
+            super().__init__()
+        except Exception:
+            pass
+        self._q: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=256)
+        self._buffer = bytearray()
+        self._stopped = False
+
+    def feed(self, pcm_24k_mono: bytes) -> None:
+        if self._stopped:
+            return
+        _put_drop_oldest(self._q, pcm_24k_mono)
+
+    def wake(self) -> bool:
+        return True
+
+    def clear(self) -> None:
+        with self._q.mutex:
+            self._q.queue.clear()
+        self._buffer.clear()
+
+    def finish(self) -> None:
+        self._stopped = True
+        _put_drop_oldest(self._q, None)
+
+    def read(self) -> bytes:
+        while len(self._buffer) < FRAME_SIZE:
+            if self._stopped:
+                return b""
+            try:
+                chunk = self._q.get(timeout=OUTPUT_READ_WAIT_SECONDS)
+            except queue.Empty:
+                return b"\x00" * FRAME_SIZE
+            if chunk is None:
+                self._stopped = True
+                return b""
+            pcm_48k_stereo = upsample_for_discord(chunk)
+            self._buffer.extend(pcm_48k_stereo)
+        frame = bytes(self._buffer[:FRAME_SIZE])
+        self._buffer = self._buffer[FRAME_SIZE:]
+        return frame
+
+    def is_opus(self) -> bool:
+        return False
+
+    def cleanup(self):
+        self._stopped = True
+
+
+try:
+    from discord.ext import voice_recv
+except Exception:
+    voice_recv = None
+
+
+if voice_recv is not None:
+    class GeminiPCMSink(voice_recv.AudioSink):
+        """Receive decoded Discord PCM and forward 16 kHz mono chunks to Gemini."""
+
+        def __init__(self, on_pcm_callback: Callable[[bytes], None]):
+            super().__init__()
+            self._on_pcm = on_pcm_callback
+            self._frames = 0
+            self._decoded_frames = 0
+            self._skipped_unknown = 0
+            self._skipped_bot = 0
+            self._decode_errors = 0
+            self._last_decode_error_log = 0.0
+
+        def wants_opus(self) -> bool:
+            """Return False so voice_recv delivers decoded PCM instead of opus frames."""
+            return False
+
+        def write(self, user, data) -> None:
+            if user is None:
+                self._skipped_unknown += 1
+                return
+            if getattr(user, "bot", False):
+                self._skipped_bot += 1
+                return
+            if ALLOWED_SPEAKER_IDS is not None and getattr(user, "id", None) not in ALLOWED_SPEAKER_IDS:
+                self._skipped_unknown += 1
+                return
+            # voice_recv gives us pre-decoded PCM (48k stereo, 20ms chunks)
+            # because wants_opus() is False.
+            pcm = getattr(data, "pcm", b"") or b""
+            if not pcm:
+                return
+            self._frames += 1
+            if not _has_speech_energy(pcm):
+                return
+            self._decoded_frames += 1
+            self._on_pcm(downsample_for_gemini(bytes(pcm)))
+
+        def cleanup(self) -> None:
+            pass
+
+        def stats(self) -> Dict[str, int]:
+            return {
+                "voice_sink_frames": self._frames,
+                "voice_sink_decoded_frames": self._decoded_frames,
+                "voice_sink_decode_errors": self._decode_errors,
+                "voice_sink_skipped_unknown": self._skipped_unknown,
+                "voice_sink_skipped_bot": self._skipped_bot,
+            }
+else:
+    GeminiPCMSink = None
+
+
+class GeminiLiveBridge:
+    AUDIO_STREAM_IDLE_END_SECONDS = float(os.getenv("GEMINI_AUDIO_STREAM_IDLE_END_SECONDS", "0.25"))
+
+    def __init__(
+        self,
+        output_source: LiveAudioSource,
+        on_wake: Callable[[], None] = None,
+        on_leave_request: Callable[[str], None] = None,
+        on_reconnect: Callable[[], None] = None,
+    ):
+        self._ws = None
+        self._output_source = output_source
+        self._on_wake = on_wake
+        self._on_leave_request = on_leave_request
+        self._on_reconnect = on_reconnect
+        self._running = False
+        self._session_handle: Optional[str] = None
+        self._reconnecting = False
+        self._user_disconnect = False
+        self._reconnect_count = 0
+        self._send_q: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=256)
+        self._video_q: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(maxsize=2)
+        self._tasks: List[asyncio.Task] = []
+        self._audio_stream_open = False
+        self._last_audio_sent_at: Optional[float] = None
+        self._last_video_sent_at: Optional[float] = None
+        self._output_turn_open = False
+        self._seen_server_content_shapes: set = set()
+        self._notes_file = self._create_notes_file()
+        self.metrics: Dict[str, Any] = {
+            "audio_in_chunks": 0,
+            "audio_out_chunks": 0,
+            "audio_out_bytes": 0,
+            "audio_stream_end_events": 0,
+            "audio_preroll_events": 0,
+            "input_transcript_events": 0,
+            "output_transcript_events": 0,
+            "video_in_frames": 0,
+            "video_sent_frames": 0,
+            "video_dropped_frames": 0,
+            "video_last_reason": None,
+            "notes_file": str(self._notes_file),
+            "notes_events": 0,
+            "last_input_transcript": None,
+            "last_output_transcript": None,
+            "last_input_to_output_ms": None,
+            "last_input_monotonic": None,
+            "last_output_monotonic": None,
+            "model": None,
+        }
+
+    def _create_notes_file(self) -> Path:
+        try:
+            NOTES_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            logger.warning("VoiceLive: could not create notes dir %s", NOTES_DIR, exc_info=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        return NOTES_DIR / f"voice-live-{stamp}.jsonl"
+
+    def feed_audio(self, pcm_16k_mono: bytes) -> None:
+        self.metrics["audio_in_chunks"] += 1
+        self.metrics["last_input_monotonic"] = time.monotonic()
+        _put_drop_oldest(self._send_q, pcm_16k_mono)
+
+    def feed_video_frame(self, data: bytes, mime_type: str, force: bool = False) -> Dict[str, Any]:
+        self.metrics["video_in_frames"] += 1
+        if not VIDEO_ENABLED:
+            self.metrics["video_dropped_frames"] += 1
+            self.metrics["video_last_reason"] = "disabled"
+            return {"accepted": False, "reason": "disabled"}
+        if mime_type not in {"image/jpeg", "image/png", "image/webp"}:
+            self.metrics["video_dropped_frames"] += 1
+            self.metrics["video_last_reason"] = "unsupported_mime"
+            return {"accepted": False, "reason": "unsupported_mime"}
+        if not data or len(data) > VIDEO_MAX_BYTES:
+            self.metrics["video_dropped_frames"] += 1
+            self.metrics["video_last_reason"] = "size_limit"
+            return {"accepted": False, "reason": "size_limit", "max_bytes": VIDEO_MAX_BYTES}
+
+        now = time.monotonic()
+        min_interval = 1.0 / max(VIDEO_MAX_FPS, 0.1)
+        if self._last_video_sent_at is not None and now - self._last_video_sent_at < min_interval:
+            self.metrics["video_dropped_frames"] += 1
+            self.metrics["video_last_reason"] = "fps_limit"
+            return {"accepted": False, "reason": "fps_limit", "max_fps": VIDEO_MAX_FPS}
+
+        last_audio = self.metrics.get("last_input_monotonic")
+        if not force and (last_audio is None or now - float(last_audio) > VIDEO_WHEN_RECENT_AUDIO_SECONDS):
+            self.metrics["video_dropped_frames"] += 1
+            self.metrics["video_last_reason"] = "no_recent_voice"
+            return {"accepted": False, "reason": "no_recent_voice"}
+
+        frame = {
+            "data": base64.b64encode(data).decode(),
+            "mimeType": mime_type,
+        }
+        _put_drop_oldest(self._video_q, frame)
+        self._last_video_sent_at = now
+        self.metrics["video_sent_frames"] += 1
+        self.metrics["video_last_reason"] = "accepted"
+        return {"accepted": True, "max_fps": VIDEO_MAX_FPS}
+
+    async def connect(self):
+        import websockets
+        ws_url = f"{GEMINI_WS_URL}?key={GEMINI_API_KEY}"
+        candidates = [GEMINI_MODEL]
+        for model in GEMINI_MODEL_FALLBACKS:
+            if model not in candidates:
+                candidates.append(model)
+        last_error: Optional[BaseException] = None
+        for model in candidates:
+            try:
+                await self._connect_model(websockets, ws_url, model, handle=self._session_handle)
+                self.metrics["model"] = model
+                break
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Gemini Live model %s failed: %s", model, exc)
+                if self._ws:
+                    try:
+                        await self._ws.close()
+                    except Exception:
+                        pass
+                    self._ws = None
+        else:
+            raise RuntimeError(f"No Gemini Live model could start: {last_error}") from last_error
+        self._running = True
+        self._tasks = [
+            asyncio.create_task(self._send_loop()),
+            asyncio.create_task(self._receive_loop()),
+        ]
+        if INITIAL_GREETING and not self._reconnecting:
+            await self.send_text(INITIAL_GREETING)
+
+    async def _connect_model(self, websockets, ws_url: str, model: str, handle=None):
+        self._ws = await websockets.connect(ws_url, ping_interval=20, ping_timeout=10)
+        honcho_ctx = await _build_honcho_context()
+        system_text = BASE_SYSTEM_PROMPT + honcho_ctx
+        setup_payload: Dict[str, Any] = {
+            "model": f"models/{model}",
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
+                    }
+                },
+            },
+            "realtimeInputConfig": {
+                "activityHandling": "START_OF_ACTIVITY_INTERRUPTS",
+                "turnCoverage": "TURN_INCLUDES_ONLY_ACTIVITY",
+                "automaticActivityDetection": {
+                    "disabled": False,
+                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+                    "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+                    "prefixPaddingMs": 20,
+                    "silenceDurationMs": 100,
+                }
+            },
+            "inputAudioTranscription": {},
+            "outputAudioTranscription": {},
+            "systemInstruction": {
+                "parts": [{
+                    "text": system_text
+                }]
+            },
+        }
+        if SPOTIFY_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _SPOTIFY_FUNCTION_DECLARATIONS})
+            logger.info("Spotify voice tools registered with Gemini Live (count=%d)", len(_SPOTIFY_FUNCTION_DECLARATIONS))
+        if WEB_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _WEB_FUNCTION_DECLARATIONS})
+            logger.info("Web voice tools registered with Gemini Live (count=%d)", len(_WEB_FUNCTION_DECLARATIONS))
+        if LOCAL_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _LOCAL_FUNCTION_DECLARATIONS})
+            logger.info("Local voice tools registered with Gemini Live (count=%d)", len(_LOCAL_FUNCTION_DECLARATIONS))
+        if handle is not None:
+            setup_payload["sessionResumption"] = {"handle": handle}
+            logger.info("Session resumption: handle=%s", handle)
+        setup = {"setup": setup_payload}
+        await self._ws.send(json.dumps(setup))
+        async for msg in self._ws:
+            resp = json.loads(msg)
+            if "setupComplete" in resp:
+                logger.info("Setup complete for model %s", model)
+                return
+        raise RuntimeError(f"Gemini setup ended before setupComplete for {model}")
+
+    async def send_text(self, text: str) -> None:
+        if not self._ws or not text.strip():
+            return
+        msg = {"realtimeInput": {"text": text.strip()}}
+        await self._ws.send(json.dumps(msg))
+
+    async def disconnect(self):
+        self._running = False
+        _put_drop_oldest(self._send_q, None)
+        for t in self._tasks:
+            t.cancel()
+        if self._tasks:
+            try:
+                await asyncio.wait_for(asyncio.gather(*self._tasks, return_exceptions=True), timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
+        if self._ws:
+            try:
+                await asyncio.wait_for(self._ws.close(), timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
+
+    async def _restart(self):
+        if self._reconnecting or self._user_disconnect:
+            return
+        self._reconnecting = True
+        self._reconnect_count += 1
+        logger.info("Gemini Live: starting reconnect #%d...", self._reconnect_count)
+        await self.disconnect()
+        try:
+            await asyncio.wait_for(asyncio.gather(*self._tasks, return_exceptions=True), timeout=3.0)
+        except asyncio.TimeoutError:
+            pass
+        if self._user_disconnect:
+            logger.info("Gemini Live: abort reconnect: user disconnected")
+            self._reconnecting = False
+            return
+        # Backoff to avoid hammering the API
+        backoff = min(2 ** (self._reconnect_count - 1), 30)
+        logger.info("Gemini Live: reconnect backoff %ds", backoff)
+        await asyncio.sleep(backoff)
+        if self._user_disconnect:
+            self._reconnecting = False
+            return
+        try:
+            await self.connect()
+            self._send_q = queue.Queue(maxsize=256)
+            self._video_q = queue.Queue(maxsize=2)
+            self._output_turn_open = False
+            self._seen_server_content_shapes.clear()
+            if self._on_reconnect:
+                try:
+                    self._on_reconnect()
+                except Exception:
+                    pass
+            logger.info("Gemini Live: reconnected successfully #%d (handle=%s)", self._reconnect_count, self._session_handle)
+        except Exception as e:
+            logger.error("Gemini Live: reconnect failed #%d: %s", self._reconnect_count, e)
+            if self._on_leave_request and not self._user_disconnect:
+                try:
+                    self._on_leave_request("Gemini reconnect failed: %s" % e)
+                except Exception:
+                    pass
+        finally:
+            self._reconnecting = False
+
+    async def _send_loop(self):
+        while self._running:
+            # Drain audio queue aggressively while interleaving video frames
+            try:
+                chunk = self._send_q.get_nowait()
+            except queue.Empty:
+                # No audio waiting — send a pending video frame and idle-end check
+                await self._send_pending_video_frame()
+                await self._maybe_end_idle_audio_stream()
+                await asyncio.sleep(0.02)
+                continue
+            if chunk is None:
+                break
+            # Send one video frame between audio chunks so video doesn't starve
+            await self._send_pending_video_frame()
+            b64_data = base64.b64encode(chunk).decode()
+            msg = {"realtimeInput": {"audio": {"data": b64_data, "mimeType": "audio/pcm;rate=16000"}}}
+            try:
+                await self._ws.send(json.dumps(msg))
+                self._audio_stream_open = True
+                self._last_audio_sent_at = time.monotonic()
+            except Exception as e:
+                logger.error("Send error: %s", e)
+                break
+
+    async def _send_pending_video_frame(self) -> None:
+        if not self._ws:
+            return
+        try:
+            frame = self._video_q.get_nowait()
+        except queue.Empty:
+            return
+        if not frame:
+            return
+        msg = {"realtimeInput": {"video": frame}}
+        try:
+            await self._ws.send(json.dumps(msg))
+        except Exception as e:
+            logger.error("Send video frame error: %s", e)
+
+    async def _maybe_end_idle_audio_stream(self) -> None:
+        if not self._audio_stream_open or self._last_audio_sent_at is None or not self._ws:
+            return
+        if time.monotonic() - self._last_audio_sent_at < self.AUDIO_STREAM_IDLE_END_SECONDS:
+            return
+        try:
+            await self._ws.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+            self.metrics["audio_stream_end_events"] += 1
+            self._audio_stream_open = False
+            self._last_audio_sent_at = None
+            logger.info("Gemini Live: sent audioStreamEnd after idle input")
+        except Exception as e:
+            logger.error("Send audioStreamEnd error: %s", e)
+
+    async def _receive_loop(self):
+        while self._running:
+            try:
+                raw = await asyncio.wait_for(self._ws.recv(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                close_code = getattr(e, "close_code", None)
+                close_reason = getattr(e, "close_reason", None)
+                is_1008 = close_code == 1008
+                if close_code is not None:
+                    logger.warning("Gemini Live: WebSocket closed (code=%s, reason=%s)", close_code, close_reason)
+                else:
+                    logger.error("Receive error: %s", e)
+                if is_1008:
+                    # 1008 = session duration exceeded — decoder state may be bad, drop it
+                    logger.warning("Gemini Live: detected 1008 GoAway-style close")
+                    self._output_turn_open = False
+                    self._seen_server_content_shapes.clear()
+                if not self._reconnecting:
+                    asyncio.get_running_loop().create_task(self._restart())
+                break
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            # Session resumption handle update
+            sru = msg.get("sessionResumptionUpdate")
+            if sru:
+                if sru.get("resumable") and sru.get("newHandle"):
+                    self._session_handle = sru["newHandle"]
+                self.metrics["gemini_resumption_updates"] = self.metrics.get("gemini_resumption_updates", 0) + 1
+            # GoAway detection
+            go_away = msg.get("goAway")
+            if go_away is not None:
+                time_left = go_away.get("timeLeft", "unknown")
+                logger.warning("Gemini Live: GoAway received (%s remaining)", time_left)
+                if not self._reconnecting:
+                    asyncio.get_running_loop().create_task(self._restart())
+                break
+            sc = msg.get("serverContent", {})
+            if sc:
+                self._log_server_content_shape(sc)
+                self._record_transcript("input", sc.get("inputTranscription", {}))
+                self._record_transcript("output", sc.get("outputTranscription", {}))
+                mt = sc.get("modelTurn", {})
+                parts = mt.get("parts", [])
+                for part in parts:
+                    idata = part.get("inlineData", {})
+                    if idata.get("mimeType", "").startswith("audio/pcm"):
+                        pcm_bytes = base64.b64decode(idata["data"])
+                        if pcm_bytes:
+                            self._record_output_chunk(len(pcm_bytes))
+                            if not self._output_turn_open:
+                                self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_PREROLL_MS))
+                                pcm_bytes = _fade_in_pcm_24k_mono(pcm_bytes, OUTPUT_FADE_IN_MS)
+                                self._output_turn_open = True
+                                self.metrics["audio_preroll_events"] += 1
+                            if self._output_source.wake():
+                                self._output_source.feed(pcm_bytes)
+                                if self._on_wake:
+                                    try:
+                                        self._on_wake()
+                                    except Exception:
+                                        pass
+                            else:
+                                self._output_source.feed(pcm_bytes)
+                if sc.get("interrupted"):
+                    if OUTPUT_CLEAR_ON_INTERRUPT:
+                        self._output_source.clear()
+                    self._output_turn_open = False
+                if sc.get("turnComplete") or sc.get("generationComplete"):
+                    if self._output_turn_open and OUTPUT_TAIL_PAD_MS > 0:
+                        self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_TAIL_PAD_MS))
+                    self._output_turn_open = False
+            # ── Handle tool calls from Gemini ──────────────────────────────────────
+            tool_call = msg.get("toolCall")
+            if tool_call:
+                try:
+                    await self._handle_tool_call(tool_call)
+                except Exception as tc_exc:
+                    logger.exception("Gemini Live: tool call handler crashed (recv loop continues): %s", tc_exc)
+            tool_call_cancel = msg.get("toolCallCancellation")
+            if tool_call_cancel:
+                logger.info("Gemini toolCallCancellation received (ignored): %s", tool_call_cancel)
+
+    def _log_server_content_shape(self, server_content: Dict[str, Any]) -> None:
+        keys = tuple(sorted(server_content.keys()))
+        if keys in self._seen_server_content_shapes:
+            return
+        self._seen_server_content_shapes.add(keys)
+        logger.info("Gemini serverContent keys: %s", ",".join(keys))
+
+    def _record_transcript(self, direction: str, payload: Any) -> None:
+        if not isinstance(payload, dict):
+            return
+        text = str(payload.get("text") or "").strip()
+        if not text:
+            return
+        metric_prefix = f"{direction}_transcript"
+        self.metrics[f"{metric_prefix}_events"] += 1
+        self.metrics[f"last_{metric_prefix}"] = text[-500:]
+        logger.info("Gemini %s transcript: %s", direction, text)
+        self._append_note_event(direction, text)
+        if direction == "input":
+            self._maybe_handle_voice_leave_request(text)
+
+    def _append_note_event(self, direction: str, text: str) -> None:
+        event = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "direction": direction,
+            "text": text,
+        }
+        try:
+            with self._notes_file.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            self.metrics["notes_events"] += 1
+        except Exception:
+            logger.warning("VoiceLive: could not append note event", exc_info=True)
+
+    async def _handle_tool_call(self, tool_call: Any) -> None:
+        """Execute Spotify, web, or other local tools requested by Gemini Live.
+
+        Tool runners are synchronous I/O; they run in a thread so the async
+        receive loop stays responsive and can't be accidentally DoS'd by one
+        slow search.
+        """
+        function_calls = tool_call.get("functionCalls", []) if isinstance(tool_call, dict) else []
+        if not function_calls:
+            logger.warning("toolCall message without functionCalls: %s", tool_call)
+            return
+        # ── Typing feedback: begin audio indicator ──────────────────────────
+        typing_active = False
+        typing_task: Optional[asyncio.Task] = None
+        if TYPING_SOUND_ENABLED and self._output_source is not None and not self._output_turn_open:
+            typing_active = True
+
+            async def _typing_loop():
+                while typing_active:
+                    try:
+                        pcm = generate_typing_pcm()
+                        self._output_source.feed(pcm)
+                    except Exception:
+                        break
+                    await asyncio.sleep(0.05 + random.random() * 0.15)
+
+            typing_task = asyncio.get_running_loop().create_task(_typing_loop())
+
+        responses: List[Dict[str, Any]] = []
+        try:
+            loop = asyncio.get_running_loop()
+            for fc in function_calls:
+                call_id = fc.get("id", "")
+                name = fc.get("name", "")
+                args = fc.get("args", {})
+                if name.startswith("web_") and isinstance(args, dict):
+                    args = _normalize_voice_web_args(name, args)
+                logger.info("Gemini tool call: %s id=%s args=%s", name, call_id, args)
+                try:
+                    if name.startswith("spotify_"):
+                        result = await loop.run_in_executor(None, _run_spotify_tool, name, args)
+                    elif name.startswith("web_"):
+                        result = await loop.run_in_executor(None, _run_web_tool, name, args)
+                    elif name.startswith("local_"):
+                        result = await loop.run_in_executor(None, _run_local_tool, name, args)
+                    else:
+                        result = {"error": f"No handler for tool: {name}"}
+                except Exception as exc:
+                    logger.exception("Gemini Live: tool %s crashed", name)
+                    result = {"error": f"{type(exc).__name__}: {exc}"}
+                responses.append({
+                    "id": call_id,
+                    "name": name,
+                    "response": result,
+                })
+        finally:
+            # ── Typing feedback: end audio indicator ───────────────────────
+            if typing_active:
+                typing_active = False
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+        if responses and self._ws:
+            payload = {"toolResponse": {"functionResponses": responses}}
+            try:
+                await self._ws.send(json.dumps(payload))
+                logger.info("Sent toolResponse for %d tool call(s)", len(responses))
+            except Exception as exc:
+                logger.error("Failed to send toolResponse: %s", exc)
+
+    def _maybe_handle_voice_leave_request(self, text: str) -> None:
+        normalized = " ".join(text.lower().replace(".", " ").replace(",", " ").split())
+        if not any(phrase in normalized for phrase in VOICE_LEAVE_PHRASES):
+            return
+        self.metrics["voice_leave_requested"] = True
+        logger.info("VoiceLive: leave requested by voice transcript: %s", text)
+        if self._on_leave_request:
+            try:
+                self._on_leave_request(text)
+            except Exception:
+                logger.exception("VoiceLive: failed to schedule voice leave request")
+
+    def _record_output_chunk(self, byte_count: int) -> None:
+        now = time.monotonic()
+        self.metrics["audio_out_chunks"] += 1
+        self.metrics["audio_out_bytes"] += byte_count
+        self.metrics["last_output_monotonic"] = now
+        last_input = self.metrics.get("last_input_monotonic")
+        if last_input is not None:
+            self.metrics["last_input_to_output_ms"] = round((now - last_input) * 1000, 1)
+
+
+class VoiceLiveBridge:
+    def __init__(self, voice_channel, discord_adapter):
+        self._channel = voice_channel
+        self._vc = None
+        self._adapter = discord_adapter
+        self._guild_id = voice_channel.guild.id
+        self._audio_source = LiveAudioSource()
+        self._listener = None
+        self._leave_requested = False
+        self._gemini = GeminiLiveBridge(
+            self._audio_source,
+            on_wake=self._wake_playback,
+            on_leave_request=self._request_leave,
+            on_reconnect=self._recreate_pcm_sink,
+        )
+        self._running = False
+        self._started_at = None
+        self._watcher_task: Optional[asyncio.Task] = None
+        self._receive_restart_task: Optional[asyncio.Task] = None
+        self._receive_restarting = False
+        self._last_activity_at = time.monotonic()
+        self._idle_prompted_at: Optional[float] = None
+
+    def _on_playback_end(self, error=None) -> None:
+        if error:
+            logger.error("Playback error: %s", error)
+
+    def _wake_playback(self) -> None:
+        if not self._running:
+            return
+        if not self._vc or not self._vc.is_connected():
+            return
+        try:
+            if not self._vc.is_playing():
+                self._vc.play(self._audio_source, after=self._on_playback_end)
+        except Exception:
+            pass
+
+    def _record_activity(self) -> None:
+        self._last_activity_at = time.monotonic()
+        self._idle_prompted_at = None
+
+    def _recreate_pcm_sink(self) -> None:
+        """Called after a Gemini reconnect to force a fresh Opus decoder."""
+        logger.info("VoiceLive: recreating PCM sink after Gemini reconnect")
+        if self._vc and self._vc.is_connected():
+            try:
+                if hasattr(self._vc, "is_listening") and self._vc.is_listening():
+                    self._vc.stop_listening()
+            except Exception:
+                pass
+            try:
+                self._listener = GeminiPCMSink(self._feed_audio)
+                self._vc.listen(self._listener, after=self._on_listen_end)
+                logger.info("VoiceLive: PCM sink recreated")
+            except Exception as e:
+                logger.error("VoiceLive: PCM sink recreation failed: %s", e)
+
+    def _request_leave(self, reason: str) -> None:
+        if self._leave_requested:
+            return
+        self._leave_requested = True
+        try:
+            loop = self._vc.loop if self._vc else asyncio.get_running_loop()
+            loop.create_task(self._stop_from_request(reason))
+        except Exception:
+            logger.exception("VoiceLive: could not schedule requested stop")
+
+    async def _stop_from_request(self, reason: str) -> None:
+        logger.info("VoiceLive: stopping from user request: %s", reason)
+        await self.stop()
+
+    async def start(self) -> bool:
+        logger.info("VoiceLive: connecting to %s in guild %d", self._channel, self._guild_id)
+        if voice_recv is None or GeminiPCMSink is None:
+            logger.error("discord-ext-voice-recv is not installed; cannot receive Discord voice")
+            return False
+
+        existing_vc = getattr(self._channel.guild, "voice_client", None)
+        if existing_vc and existing_vc.is_connected():
+            try:
+                logger.info("VoiceLive: disconnecting existing guild voice client before reconnect")
+                await asyncio.wait_for(existing_vc.disconnect(force=True), timeout=10.0)
+            except Exception as e:
+                logger.warning("VoiceLive: existing voice disconnect failed: %s", e)
+
+        receiver = self._adapter._voice_receivers.get(self._guild_id)
+        if receiver:
+            receiver.pause()
+
+        try:
+            self._vc = await self._channel.connect(
+                cls=voice_recv.VoiceRecvClient,
+                timeout=60.0,
+                reconnect=True,
+                self_deaf=False,
+            )
+        except Exception as e:
+            logger.error("Discord voice connect failed: %s", e)
+            if receiver:
+                receiver.resume()
+            return False
+
+        self._listener = GeminiPCMSink(self._feed_audio)
+        try:
+            self._vc.listen(self._listener, after=self._on_listen_end)
+            self._vc.play(self._audio_source, after=self._on_playback_end)
+        except Exception as e:
+            logger.error("Failed to start Discord voice I/O: %s", e)
+            await self.stop()
+            return False
+
+        try:
+            await self._gemini.connect()
+        except Exception as e:
+            logger.error("Gemini connect failed: %s", e)
+            await self.stop()
+            return False
+
+        self._running = True
+        self._started_at = time.monotonic()
+        self._watcher_task = asyncio.create_task(self._connection_watchdog())
+        logger.info("VoiceLive: bridge active for guild %d", self._guild_id)
+        return True
+
+    def _feed_audio(self, pcm_16k_mono: bytes) -> None:
+        self._record_activity()
+        self._gemini.feed_audio(pcm_16k_mono)
+
+    def _on_listen_end(self, error=None) -> None:
+        if error:
+            logger.error("Voice receive error: %s", error)
+        if self._running and self._vc and self._vc.is_connected():
+            if self._receive_restarting:
+                return
+            try:
+                loop = self._vc.loop
+                self._receive_restart_task = loop.create_task(self._restart_receive())
+            except Exception:
+                logger.exception("Could not schedule voice receive restart")
+
+    async def _restart_receive(self) -> None:
+        self._receive_restarting = True
+        try:
+            await asyncio.sleep(2.0)
+            if not self._running or not self._vc or not self._vc.is_connected():
+                return
+            try:
+                if hasattr(self._vc, "is_listening") and self._vc.is_listening():
+                    return
+                self._listener = GeminiPCMSink(self._feed_audio)
+                self._vc.listen(self._listener, after=self._on_listen_end)
+                logger.info("VoiceLive: voice receive restarted")
+            except Exception as e:
+                logger.error("VoiceLive: receive restart failed: %s", e)
+        finally:
+            self._receive_restarting = False
+
+    async def _connection_watchdog(self) -> None:
+        while self._running:
+            await asyncio.sleep(1.0)
+            if not self._vc or not self._vc.is_connected():
+                if not self._running:
+                    return
+                logger.warning("VoiceLive: Discord disconnected. Stopping bridge.")
+                await self.stop()
+                return
+
+            now = time.monotonic()
+            idle = now - self._last_activity_at
+
+            # Phase 1: prompt if idle too long and not already prompted
+            if (
+                IDLE_PROMPT_SECONDS > 0
+                and self._idle_prompted_at is None
+                and idle >= IDLE_PROMPT_SECONDS
+                and self._started_at
+                and now - self._started_at >= AUTO_LEAVE_MIN_UPTIME_SECONDS
+            ):
+                logger.info("VoiceLive: idle for %.0fs — prompting user", idle)
+                self._idle_prompted_at = now
+                await self._gemini.send_text(IDLE_PROMPT_TEXT)
+                continue
+
+            # Phase 2: hang up if no response after grace period
+            if self._idle_prompted_at is not None:
+                grace = now - self._idle_prompted_at
+                if grace >= IDLE_PROMPT_GRACE_SECONDS:
+                    logger.info(
+                        "VoiceLive: no response after %.0fs grace — hanging up", grace
+                    )
+                    await self.stop()
+                    return
+                # Still within grace; don't fall through to plain auto-leave
+                continue
+
+            # Fallback: plain auto-leave if prompt system is disabled
+            if self._should_auto_leave_quiet():
+                logger.info("VoiceLive: auto-leaving after %.0fs of quiet", idle)
+                await self.stop()
+                return
+
+    def _should_auto_leave_quiet(self) -> bool:
+        if AUTO_LEAVE_QUIET_SECONDS <= 0 or self._started_at is None:
+            return False
+        now = time.monotonic()
+        if now - self._started_at < AUTO_LEAVE_MIN_UPTIME_SECONDS:
+            return False
+        if self._vc and self._vc.is_playing():
+            return False
+        return now - self._last_activity_at >= AUTO_LEAVE_QUIET_SECONDS
+
+    async def stop(self):
+        self._running = False
+        if self._receive_restart_task:
+            self._receive_restart_task.cancel()
+        self._audio_source.finish()
+        if self._gemini:
+            self._gemini._user_disconnect = True
+            await self._gemini.disconnect()
+        if self._vc and self._vc.is_connected():
+            try:
+                if hasattr(self._vc, "is_listening") and self._vc.is_listening():
+                    self._vc.stop_listening()
+            except Exception:
+                pass
+            try:
+                self._vc.stop_playing() if hasattr(self._vc, "stop_playing") else self._vc.stop()
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(self._vc.disconnect(), timeout=5.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
+        receiver = self._adapter._voice_receivers.get(self._guild_id)
+        if receiver:
+            receiver.resume()
+        logger.info("VoiceLive bridge stopped")
+
+    def health(self) -> Dict[str, Any]:
+        metrics = dict(getattr(self._gemini, "metrics", {}) or {})
+        sink_stats = self._listener.stats() if self._listener and hasattr(self._listener, "stats") else {}
+        return {
+            "status": "ok" if self._running else "stopped",
+            "running": self._running,
+            "guild_id": self._guild_id,
+            "voice_connected": bool(self._vc and self._vc.is_connected()),
+            "receiving_active": bool(
+                self._vc and hasattr(self._vc, "is_listening") and self._vc.is_listening()
+            ),
+            "playback_active": bool(self._vc and self._vc.is_playing()),
+            "uptime_seconds": round(time.monotonic() - self._started_at, 3) if self._started_at else 0,
+            "quiet_seconds": round(time.monotonic() - self._last_activity_at, 3),
+            "auto_leave_quiet_seconds": AUTO_LEAVE_QUIET_SECONDS,
+            "idle_prompt_seconds": IDLE_PROMPT_SECONDS,
+            "idle_prompt_grace_seconds": IDLE_PROMPT_GRACE_SECONDS,
+            "idle_prompted_seconds": round(time.monotonic() - self._idle_prompted_at, 3) if self._idle_prompted_at else None,
+            "configured_model": GEMINI_MODEL,
+            **sink_stats,
+            **metrics,
+        }
+
+
+HTTP_PORT = int(os.getenv("DISCORD_VOICE_LIVE_PORT", "18943"))
+BRIDGE: Optional[VoiceLiveBridge] = None
+
+
+async def handle_http_request(reader, writer):
+    request_data = b""
+    while True:
+        line = await reader.readline()
+        if not line or line == b"\r\n":
+            break
+        request_data += line
+    request_text = request_data.decode("utf-8", errors="replace")
+    lines = request_text.split("\r\n")
+    if not lines:
+        writer.close()
+        return
+    method_path = lines[0].split(" ")
+    if len(method_path) < 2:
+        writer.close()
+        return
+    path = method_path[1]
+    parsed_url = urlparse(path)
+    route = parsed_url.path
+    response_body = ""
+    status = 200
+    if route == "/health":
+        response_body = json.dumps(BRIDGE.health() if BRIDGE else {"status": "not_started", "running": False})
+    elif route == "/stop":
+        if BRIDGE and BRIDGE._running:
+            await BRIDGE.stop()
+            response_body = json.dumps({"status": "stopped"})
+        else:
+            response_body = json.dumps({"status": "not_running"})
+    elif route == "/say":
+        text = parse_qs(parsed_url.query).get("text", [""])[0]
+        if BRIDGE and BRIDGE._running and text:
+            await BRIDGE._gemini.send_text(text)
+            response_body = json.dumps({"status": "sent", "text": text})
+        else:
+            response_body = json.dumps({"status": "error", "message": "Bridge not running or text missing"})
+            status = 400
+    elif route == "/frame":
+        if not BRIDGE or not BRIDGE._running:
+            response_body = json.dumps({"status": "error", "message": "Bridge not running"})
+            status = 400
+        else:
+            query = parse_qs(parsed_url.query)
+            force = str(query.get("force", ["false"])[0]).lower() in {"1", "true", "yes", "on"}
+            mime_type = query.get("mime", ["image/jpeg"])[0]
+            headers = {}
+            for line in lines[1:]:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    headers[key.lower().strip()] = value.strip()
+            content_length = int(headers.get("content-length", "0") or "0")
+            if content_length <= 0:
+                response_body = json.dumps({"status": "error", "message": "Missing frame body"})
+                status = 400
+            elif content_length > VIDEO_MAX_BYTES:
+                response_body = json.dumps({"status": "error", "message": "Frame too large", "max_bytes": VIDEO_MAX_BYTES})
+                status = HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            else:
+                body = await reader.readexactly(content_length)
+                if "content-type" in headers:
+                    mime_type = headers["content-type"].split(";", 1)[0].strip().lower()
+                result = BRIDGE._gemini.feed_video_frame(body, mime_type, force=force)
+                response_body = json.dumps({"status": "ok" if result.get("accepted") else "dropped", **result})
+    elif route == "/notes":
+        if not BRIDGE or not BRIDGE._running:
+            response_body = json.dumps({"status": "error", "message": "Bridge not running"})
+            status = 400
+        else:
+            query = parse_qs(parsed_url.query)
+            limit = max(1, min(int(query.get("limit", ["50"])[0] or "50"), 500))
+            notes_file = Path(BRIDGE._gemini.metrics.get("notes_file") or "")
+            events: List[Dict[str, Any]] = []
+            if notes_file.exists():
+                lines = notes_file.read_text(encoding="utf-8", errors="replace").splitlines()[-limit:]
+                for line in lines:
+                    try:
+                        events.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+            transcript: List[Dict[str, str]] = []
+            for event in events:
+                direction = str(event.get("direction") or "")
+                text = str(event.get("text") or "").strip()
+                if not direction or not text:
+                    continue
+                if transcript and transcript[-1]["direction"] == direction:
+                    sep = "" if text in {".", ",", "?", "!", ":", ";"} else " "
+                    transcript[-1]["text"] = (transcript[-1]["text"] + sep + text).strip()
+                    transcript[-1]["ts"] = str(event.get("ts") or transcript[-1]["ts"])
+                else:
+                    transcript.append({
+                        "ts": str(event.get("ts") or ""),
+                        "direction": direction,
+                        "text": text,
+                    })
+            response_body = json.dumps({
+                "status": "ok",
+                "notes_file": str(notes_file),
+                "events": events,
+                "transcript": transcript,
+            })
+    else:
+        response_body = json.dumps({"status": "error", "message": "Not found"})
+        status = 404
+    response = (
+        f"HTTP/1.1 {status} OK\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(response_body)}\r\n"
+        f"Connection: close\r\n"
+        f"\r\n"
+        f"{response_body}"
+    )
+    writer.write(response.encode())
+    await writer.drain()
+    writer.close()
+
+
+async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None):
+    global BRIDGE
+    BRIDGE = VoiceLiveBridge(vc, adapter)
+    server = None
+    try:
+        server = await asyncio.start_server(handle_http_request, "127.0.0.1", HTTP_PORT)
+        logger.info("Control API listening on 127.0.0.1:%d", HTTP_PORT)
+        ok = await BRIDGE.start()
+        if not ok:
+            logger.error("Bridge failed to start")
+            if ready_future and not ready_future.done():
+                ready_future.set_result({"ok": False, "message": "Bridge failed to start"})
+            return
+        if ready_future and not ready_future.done():
+            ready_future.set_result({"ok": True, "health": BRIDGE.health(), "vc": BRIDGE._vc})
+
+        # Watch for stop() to close server so run_sidecar task completes
+        async def _shutdown_watcher():
+            while BRIDGE and BRIDGE._running:
+                await asyncio.sleep(1.0)
+            logger.info("VoiceLive: shutting down control server")
+            if server:
+                server.close()
+        shutdown_task = asyncio.create_task(_shutdown_watcher())
+
+        async with server:
+            await server.serve_forever()
+        # server stopped — either by watcher or cancel
+        shutdown_task.cancel()
+    except asyncio.CancelledError:
+        if ready_future and not ready_future.done():
+            ready_future.cancel()
+    except Exception as exc:
+        if ready_future and not ready_future.done():
+            ready_future.set_result({"ok": False, "message": str(exc)})
+        raise
+    finally:
+        if server:
+            server.close()
+            await server.wait_closed()
+        if BRIDGE:
+            await BRIDGE.stop()
+
+
+if __name__ == "__main__":
+    if not GEMINI_API_KEY:
+        print("FATAL: GEMINI_API_KEY not set", file=sys.stderr)
+        sys.exit(1)
+    print("Voice Live sidecar started (standalone test mode)", file=sys.stderr)
+    print("Run via Hermes plugin to provide voice_client and adapter", file=sys.stderr)

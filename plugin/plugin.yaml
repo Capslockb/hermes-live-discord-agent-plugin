@@ -1,0 +1,27 @@
+name: discord-voice
+version: 0.1.0
+kind: standalone
+platforms: [linux]
+description: High-performance Discord Voice bridge via Gemini Multimodal Live API
+python_requirements:
+  - requirements.txt
+provides_tools:
+  - voice_live
+  - voice_live_leave
+requirements_env:
+  - name: DISCORD_BOT_TOKEN
+    prompt: "Discord bot token"
+    password: true
+  - name: GEMINI_API_KEY
+    prompt: "Google Gemini API key"
+    password: true
+optional_env:
+  - name: GEMINI_MODEL
+    prompt: "Gemini Live model (default: gemini-3.1-flash-live-preview)"
+    password: false
+  - name: GEMINI_LIVE_MODEL_FALLBACKS
+    prompt: "Comma-separated Gemini Live fallback models"
+    password: false
+  - name: DISCORD_VOICE_LIVE_PORT
+    prompt: "Local HTTP control port (default: 18943)"
+    password: false

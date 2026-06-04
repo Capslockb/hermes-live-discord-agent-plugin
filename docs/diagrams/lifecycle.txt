@@ -1,0 +1,80 @@
+                          ╔══════════════════════════════════════╗
+                          ║   LIFECYCLE / slash command flow    ║
+                          ╚══════════════════════════════════════╝
+
+  USER (in Discord)        HERMES GATEWAY                BRIDGE
+  ────────────────         ───────────────                ──────
+       │
+       │  /voice-live
+       ├────────────────────►│
+       │                     │  register_tool lookup
+       │                     │  voice_live()
+       │                     │
+       │                     │  force-disconnect any
+       │                     │  existing vc in guild
+       │                     │  (Gemini↔Vapi safety)
+       │                     │
+       │                     │  importlib.load(bridge.py)
+       │                     │
+       │                     │  create_task(run_sidecar)
+       │                     ├─────────────────────►│
+       │                     │                       │
+       │                     │                       │  channel.connect()
+       │                     │                       │  (~27s due to CDN
+       │                     │                       │   handshake quirk)
+       │                     │                       │
+       │                     │                       │  open Gemini WSS
+       │                     │                       │  send session config
+       │                     │                       │
+       │                     │                       │  start VoiceListener
+       │                     │                       │  start LiveAudioSource
+       │                     │                       │  start sidecar HTTP
+       │                     │                       │
+       │                     │                       │  resolve ready_future
+       │                     │  ◄─────────────────────┤
+       │                     │  { ok: True, vc: ... }│
+       │                     │
+       │  "Voice bridge      │
+       │   started in        │
+       │   #channel-name"    │
+       │  ◄───────────────────┤
+       │                     │
+       │  (conversation)     │
+       │  ◄──────────────────►│  ◄──────────────────►│  ◄──► Gemini
+       │                     │                       │
+       │  /voice-live-leave  │
+       ├────────────────────►│
+       │                     │  bridge task cancel
+       │                     ├─────────────────────►│
+       │                     │                       │  close WSS
+       │                     │                       │  vc.disconnect()
+       │                     │                       │  HTTP server shutdown
+       │                     │                       │
+       │                     │  pop _active_bridges  │
+       │                     │  ◄─────────────────────┤
+       │  "Bridge stopped"   │
+       │  ◄───────────────────┤
+
+
+  IDEMPOTENT RE-ENTRY:
+
+    /voice-live  ──►  same channel?    ──►  "success: ready"   (no-op)
+                   └─ different chan?  ──►  vc.move_to()       (no disconnect)
+                   └─ stale entry?     ──►  cancel + start fresh
+
+
+  AUTOSTART (on gateway boot):
+
+    voice-live-autostart.json exists?
+        │ yes
+        ▼
+    _schedule_autostart_thread()
+        │
+        ▼
+    180s deadline loop:
+        - find adapter
+        - read params
+        - call voice_live() on gateway loop
+        │
+        ▼
+    success → delete autostart file

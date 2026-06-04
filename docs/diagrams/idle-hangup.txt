@@ -1,0 +1,74 @@
+                  ╔════════════════════════════════════════════╗
+                  ║     IDLE HANGUP — TWO-PHASE TIMER         ║
+                  ╚════════════════════════════════════════════╝
+
+  TIMELINE ─────────────────────────────────────────────────────►
+
+  T=0              user stops talking
+  │
+  │                "quiet_seconds" accumulates
+  │                on every health check
+  │
+  T=300s           ┌─────────────────────────┐
+  (IDLE_PROMPT_    │  PHASE 1: PROMPT         │
+   SECONDS)        │  Inject "Are you still  │
+                   │  there?" into Gemini    │
+                   │  session as user turn    │
+                   │                         │
+                   │  Gemini replies with    │
+                   │  TTS: "Yes? I'm here."  │
+                   └────────────┬────────────┘
+                                │
+                                │ "idle_prompted_seconds"
+                                │ is now non-null in /health
+                                │
+  T=300s+60s       ┌────────────▼────────────┐
+  (PROMPT + GRACE) │  PHASE 2: HANGUP        │
+                   │  No user speech seen    │
+                   │  in GRACE window.       │
+                   │                         │
+                   │  Action:                │
+                   │   1. send stop frame    │
+                   │   2. close WSS          │
+                   │   3. vc.disconnect()    │
+                   │   4. pop _active_bridges│
+                   └─────────────────────────┘
+
+  ── ALTERNATE: user speaks during grace ──────────────
+
+  T=300s           prompt fires
+  T=300s+12s       user says "yeah, still here"
+  │                both timers reset to 0
+  │                idle_prompted_seconds = null again
+  T=300s+12s+...   prompt fires again (full wait)
+
+
+  STATE MACHINE (per bridge instance):
+
+                  ┌────────────┐
+                  │   IDLE     │  quiet_seconds < PROMPT
+                  │  (talking  │
+                  │   fine)    │
+                  └─────┬──────┘
+                        │ quiet_seconds >= PROMPT
+                        ▼
+                  ┌────────────┐
+                  │  PROMPTED  │  idle_prompted_seconds < GRACE
+                  │            │
+                  └─────┬──────┘
+                        │ user speaks?
+              ┌─────────┴─────────┐
+              │ yes               │ no (>= GRACE)
+              ▼                   ▼
+        ┌──────────┐         ┌──────────┐
+        │  back to │         │  HANGUP  │
+        │   IDLE   │         │ (stop)   │
+        └──────────┘         └──────────┘
+
+
+  CONFIG (env vars):
+    DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS         = 300  (0 = disabled)
+    DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS   = 60
+    DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT            = "Are you still there?"
+    DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS    = 900  (fallback if prompt disabled)
+    DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECS  = 120  (don't hangup early)

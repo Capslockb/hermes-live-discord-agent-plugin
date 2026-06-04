@@ -1,0 +1,42 @@
+                   ╔═══════════════════════════════════════════════╗
+                   ║         AUDIO PIPELINE (end-to-end)         ║
+                   ╚═══════════════════════════════════════════════╝
+
+  USER ──► MIC ──► DISCORD ──► UDP ──► NaCl ──► Opus ──► numpy ──► base64 ──► GEMINI
+           │       (48kHz)   (RTP)  decrypt  decode   downsample  encode      WSS
+           │                                                              │
+           │                                                              │
+           │       Opus   Opus   numpy   base64                          │
+           │       decode encode upsample encode                          │
+           │        ▲      ▲       ▲        ▲                             │
+           │        │      │       │        │                             │
+           │       PCM    48kHz  48kHz    24kHz                          │
+           │       24kHz  stereo stereo    mono                          │
+           │        │      │       │        │                             ▼
+           │        └──────┴───────┴────────┴───── ◄── LiveAudioSource ──┘
+           │                                    │
+           │                                    ▼
+           │                              DISCORD VOICE
+           │                              (Opus encode + send)
+           │                                    │
+           ▼                                    ▼
+       SPEAKER ◄──────────────────────────────┘
+
+
+  SAMPLE RATES:
+    Discord UDP        : 48 kHz stereo  (Opus)
+    VoiceListener      : 48 kHz stereo  → 16 kHz mono  (downsample to Gemini)
+    Gemini WSS         : 16 kHz mono in / 24 kHz mono out
+    LiveAudioSource    : 24 kHz mono   → 48 kHz stereo  (upsample for Discord)
+
+
+  THREADING:
+    [gateway asyncio loop]   owns Gemini WSS, dispatches tool calls
+    [VoiceListener thread]   reads from Discord rx, decodes Opus
+    [discord.py voice tx]    pulls from LiveAudioSource, encodes Opus
+    [LiveAudioSource queue]  thread-safe bridge between async and tx
+
+  LATENCY (typical):
+    Discord UDP rx → Gemini:        ~50ms
+    Gemini WSS → Discord UDP tx:    ~150-300ms (model TTS + frame buffering)
+    End-to-end round trip:         ~400-600ms
