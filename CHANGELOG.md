@@ -1,5 +1,29 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.2.5 — 2026-06-05
+
+### Features
+- **GitHub repo tracker (criterion #22)** — 6 new voice tools that wrap the existing `gh` CLI (already authenticated as Capslockb):
+  - `local_github_repo_list` — list the user's GitHub repos
+  - `local_github_issues` — list issues for a specific repo
+  - `local_github_prs` — list pull requests for a specific repo
+  - `local_github_issue_create` — create a new issue
+  - `local_github_note` — append a free-form note to `~/.hermes/voice-users/voice-session-notes.jsonl` (the "leave notes for hermes to update after call" piece)
+  - `local_github_notes_read` — read back persisted notes (most recent first)
+- **Note persistence** (criterion #22 follow-on) — voice session notes are written to `~/.hermes/voice-users/voice-session-notes.jsonl` in append-only mode so the next Hermes turn (or any future voice session) can pick up the action items.
+
+### Configuration additions
+```
+DISCORD_VOICE_LIVE_GITHUB_TOOLS=true   (default: true; set false to disable all 6 tools)
+```
+
+### Tests
+- New `scripts/regression_test_criterion_22.py` — 22 checks across 5 sets covering declarations, real `gh` CLI calls, note roundtrip, and error handling. All 22 pass.
+
+---
+
+---
+
 ## 0.2.4 — 2026-06-05
 
 ### Features
@@ -30,6 +54,7 @@ DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3
 
 ---
 
+
 ## 0.2.3 — 2026-06-05
 
 ### Fixes
@@ -43,6 +68,7 @@ DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3
 
 ---
 
+
 ## 0.2.1 — 2026-06-05
 
 ### Fixes
@@ -52,6 +78,7 @@ DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3
 - **New `scripts/regression_test_user_isolation.py`** — 50 checks across 11 sets exercising the full per-user isolation surface (legacy fallback, owner privilege, new-user safe defaults, explicit disable, cross-user opencode denial, profile round-trip, index tracking, auto-owner promotion, "all" override, list API). Run with `python3 scripts/regression_test_user_isolation.py`. All 50 pass.
 
 ---
+
 
 ## 0.2.0 — 2026-06-05
 
@@ -99,6 +126,7 @@ Major feature drop: per-user profiles, OpenCode delegation, real keyboard SFX, a
 
 ---
 
+
 ## 0.1.0 — 2026-06-04
 
 Initial public release.
@@ -125,3 +153,5 @@ See [`docs/KNOWN_BUGS.md`](docs/KNOWN_BUGS.md). Key ones:
 - Discord CDN handshake rejection (code 4006) — first ~5 attempts always fail; just wait ~27 s.
 - Module import path uses dash→underscore normalization.
 - Function-calling handlers must return quickly; long work must go to a background task.
+
+
