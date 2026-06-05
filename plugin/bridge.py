@@ -3298,13 +3298,16 @@ class GeminiLiveBridge:
                         "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
                     }
                 },
-                # mediaResolution lives INSIDE generationConfig for the Live API
-                # setup payload (verified via https://ai.google.dev/api/live
-                # on 2026-06-05). The Live generationConfig is a separate
-                # schema from the standard one — top-level videoConfig
-                # causes "Unknown name 'videoConfig' at 'setup'" WebSocket
-                # error 1007. LOW ≈ 100 tokens/frame vs default ~258.
-                "mediaResolution": "LOW",
+                # NOTE: mediaResolution is intentionally OMITTED from the setup
+                # payload. The Gemini Live API rejects it with
+                # "Unknown name 'mediaResolution' at 'setup': Cannot find field."
+                # for the current model lineup (3.1-flash-live-preview and
+                # 2.5-flash-native-audio-preview-*). The field exists in the docs
+                # for "native audio" models but is NOT accepted on these
+                # specific model names. The Live API works fine without it —
+                # omitting it avoids the 1007 setup error. Frame-size cost is
+                # already controlled at the bridge level (1 fps cap + 512 KB
+                # max + audio-gating).
             },
             "realtimeInputConfig": {
                 "activityHandling": "START_OF_ACTIVITY_INTERRUPTS",
