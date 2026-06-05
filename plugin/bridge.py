@@ -35,7 +35,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
-from typing import Any, Optional, Dict, List, Callable
+from typing import Any, Optional, Dict, List, Callable, Tuple
 
 import numpy as np
 
@@ -703,6 +703,12 @@ _OPENCODE_SESSIONS: Dict[Any, Dict[str, Any]] = {}
 # are (user_id, session_name) tuples so two users never collide.
 _OPENCODE_CURRENT_USER: Optional[str] = None
 
+# Module-level "current bridge" reference. Set by
+# `_run_opencode_tool_with_bridge` for the duration of a single tool
+# dispatch. The watcher uses this as a fallback when the per-session
+# weak-ref registry hasn't been populated yet.
+_opencode_current_bridge: Optional[Any] = None
+
 
 def _opencode_set_user(user_id: Optional[str]) -> None:
     """Set the current opencode user context (called from bridge executor before dispatch)."""
@@ -767,6 +773,335 @@ def _opencode_list_sessions() -> List[Dict[str, Any]]:
     ]
 
 
+# ── OpenCode progress watcher ───────────────────────────────────────────
+# Long-running opencode tasks (multi-minute code refactors, builds, test
+# runs) leave the user in silence. This watcher periodically checks the
+# opencode log file and injects a text message into the live Gemini
+# session so the agent speaks the progress aloud.
+#
+# Design:
+#   - Spawned as an asyncio.Task on the gateway's event loop when
+#     `opencode_run` is called (if the bridge instance is available).
+#   - Polls the log file every OPENCODE_WATCHER_POLL_SECONDS.
+#   - Throttles voice updates: at most once per
+#     OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS, and only after an initial
+#     OPENCODE_WATCHER_INITIAL_DELAY_SECONDS grace period.
+#   - Detects milestones (errors, test pass/fail, "done", compile
+#     success) and sends an immediate update regardless of throttle.
+#   - Respects "agent currently speaking" and "user currently speaking"
+#     gates — defers or drops updates rather than barging in.
+#   - On tmux window death (the opencode session ended), sends a final
+#     summary and stops the watcher.
+#
+# Per-user isolation: watchers are keyed (user_id, session_name) like the
+# session registry. Two users can each have an active watcher without
+# interference.
+
+OPENCODE_WATCHER_ENABLED = os.getenv("DISCORD_VOICE_LIVE_OPENCODE_WATCHER", "true").lower() in {"1", "true", "yes", "on"}
+OPENCODE_WATCHER_POLL_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_OPENCODE_WATCHER_POLL_SECONDS", "5"))
+OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS", "30"))
+OPENCODE_WATCHER_INITIAL_DELAY_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_OPENCODE_WATCHER_INITIAL_DELAY_SECONDS", "60"))
+
+# Milestone regex (case-insensitive). Matched against the new tail of
+# the log since the last update. Any match triggers an immediate voice
+# update regardless of throttle.
+_MILESTONE_RE = re.compile(
+    r"(?i)("
+    r"\berror\b|\bexception\b|\btraceback\b|\bfailed\b|\bfatal\b|"
+    r"\btest(s)?\s*(pass(ed)?|fail(ed)?)\b|"
+    r"\bcompile(d)?\s*(success(fully)?|error)?\b|"
+    r"\bbuild\s*(success(fully)?|fail(ed)?)\b|"
+    r"\bdone\b|\bcomplete(d)?\b|\bfinish(ed)?\b|"
+    r"\bcommit\b|\bpush(ed)?\b|"
+    r"\u2713|\u2717|"
+    r")"
+)
+
+
+def _opencode_extract_progress(log_path: str, last_line_count: int, max_lines: int = 40) -> Tuple[str, int, bool]:
+    """Read new lines from an opencode log file and build a progress summary.
+
+    Returns:
+        (progress_text, new_line_count, is_milestone)
+
+    The progress_text is short enough to inject as a single text turn
+    (~200-500 chars). If no new content, returns empty string.
+    """
+    try:
+        p = Path(log_path)
+        if not p.exists():
+            return "", last_line_count, False
+        with p.open("r", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as exc:
+        logger.debug("opencode watcher: read failed (%s): %s", log_path, exc)
+        return "", last_line_count, False
+
+    if len(lines) <= last_line_count:
+        return "", last_line_count, False
+
+    new_lines = lines[last_line_count:][-max_lines:]
+    new_line_count = len(lines)
+
+    # Strip blank lines and ANSI escape codes
+    cleaned = []
+    for ln in new_lines:
+        s = re.sub(r"\x1b\[[0-9;]*m", "", ln.rstrip())
+        if s.strip():
+            cleaned.append(s)
+    if not cleaned:
+        return "", new_line_count, False
+
+    # Milestone detection: scan the cleaned lines for any keyword
+    is_milestone = any(_MILESTONE_RE.search(s) for s in cleaned)
+
+    # Build a concise summary — show first 3 + last 5 lines if long
+    if len(cleaned) <= 8:
+        body = "\n".join(cleaned)
+    else:
+        head = cleaned[:3]
+        tail = cleaned[-5:]
+        body = "\n".join(head) + f"\n... ({len(cleaned) - 8} more lines) ...\n" + "\n".join(tail)
+
+    if is_milestone:
+        progress = f"[opencode milestone] {body}"
+    else:
+        progress = f"[opencode progress] {body}"
+
+    # Cap length to keep the voice turn short
+    if len(progress) > 600:
+        progress = progress[:600] + "..."
+    return progress, new_line_count, is_milestone
+
+
+def _opencode_tmux_window_alive(tmux_session: str, window_name: str) -> bool:
+    """Return True if the named tmux window still exists."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["tmux", "list-windows", "-t", tmux_session, "-F", "#{window_name}"],
+            capture_output=True,
+            timeout=5,
+        )
+        if out.returncode != 0:
+            return False
+        windows = out.stdout.decode(errors="replace").splitlines()
+        return window_name in windows
+    except Exception:
+        return False
+
+
+# Global registry of watcher tasks: (user_id, session_name) -> asyncio.Task
+_OPENCODE_WATCHERS: Dict[Any, "asyncio.Task"] = {}
+# A weak ref to the bridge instance per (user_id, session_name). The watcher
+# uses this to call send_text. Stored separately so the task can drop the
+# ref when done.
+_OPENCODE_BRIDGE_REFS: Dict[Any, Any] = {}
+
+
+def _opencode_register_bridge(session_name: str, user_id: Optional[str], bridge: Any) -> None:
+    """Store a weak ref to the bridge for the watcher's send_text calls."""
+    import weakref
+    key = (user_id, session_name)
+    try:
+        _OPENCODE_BRIDGE_REFS[key] = weakref.ref(bridge)
+    except TypeError:
+        # Bridge doesn't support weakref (e.g. compiled class) — skip
+        pass
+
+
+def _opencode_get_bridge(session_name: str, user_id: Optional[str]) -> Any:
+    """Get the bridge instance for the watcher's send_text calls.
+
+    Tries the per-session registry first (set by _run_opencode_tool_with_bridge).
+    Falls back to the module-level _opencode_current_bridge if no per-session
+    ref was registered yet.
+    """
+    key = (user_id, session_name)
+    ref = _OPENCODE_BRIDGE_REFS.get(key)
+    if ref is not None:
+        bridge = ref()
+        if bridge is not None:
+            return bridge
+        _OPENCODE_BRIDGE_REFS.pop(key, None)
+    # Fallback: use the most recently active bridge (works when there's
+    # only one active session per user, which is the common case)
+    return _opencode_current_bridge
+
+
+async def _opencode_watcher_loop(
+    session_name: str,
+    tmux_session: str,
+    tmux_window: str,
+    log_path: str,
+    user_id: Optional[str],
+    goal: str,
+    model: Optional[str],
+) -> None:
+    """Background task: watch an opencode log, inject progress into Gemini Live.
+
+    Runs until the tmux window dies (task finished or killed) or the bridge
+    disconnects. Sends voice updates with throttling + milestone detection.
+    """
+    import time as _time
+    key = (user_id, session_name)
+    last_line_count = 0
+    last_voice_at: Optional[float] = None
+    started_at = _time.monotonic()
+    last_window_alive = True
+    milestone_triggered = False
+    final_summary_sent = False
+
+    try:
+        # Initial delay before any voice activity
+        await asyncio.sleep(OPENCODE_WATCHER_INITIAL_DELAY_SECONDS)
+
+        while True:
+            # Check tmux window liveness
+            alive = _opencode_tmux_window_alive(tmux_session, tmux_window)
+            if not alive and last_window_alive:
+                # The opencode session ended. Read final log and send summary.
+                last_window_alive = False
+                await asyncio.sleep(2.0)  # let tee flush
+                progress, last_line_count, _ = _opencode_extract_progress(
+                    log_path, last_line_count, max_lines=20
+                )
+                bridge = _opencode_get_bridge(session_name, user_id)
+                elapsed = int(_time.monotonic() - started_at)
+                mins, secs = divmod(elapsed, 60)
+                elapsed_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+                final_body = ("Here is the final output:\n" + progress) if progress else "No output captured."
+                final = (
+                    f"[opencode finished after {elapsed_str}] "
+                    f"Session '{session_name}' has ended. {final_body}"
+                )
+                if bridge is not None:
+                    try:
+                        await bridge.send_text(final)
+                    except Exception:
+                        pass
+                final_summary_sent = True
+                logger.info(
+                    "opencode watcher: session %s finished after %ss, final update sent",
+                    session_name, elapsed,
+                )
+                break
+            last_window_alive = alive
+
+            # Read new log content
+            progress, last_line_count, is_milestone = _opencode_extract_progress(
+                log_path, last_line_count, max_lines=30
+            )
+            if progress:
+                now = _time.monotonic()
+                elapsed = int(now - started_at)
+                mins, secs = divmod(elapsed, 60)
+                elapsed_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+                # Throttle: only speak if enough time has passed OR milestone
+                should_speak = False
+                if is_milestone:
+                    should_speak = True
+                    milestone_triggered = True
+                elif last_voice_at is None or (now - last_voice_at) >= OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS:
+                    should_speak = True
+
+                if should_speak:
+                    # Don't barge in if the user is currently speaking
+                    bridge = _opencode_get_bridge(session_name, user_id)
+                    if bridge is None:
+                        # Bridge gone — stop watching
+                        break
+                    last_input = getattr(bridge, "metrics", {}).get("last_input_monotonic")
+                    if last_input is not None and (now - float(last_input)) < 5.0:
+                        # User is speaking right now — defer this update
+                        pass
+                    else:
+                        # Compose a turn that asks Gemini to speak the progress
+                        turn = (
+                            f"User is waiting for opencode session '{session_name}' "
+                            f"(goal: {goal[:120]}). It has been running for {elapsed_str}. "
+                            f"Here is the latest output — please summarize briefly for the user in voice.\n\n"
+                            f"{progress}"
+                        )
+                        try:
+                            await bridge.send_text(turn)
+                            last_voice_at = now
+                        except Exception as exc:
+                            logger.debug("opencode watcher: send_text failed: %s", exc)
+
+            await asyncio.sleep(OPENCODE_WATCHER_POLL_SECONDS)
+    except asyncio.CancelledError:
+        # Watcher was cancelled (e.g. bridge disconnect or user opencode_stop).
+        # Send a brief "stopped" notice if the bridge is still around.
+        bridge = _opencode_get_bridge(session_name, user_id)
+        if bridge is not None and not final_summary_sent:
+            try:
+                await bridge.send_text(
+                    f"[opencode watcher stopped] Session '{session_name}' was stopped or bridge disconnected."
+                )
+            except Exception:
+                pass
+        raise
+    except Exception as exc:
+        logger.warning("opencode watcher: loop crashed: %s", exc, exc_info=True)
+    finally:
+        _OPENCODE_WATCHERS.pop(key, None)
+        _OPENCODE_BRIDGE_REFS.pop(key, None)
+        logger.debug("opencode watcher: cleaned up %s", key)
+
+
+def _opencode_spawn_watcher(
+    session_name: str,
+    tmux_session: str,
+    tmux_window: str,
+    log_path: str,
+    user_id: Optional[str],
+    goal: str,
+    model: Optional[str],
+    bridge: Any,
+) -> None:
+    """Spawn a background watcher task. Idempotent (replaces existing)."""
+    if not OPENCODE_WATCHER_ENABLED:
+        return
+    key = (user_id, session_name)
+    # Cancel any prior watcher for this key
+    prior = _OPENCODE_WATCHERS.pop(key, None)
+    if prior is not None and not prior.done():
+        prior.cancel()
+    _opencode_register_bridge(session_name, user_id, bridge)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # Not in an async context — defer watcher start to next call
+        return
+    task = loop.create_task(
+        _opencode_watcher_loop(
+            session_name=session_name,
+            tmux_session=tmux_session,
+            tmux_window=tmux_window,
+            log_path=log_path,
+            user_id=user_id,
+            goal=goal,
+            model=model,
+        )
+    )
+    _OPENCODE_WATCHERS[key] = task
+    logger.info(
+        "opencode watcher: spawned for %s (user=%s, log=%s, poll=%.1fs, min_gap=%.1fs)",
+        session_name, user_id, log_path,
+        OPENCODE_WATCHER_POLL_SECONDS, OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS,
+    )
+
+
+def _opencode_stop_watcher(session_name: str, user_id: Optional[str]) -> None:
+    """Cancel the watcher for a session (called from opencode_stop)."""
+    key = (user_id, session_name)
+    task = _OPENCODE_WATCHERS.pop(key, None)
+    if task is not None and not task.done():
+        task.cancel()
+    _OPENCODE_BRIDGE_REFS.pop(key, None)
+
+
 def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], workdir: Optional[str]) -> Dict[str, Any]:
     """Spawn opencode in a new tmux window under the configured session.
 
@@ -824,6 +1159,19 @@ def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], wor
         "log_path": f"/tmp/opencode-{window_name}.log",
         "user_id": _OPENCODE_CURRENT_USER,
     }
+    # Spawn the progress watcher so the user gets voice updates on long
+    # opencode runs. Uses the module-global _opencode_current_bridge (set
+    # by _run_opencode_tool_with_bridge) as a back-ref for send_text.
+    _opencode_spawn_watcher(
+        session_name=session_name,
+        tmux_session=OPENCODE_TMUX_SESSION,
+        tmux_window=window_name,
+        log_path=f"/tmp/opencode-{window_name}.log",
+        user_id=_OPENCODE_CURRENT_USER,
+        goal=prompt,
+        model=model,
+        bridge=_opencode_current_bridge,
+    )
     return {
         "result": {
             "name": session_name,
@@ -916,6 +1264,9 @@ def _opencode_stop(name: str) -> Dict[str, Any]:
     if not meta:
         return {"error": f"no opencode session named '{name}' for current user"}
     window = meta["tmux_window"]
+    # Cancel the progress watcher first so it doesn't fire a final summary
+    # for a session we just killed.
+    _opencode_stop_watcher(name, _OPENCODE_CURRENT_USER)
     subprocess.run(
         ["tmux", "kill-window", "-t", f"{OPENCODE_TMUX_SESSION}:{window}"],
         capture_output=True,
@@ -1004,8 +1355,27 @@ _OPENCODE_FUNCTION_DECLARATIONS = [
 ]
 
 
+def _run_opencode_tool_with_bridge(
+    name: str, args: Dict[str, Any], user_id: Optional[str], bridge: Any
+) -> Dict[str, Any]:
+    """Bridge entry point: set the per-user context then dispatch.
+
+    The `bridge` reference is stored module-globally so the watcher (spawned
+    in the executor's thread) can call back into send_text() from the
+    gateway's event loop via the weak-ref registry. The bridge also exposes
+    itself via a thread-local for the duration of the call.
+    """
+    global _opencode_current_bridge
+    _opencode_set_user(user_id)
+    _opencode_current_bridge = bridge
+    try:
+        return _run_opencode_tool(name, args)
+    finally:
+        _opencode_current_bridge = None
+
+
 def _run_opencode_tool_with_user(name: str, args: Dict[str, Any], user_id: Optional[str]) -> Dict[str, Any]:
-    """Bridge entry point: set the per-user context then dispatch."""
+    """Legacy entry point: set the per-user context then dispatch (no bridge)."""
     _opencode_set_user(user_id)
     return _run_opencode_tool(name, args)
 
@@ -2686,8 +3056,8 @@ class GeminiLiveBridge:
                         _user_id = self._user_profile.discord_id if self._user_profile is not None else None
                         result = await loop.run_in_executor(
                             None,
-                            _run_opencode_tool_with_user,
-                            name, args, _user_id,
+                            _run_opencode_tool_with_bridge,
+                            name, args, _user_id, self,
                         )
                     else:
                         result = {"error": f"No handler for tool: {name}"}
