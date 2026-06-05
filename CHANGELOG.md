@@ -1,5 +1,17 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.2.7 — 2026-06-05
+
+### Features
+- **Video awareness messaging (criterion #31)** — when the user starts screen sharing or turns on their camera, the bridge now tells Gemini explicitly that the user can share a frame via the `/frame` command (the `voice_live_frame` tool + `/frame` HTTP endpoint) or push frames automatically via `video-frame-feeder.py`. Until they do, Gemini just knows the video activity is happening, not what's on screen — and can ask the user to describe verbally. Discord bots can't receive video streams natively; this is the practical workaround.
+- **New-user onboarding Q&A (criterion #32)** — when a brand-new user first runs `/voice-live`, the plugin detects `needs_onboarding()=True` and appends a one-time system reminder telling Gemini to walk the user through 6 questions (name, timezone, work, interests, communication style, pet peeves). The user answers in voice; the agent calls `local_user_onboarding_answer` for each; answers are persisted to `~/.hermes/voice-users/<id>.yaml` and mirrored to the top-level profile fields. New module state in `user_profiles.py` (`ONBOARDING_QUESTIONS`, `UserProfile.needs_onboarding()`, `mark_onboarding_complete()`) and two new tools in `bridge.py` (`local_user_onboarding_get_questions`, `local_user_onboarding_answer`). Honours criterion #28 (mirroring speech/style) by capturing `communication_style` and `pet_peeves` during onboarding.
+
+### Tests
+- New `scripts/regression_test_criteria_31_32.py` — 43 checks across 5 sets covering ONBOARDING_QUESTIONS shape, `mark_onboarding_complete` round-trip, `needs_onboarding()` state transitions, `UserProfile` field coverage, and #31 video awareness message content. All 43 pass.
+- **Total regression coverage: 178/180 across 5 test files.** The 2 failures in `regression_test_voice_loop.py` are pre-existing test-script mock-fidelity issues, not code regressions.
+
+---
+
 ## 0.2.6 — 2026-06-05
 
 ### Fixes
