@@ -1,5 +1,22 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.2.2 — 2026-06-05
+
+### Fixes
+- **Autostart leave/join loop guard** — the autostart thread now exits cleanly when a bridge is already active in the target guild+channel, instead of repeatedly calling `voice_live` which would toggle-leave and re-join. Symptoms: bot kept leaving and re-joining the voice channel, finally exiting with "Bridge failed to start". Cause: the inner `voice_live()` matches the active channel and triggers `voice_live_leave()` as a "toggle" — the next autostart iteration then reverses by re-joining. Fix: explicit already-active short-circuit in `_autostart_voice_live()` that detects the active bridge via `_active_bridges[gid]["vc"]` and returns without re-entering `voice_live`. Also added a NoneType guard in `voice_live_leave()` for the `task` field so a partially-initialized bridge doesn't crash with `'NoneType' object has no attribute 'cancel'`.
+- **Discord adapter: native slash command wiring** — replaced the `ctx.register_command()` workaround (which registered Hermes-CLI / in-session commands that Discord does NOT surface as native `/` commands) with the official pattern: `@tree.command(name="voice-live")` and `@tree.command(name="voice-live-leave")` blocks added to the Discord platform adapter at `gateway/platforms/discord/adapter.py`. These call directly into the plugin's importable `voice_live` / `voice_live_leave` functions, mirror the existing `tree.command` blocks (e.g. `/model`, `/restart`), and go through the same `_check_slash_authorization` gate. Restart the gateway and the commands appear in the Discord `/` autocomplete menu natively. The plugin's `voice_live()` now also auto-infers the invoker's current voice channel when called with empty guild_id+channel_id (the path the slash command takes).
+
+### Documentation
+- README + this CHANGELOG updated to reference the slash command architecture.
+- New `scripts/regression_test_voice_loop.py` — focused tests for the autostart loop guard, plugin importability via `hermes_plugins.discord_voice`, and the NoneType guard.
+
+### Known issues
+- See [`docs/KNOWN_BUGS.md`](docs/KNOWN_BUGS.md). The `mediaResolution` placement fix landed in 0.2.1 (camelCase `mediaResolution: "LOW"` inside `generationConfig`).
+
+---
+
+# CHANGELOG — gemini-live-discord-bridge
+
 ## 0.2.1 — 2026-06-05
 
 ### Fixes

@@ -169,76 +169,19 @@ def register(ctx):
         is_async=True,
     )
 
-    # Slash command wrapper: /voice-live in Discord starts the Gemini Live bridge.
-    # The plugin already exposes voice_live as a tool for the LLM; this adds
-    # the /voice-live slash command so the gateway router recognizes it.
-    async def _slash_voice_live(raw_args: str) -> str:
-        import gateway.run as _gw
-        from gateway.platforms.base import Platform
-        runner = None
-        ref = getattr(_gw, "_gateway_runner_ref", None)
-        if callable(ref):
-            runner = ref()
-        if runner is None:
-            runner = getattr(getattr(_gw, "GatewayRunner", object), "_instance", None)
-        if not runner:
-            return "Gateway not available."
-        adapter = runner.adapters.get(Platform("discord"))
-        if not adapter:
-            return "Discord adapter not found."
-        user_id = DEFAULT_USER_ID
-        inferred = _infer_user_voice_channel(adapter, str(user_id))
-        if not inferred:
-            return "Could not infer your current voice channel. Join a voice channel first."
-        guild_id_str, channel_id_str = inferred
-        result = json.loads(await voice_live(adapter, guild_id_str, channel_id_str, user_id=str(user_id)))
-        status = result.get("status", "error")
-        msg = result.get("message", "")
-        if status == "success":
-            return f"✅ voice-live: {msg}"
-        if status == "pending":
-            return f"⏳ voice-live: {msg}"
-        return f"❌ voice-live: {msg or status}"
-
-    ctx.register_command(
-        name="voice-live",
-        handler=_slash_voice_live,
-        description="Start Gemini Live voice bridge in your current voice channel",
-        args_hint="",
-    )
-
-    async def _slash_voice_live_leave(raw_args: str) -> str:
-        import gateway.run as _gw
-        runner = None
-        ref = getattr(_gw, "_gateway_runner_ref", None)
-        if callable(ref):
-            runner = ref()
-        if runner is None:
-            runner = getattr(getattr(_gw, "GatewayRunner", object), "_instance", None)
-        if not runner:
-            return "Gateway not available."
-        from gateway.platforms.base import Platform
-        adapter = runner.adapters.get(Platform("discord"))
-        if not adapter:
-            return "Discord adapter not found."
-        user_id = DEFAULT_USER_ID
-        inferred = _infer_user_voice_channel(adapter, str(user_id))
-        if not inferred:
-            return "No active voice session found."
-        guild_id_str = inferred[0]
-        result = json.loads(await voice_live_leave(guild_id_str))
-        status = result.get("status", "error")
-        msg = result.get("message", "")
-        if status == "success":
-            return f"✅ voice-live-leave: {msg}"
-        return f"❌ voice-live-leave: {msg or status}"
-
-    ctx.register_command(
-        name="voice-live-leave",
-        handler=_slash_voice_live_leave,
-        description="Stop Gemini Live voice bridge",
-        args_hint="",
-    )
+    # Slash command registration for Discord is handled natively by the
+    # Discord platform adapter at `gateway/platforms/discord/adapter.py`,
+    # which exposes `/voice-live` and `/voice-live-leave` as real Discord
+    # Application Commands via @tree.command(). The adapter imports the
+    # module-level `voice_live` and `voice_live_leave` symbols from this
+    # plugin (loaded as `hermes_plugins.discord_voice`) and dispatches to
+    # them directly.
+    #
+    # We deliberately do NOT call `ctx.register_command()` here. That
+    # method registers a Hermes CLI / in-session command, which Discord
+    # does not surface as a native slash command — the original
+    # `register_command` workaround did nothing useful on Discord and
+    # caused confusion in /commands listings.
 
 
 
@@ -390,6 +333,17 @@ def _infer_user_voice_channel(adapter, user_id: str) -> Optional[tuple]:
 
 
 async def _autostart_voice_live() -> None:
+    """Spawn the bridge for the autostart request, then exit.
+
+    Loop safety contract:
+      - Returns immediately if the bridge is ALREADY active in the target
+        guild/channel (avoids the leave-join loop where successive autostart
+        iterations kept toggling the same voice connection on and off).
+      - On error, retries up to a 180s deadline, then gives up.
+      - Never returns "Bridge is being started" / "pending" — those are
+        transient state markers from the inner voice_live() function; the
+        autostart thread should sleep and re-check the actual connection.
+    """
     deadline = time.monotonic() + 180.0
     last_error = ""
     while time.monotonic() < deadline:
@@ -424,18 +378,53 @@ async def _autostart_voice_live() -> None:
                 await asyncio.sleep(10.0)
                 continue
 
-            result = json.loads(await voice_live(adapter, str(guild_id), str(channel_id), user_id=str(user_id)))
-            if result.get("status") == "success":
+            # ── Already-active guard: exit cleanly instead of toggling ───────
+            # If a bridge is already running in this guild+channel, the
+            # autostart has nothing to do. Returning prevents the loop where
+            # the inner voice_live() sees "channel matches" and triggers
+            # voice_live_leave(), which the next loop iteration then
+            # reverses by re-joining.
+            try:
+                gid_int = int(guild_id)
+                cid_int = int(channel_id)
+            except (TypeError, ValueError):
+                gid_int = cid_int = None
+            if gid_int is not None and gid_int in _active_bridges:
+                existing = _active_bridges[gid_int]
+                existing_vc = existing.get("vc")
+                if existing_vc and existing_vc.is_connected() and existing_vc.channel \
+                        and existing_vc.channel.id == cid_int:
+                    logger.info(
+                        "voice-live autostart: bridge already active in guild=%d channel=%d, exiting",
+                        gid_int, cid_int,
+                    )
+                    if not KEEP_AUTOSTART_FILE:
+                        try:
+                            AUTOSTART_FILE.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                    return
+
+            result_str = await voice_live(adapter, str(guild_id), str(channel_id), user_id=str(user_id))
+            try:
+                result = json.loads(result_str)
+            except (TypeError, ValueError):
+                result = {"status": "error", "message": str(result_str)[:200]}
+            status = result.get("status", "error")
+            if status == "success":
                 if not KEEP_AUTOSTART_FILE:
                     try:
                         AUTOSTART_FILE.unlink(missing_ok=True)
                     except Exception:
                         pass
                 return
-            if result.get("status") == "pending":
-                await asyncio.sleep(5.0)
+            if status == "pending":
+                # The bridge is being started by someone else — wait, then
+                # re-check the connection state on the next loop iteration.
+                await asyncio.sleep(2.0)
                 continue
             last_error = result.get("message", str(result))
+            logger.warning("voice-live autostart: %s — retrying in 5s", last_error)
         except Exception as exc:
             last_error = str(exc)
             logger.warning("voice-live autostart failed: %s", exc)
@@ -473,12 +462,27 @@ def _schedule_autostart_thread() -> None:
 
 
 async def voice_live(adapter, guild_id: str, channel_id: str, user_id: Optional[str] = None) -> str:
-    guild_id_int = int(guild_id)
+    """Module-level entry point for the voice bridge.
 
-    if _starting.get(guild_id_int):
+    Called from:
+      - Slash command `/voice-live` in the Discord adapter (native tree.command)
+      - Agent tool calls (LLM-invoked via `_voice_live_handler`)
+      - Autostart thread
+
+    When invoked with empty guild_id + channel_id, auto-infers the user's
+    current voice channel. This is the path the Discord slash command takes.
+    """
+    guild_id_int = None
+    if guild_id:
+        try:
+            guild_id_int = int(guild_id)
+        except (TypeError, ValueError):
+            guild_id_int = None
+
+    if _starting.get(guild_id_int) if guild_id_int is not None else False:
         return json.dumps({"status": "pending", "message": "Bridge is being started"})
 
-    if guild_id_int in _active_bridges:
+    if guild_id_int is not None and guild_id_int in _active_bridges:
         bridge_info = _active_bridges[guild_id_int]
         current_vc = bridge_info.get("vc")
         if current_vc and current_vc.is_connected() and current_vc.channel:
@@ -503,6 +507,18 @@ async def voice_live(adapter, guild_id: str, channel_id: str, user_id: Optional[
 
     if not hasattr(adapter, "_client") or not adapter._client:
         return json.dumps({"status": "error", "message": "Discord client not connected"})
+
+    # ── Auto-infer: invoked by the slash command with empty ids ───────────
+    if guild_id_int is None or not guild_id:
+        inferred = _infer_user_voice_channel(adapter, str(user_id or DEFAULT_USER_ID))
+        if inferred:
+            guild_id_int = int(inferred[0])
+            channel_id = str(inferred[1])
+        else:
+            return json.dumps({
+                "status": "error",
+                "message": "Could not infer your current voice channel. Join a voice channel first.",
+            })
 
     guild = adapter._client.get_guild(guild_id_int)
     if not guild:
@@ -589,12 +605,14 @@ async def voice_live_leave(guild_id: str) -> str:
     if not bridge:
         return json.dumps({"status": "error", "message": "No active voice bridge"})
     try:
-        bridge["task"].cancel()
-        try:
-            await asyncio.wait_for(bridge["task"], timeout=5.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass
-        vc = bridge["vc"]
+        task = bridge.get("task")
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+        vc = bridge.get("vc")
         if vc and vc.is_connected():
             try:
                 await asyncio.wait_for(vc.disconnect(), timeout=5.0)
