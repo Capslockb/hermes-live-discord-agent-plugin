@@ -58,6 +58,94 @@ NEVER_AUTO_ENABLED = {
 KNOWN_TOOL_NAMES: List[str] = []  # populated by register_known_tool()
 
 
+# ── Onboarding Q&A (criterion #32) ───────────────────────────────────────
+# When a brand-new user first runs /voice-live, the plugin detects
+# onboarding_completed=False and walks them through these questions
+# in voice. Answers are stored in the profile YAML and fed to
+# (a) the user's Honcho peer representation and
+# (b) the system prompt on subsequent calls
+# so the agent remembers the user across sessions.
+
+ONBOARDING_QUESTIONS: List[Dict[str, str]] = [
+    {
+        "id": "name",
+        "question": "Hey! I'm the live voice agent. Before we start, what name should I call you?",
+        "field": "display_name",
+    },
+    {
+        "id": "timezone",
+        "question": "What timezone are you in? (so I don't suggest 3 AM meetings)",
+        "field": "timezone",
+    },
+    {
+        "id": "work",
+        "question": "In one sentence, what do you do? (I'm curious)",
+        "field": "work",
+    },
+    {
+        "id": "interests",
+        "question": "What topics or projects are you into right now? (comma-separated, I'll remember)",
+        "field": "interests",
+    },
+    {
+        "id": "style",
+        "question": "How do you want me to talk to you — short and direct, or more conversational with context?",
+        "field": "communication_style",
+    },
+    {
+        "id": "pet_peeves",
+        "question": "Anything I should NEVER do or say? (e.g. no emojis, don't call me sir, etc.)",
+        "field": "pet_peeves",
+    },
+]
+
+
+def mark_onboarding_complete(profile: "UserProfile", answers: Dict[str, str]) -> "UserProfile":
+    """Persist onboarding answers to disk and return the updated profile.
+
+    Caller is expected to merge answers into the profile's onboarding_answers
+    dict, set the relevant top-level fields (display_name, timezone,
+    interests, communication_style), flip onboarding_completed=True, and
+    stamp onboarding_completed_at.
+    """
+    if not answers:
+        return profile
+    from pathlib import Path as _P
+    path = _P(_safe_discord_id_path(profile.discord_id))
+    if not path.exists():
+        return profile
+    try:
+        import yaml
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        merged = dict(data.get("onboarding_answers") or {})
+        merged.update(answers)
+        data["onboarding_answers"] = merged
+        # Mirror well-known fields to the top-level too
+        for q in ONBOARDING_QUESTIONS:
+            ans = answers.get(q["id"])
+            if not ans:
+                continue
+            field = q.get("field")
+            if field == "interests":
+                lst = [s.strip() for s in ans.split(",") if s.strip()]
+                data["interests"] = lst
+            elif field:
+                data[field] = ans
+        data["onboarding_completed"] = True
+        data["onboarding_completed_at"] = int(time.time())
+        data["last_seen_at"] = int(time.time())
+        _atomic_write_yaml(path, data)
+    except Exception:
+        return profile
+    # Return a fresh profile instance reflecting the new state
+    return get_or_create_profile(profile.discord_id)
+
+
+def _safe_discord_id_path(discord_id: str) -> str:
+    return str(VOICE_USERS_DIR / f"{_safe_discord_id(discord_id)}.yaml")
+
+
 def register_known_tool(name: str) -> None:
     """Called by bridge.py at import time to populate the allowlist vocabulary."""
     if name and name not in KNOWN_TOOL_NAMES:
@@ -89,6 +177,18 @@ def _default_profile_yaml(discord_id: str) -> Dict[str, Any]:
         "created_at": now,
         "last_seen_at": now,
         "is_owner": False,                # owner-only tools gated on this
+        # #32: New-user onboarding Q&A
+        # When a brand-new user first joins the bridge, the plugin's
+        # voice_live handler detects onboarding_completed=False and
+        # runs an interactive Q&A flow to learn about the user. Answers
+        # are stored here and get loaded into Honcho + the system prompt
+        # so subsequent calls feel personal.
+        "onboarding_completed": False,
+        "onboarding_answers": {},        # {question_id: answer}
+        "onboarding_completed_at": None,
+        "interests": [],                  # populated by Q&A; used for #30 repo recs
+        "timezone": "",                   # populated by Q&A
+        "communication_style": "",        # populated by Q&A (#28)
     }
 
 
@@ -129,6 +229,17 @@ class UserProfile:
     is_owner: bool = False
     created_at: int = 0
     last_seen_at: int = 0
+    # #32: Onboarding Q&A state
+    onboarding_completed: bool = False
+    onboarding_answers: Dict[str, str] = field(default_factory=dict)
+    onboarding_completed_at: Optional[int] = None
+    interests: List[str] = field(default_factory=list)
+    timezone: str = ""
+    communication_style: str = ""
+
+    def needs_onboarding(self) -> bool:
+        """True if this profile is new and hasn't been onboarded yet."""
+        return not self.onboarding_completed
 
     def is_tool_allowed(self, tool_name: str) -> bool:
         """Check whether this user is allowed to invoke a given tool.
@@ -241,6 +352,13 @@ def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> User
         is_owner=bool(data.get("is_owner", False)),
         created_at=int(data.get("created_at", 0)),
         last_seen_at=int(data.get("last_seen_at", 0)),
+        # #32: Onboarding
+        onboarding_completed=bool(data.get("onboarding_completed", False)),
+        onboarding_answers=dict(data.get("onboarding_answers") or {}),
+        onboarding_completed_at=data.get("onboarding_completed_at"),
+        interests=list(data.get("interests") or []),
+        timezone=str(data.get("timezone", "")),
+        communication_style=str(data.get("communication_style", "")),
     )
 
 

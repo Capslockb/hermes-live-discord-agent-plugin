@@ -1244,6 +1244,39 @@ _LOCAL_FUNCTION_DECLARATIONS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "local_user_onboarding_answer",
+        "description": (
+            "Persist the user's answer to a single onboarding question (criterion #32). "
+            "Use the question_id from local_user_onboarding_get_questions and the "
+            "user's spoken answer. Marks the profile's onboarding_completed=true once "
+            "all questions in the set are answered."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question_id": {
+                    "type": "string",
+                    "description": "One of: name, timezone, work, interests, style, pet_peeves",
+                },
+                "answer": {
+                    "type": "string",
+                    "description": "The user's answer (free text — STT transcript)",
+                },
+            },
+            "required": ["question_id", "answer"],
+        },
+    },
+    {
+        "name": "local_user_onboarding_get_questions",
+        "description": (
+            "Return the list of onboarding questions to ask the user (criterion #32). "
+            "Call this on the first turn of a new user's first voice session to learn "
+            "their name, timezone, work, interests, communication style, and pet peeves. "
+            "Then call local_user_onboarding_answer for each."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
 ]
 
 LOCAL_VOICE_TOOLS_ENABLED = os.getenv(
@@ -2800,6 +2833,60 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as exc:
                 return {"error": f"Honcho search failed: {exc}"}
 
+        elif name in ("local_user_onboarding_get_questions", "local_user_onboarding_answer"):
+            # #32: New-user onboarding Q&A. Imports user_profiles on
+            # demand so the local-tool dispatch doesn't hard-fail at
+            # module import if the profile module has issues.
+            try:
+                from user_profiles import (
+                    ONBOARDING_QUESTIONS,
+                    get_or_create_profile,
+                    mark_onboarding_complete,
+                )
+            except Exception as exc:
+                return {"error": f"onboarding module import failed: {exc}"}
+
+            if name == "local_user_onboarding_get_questions":
+                return {"result": {
+                    "questions": [
+                        {"id": q["id"], "question": q["question"]}
+                        for q in ONBOARDING_QUESTIONS
+                    ],
+                    "instructions": (
+                        "Ask these one at a time in voice, in order. "
+                        "After each answer, call local_user_onboarding_answer. "
+                        "Don't rush; mirror the user's energy."
+                    ),
+                }}
+
+            # local_user_onboarding_answer
+            qid = args.get("question_id", "").strip()
+            answer = (args.get("answer") or "").strip()
+            if not qid or not answer:
+                return {"error": "question_id and answer are both required"}
+            valid_ids = {q["id"] for q in ONBOARDING_QUESTIONS}
+            if qid not in valid_ids:
+                return {"error": f"unknown question_id: {qid!r}. Valid: {sorted(valid_ids)}"}
+            # Get the active user. We rely on the bridge's _user_profile.
+            bridge = globals().get("BRIDGE")
+            user_id = None
+            if bridge is not None:
+                prof = getattr(bridge, "_user_profile", None)
+                if prof is not None:
+                    user_id = getattr(prof, "discord_id", None)
+            if not user_id:
+                return {"error": "no active user (bridge/_user_profile missing)"}
+            existing = get_or_create_profile(user_id)
+            merged = dict(existing.onboarding_answers)
+            merged[qid] = answer
+            updated = mark_onboarding_complete(existing, merged)
+            return {"result": {
+                "stored": qid,
+                "answer_length": len(answer),
+                "answers_so_far": list(updated.onboarding_answers.keys()),
+                "onboarding_completed": updated.onboarding_completed,
+            }}
+
         elif name.startswith("local_homeassistant_"):
             hass_url = os.getenv("HASS_URL", "http://homeassistant.local:8123").rstrip("/")
             hass_token = os.getenv("HASS_TOKEN", "")
@@ -3289,6 +3376,27 @@ class GeminiLiveBridge:
                 peer_override = None
         honcho_ctx = await _build_honcho_context(peer_name_override=peer_override)
         system_text = base_prompt + honcho_ctx
+        # #32: If this is a new user who hasn't been onboarded, append
+        # a one-time system reminder to start the Q&A flow. The agent
+        # sees this on the very first turn, calls
+        # local_user_onboarding_get_questions, then walks the user
+        # through the 6 questions via local_user_onboarding_answer.
+        try:
+            if self._user_profile is not None and self._user_profile.needs_onboarding():
+                from user_profiles import ONBOARDING_QUESTIONS
+                q_list = ", ".join(q["id"] for q in ONBOARDING_QUESTIONS)
+                system_text = system_text + (
+                    "\n\n--- ONBOARDING REQUIRED (criterion #32) ---\n"
+                    "This user has never been onboarded. On your first turn, call\n"
+                    "local_user_onboarding_get_questions to retrieve the list, then\n"
+                    "walk them through the questions in order (one at a time, in voice).\n"
+                    f"After each answer, call local_user_onboarding_answer with the\n"
+                    f"question_id and the user's spoken answer. Questions: {q_list}.\n"
+                    "Do NOT start any other task until onboarding is complete.\n"
+                    "--- END ONBOARDING REQUIRED ---"
+                )
+        except Exception:
+            pass
         setup_payload: Dict[str, Any] = {
             "model": f"models/{model}",
             "generationConfig": {

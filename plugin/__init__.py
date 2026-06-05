@@ -675,12 +675,30 @@ async def _video_state_watcher(guild_id: int) -> None:
                 continue
 
             if current["stream"] and not previous["stream"]:
-                _send_video_awareness(bridge_mod, f"{member.display_name} started screen sharing. I can't see the shared screen, but I know it's active.")
+                # #31: Discord bots can't receive video streams natively.
+                # When the user starts screen sharing or turns on their
+                # camera, we tell Gemini explicitly that the user can
+                # share frames via the /frame command (voice_live_frame tool
+                # + /frame HTTP endpoint) or push frames automatically via
+                # video-frame-feeder.py. Until they do, Gemini just knows
+                # the video activity is happening, not what's on screen.
+                _send_video_awareness(
+                    bridge_mod,
+                    f"{member.display_name} started screen sharing. "
+                    f"I can't see the shared screen automatically (Discord bots don't get video streams), "
+                    f"but the user can use the /frame command to share a screenshot, or run the video-frame-feeder.py "
+                    f"script to push frames automatically. Until they do, I'll just know sharing is active."
+                )
             elif not current["stream"] and previous["stream"]:
                 _send_video_awareness(bridge_mod, f"{member.display_name} stopped screen sharing.")
 
             if current["video"] and not previous["video"]:
-                _send_video_awareness(bridge_mod, f"{member.display_name} turned on their camera. I can't see the video feed, but I know it's on.")
+                _send_video_awareness(
+                    bridge_mod,
+                    f"{member.display_name} turned on their camera. "
+                    f"I can't see the camera feed automatically. The user can use the /frame command to share a snapshot, "
+                    f"or describe verbally what I should look at."
+                )
             elif not current["video"] and previous["video"]:
                 _send_video_awareness(bridge_mod, f"{member.display_name} turned off their camera.")
 
