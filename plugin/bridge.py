@@ -145,7 +145,7 @@ HONCHO_PEER_NAME = os.getenv("VOICE_LIVE_HONCHO_PEER", os.getenv("HONCHO_PEER_NA
 BASE_SYSTEM_PROMPT = (
     "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, ask clarifying questions, and turn vague talk into concrete next steps. You are allowed to challenge weak ideas directly but constructively. The system saves transcripts for later notes, so do not claim you cannot take notes. Ask frequent short clarifying questions — who owns this, deadline, priority, missing context. Prefer one focused question at a time. Keep replies short and natural. Do not announce that you are connected or ready unless asked. If speech is unclear, ask a brief clarification instead of guessing. Avoid repeating yourself."
     "\n\n"
-    "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time."
+    "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time. You can also read, send, and reply to emails using your Gmail account. If Home Assistant is connected, you can control smart home devices too."
     "\n\n"
     "TOOL BEHAVIOUR: When you need to run a tool (Spotify, web search, etc.), you will hear a brief typing click sound while it executes. This is normal — it means the tool is working. Tools run in background threads and will not freeze or delay the conversation. Wait for the result, then respond naturally. Do not apologise for using tools."
 )
@@ -401,6 +401,58 @@ _WEB_FUNCTION_DECLARATIONS = [
     },
 ]
 
+# ── Email tools (google_api.py subprocess, falls back to himalaya) ────────
+_SCRIPTS_DIR = Path.home() / ".hermes" / "hermes-agent" / "skills" / "productivity" / "google-workspace" / "scripts"
+GOOGLE_API_BIN = str(_SCRIPTS_DIR / "google_api.py")
+
+EMAIL_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_EMAIL_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+
+# ── Home Assistant tools (HTTP API, gated on HASS_TOKEN) ──────────────────
+HA_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_HA_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+HA_VOICE_TOOLS_ENABLED = os.getenv("HASS_TOKEN", "").strip() != "" and HA_VOICE_TOOLS_ENABLED
+
+_HOMEASSISTANT_FUNCTION_DECLARATIONS = [
+    {
+        "name": "local_homeassistant_entity_list",
+        "description": "List all Home Assistant entities with their current state and friendly name. Use this to discover available devices, sensors, switches, lights, and other entities in the smart home.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "local_homeassistant_get_state",
+        "description": "Get the current state of a specific Home Assistant entity (e.g., light.living_room, sensor.temperature). Returns state, attributes, and last_changed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entity_id": {"type": "string", "description": "Full entity ID, e.g. light.living_room or sensor.temperature_bedroom"},
+            },
+            "required": ["entity_id"],
+        },
+    },
+    {
+        "name": "local_homeassistant_call_service",
+        "description": "Call a Home Assistant service to control devices — turn lights on/off, set temperature, lock doors, trigger automations, etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Service domain, e.g. light, switch, climate, lock, automation"},
+                "service": {"type": "string", "description": "Service name, e.g. turn_on, turn_off, set_temperature"},
+                "entity_id": {"type": "string", "description": "Target entity ID, e.g. light.living_room"},
+                "data": {"type": "object", "description": "Optional service data as JSON object (e.g. brightness, temperature, rgb_color)"},
+            },
+            "required": ["domain", "service", "entity_id"],
+        },
+    },
+    {
+        "name": "local_homeassistant_get_services",
+        "description": "List all available Home Assistant service domains and their services. Use this when you need to know what services are available for a specific domain.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+]
+
 _LOCAL_FUNCTION_DECLARATIONS = [
     {
         "name": "local_weather",
@@ -456,6 +508,42 @@ _LOCAL_FUNCTION_DECLARATIONS = [
             "properties": {
                 "limit": {"type": "integer", "description": "Number of emails to list (default 5)"},
             },
+        },
+    },
+    {
+        "name": "local_email_read",
+        "description": "Fetch the full content of a specific email by ID. Returns sender, recipient, subject, date, and body text. Use IDs from local_email (email list). Uses the Gmail API.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string", "description": "Gmail message ID (numeric, from email list results)"},
+            },
+            "required": ["message_id"],
+        },
+    },
+    {
+        "name": "local_email_send",
+        "description": "Compose and send a new email via Gmail. Provide recipient, subject, and body. Works best for short messages.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Recipient email address"},
+                "subject": {"type": "string", "description": "Email subject line"},
+                "body": {"type": "string", "description": "Email body text (plain text)"},
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
+    {
+        "name": "local_email_reply",
+        "description": "Reply to an existing email by its Gmail message ID. Properly threads the reply with In-Reply-To and References headers. Use IDs from local_email (email list).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string", "description": "Gmail message ID to reply to"},
+                "body": {"type": "string", "description": "Reply body text (plain text)"},
+            },
+            "required": ["message_id", "body"],
         },
     },
     {
@@ -551,6 +639,418 @@ _LOCAL_FUNCTION_DECLARATIONS = [
 LOCAL_VOICE_TOOLS_ENABLED = os.getenv(
     "DISCORD_VOICE_LIVE_LOCAL_TOOLS", "true"
 ).lower() in {"1", "true", "yes", "on"}
+
+# ── OpenCode delegation tools (tmux-backed PTY sessions) ─────────────────
+# Lets Gemini Live delegate coding/build tasks to a full opencode process.
+# The session runs in its own tmux window so the user can see progress, jump
+# in to answer approval prompts, and Gemini can poll / send follow-ups via
+# opencode_status / opencode_send. Approval prompts (y/n) are surfaced back
+# to the live voice channel as text so B can answer by speaking.
+OPENCODE_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_OPENCODE_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+OPENCODE_BIN = os.getenv("OPENCODE_BIN", "/home/caps/.local/bin/opencode")
+OPENCODE_DEFAULT_MODEL = os.getenv("OPENCODE_DEFAULT_MODEL", "anthropic/claude-sonnet-4")
+OPENCODE_TMUX_SESSION = os.getenv("OPENCODE_TMUX_SESSION", "opencode-voice")
+
+# Active session registry: name -> {"tmux_window": str, "created_at": float, "goal": str}
+_OPENCODE_SESSIONS: Dict[str, Dict[str, Any]] = {}
+
+
+def _opencode_tmux_window_name(session_name: str) -> str:
+    """Return tmux window name for a given opencode voice session."""
+    return f"oc-{session_name}"
+
+
+def _opencode_list_sessions() -> List[Dict[str, Any]]:
+    """Return summary of tracked opencode sessions (most recent first)."""
+    return [
+        {
+            "name": n,
+            "tmux_window": meta.get("tmux_window"),
+            "goal": meta.get("goal", "")[:200],
+            "created_at": meta.get("created_at"),
+        }
+        for n, meta in sorted(_OPENCODE_SESSIONS.items(), key=lambda kv: -kv[1].get("created_at", 0))
+    ]
+
+
+def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], workdir: Optional[str]) -> Dict[str, Any]:
+    """Spawn opencode in a new tmux window under the configured session.
+
+    Returns {"name", "tmux_window", "tmux_session"}. Use opencode_status to tail.
+    """
+    import subprocess
+    import shlex
+    import time
+
+    if not Path(OPENCODE_BIN).exists():
+        return {"error": f"opencode binary not found at {OPENCODE_BIN}"}
+
+    window_name = _opencode_tmux_window_name(session_name)
+    model = model or OPENCODE_DEFAULT_MODEL
+    workdir = workdir or str(Path.home())
+
+    # Check tmux session exists; create if not
+    check = subprocess.run(["tmux", "has-session", "-t", OPENCODE_TMUX_SESSION], capture_output=True)
+    if check.returncode != 0:
+        subprocess.run(["tmux", "new-session", "-d", "-s", OPENCODE_TMUX_SESSION, "-n", "_init"], check=False)
+
+    # Kill any prior window with this name (re-run replaces old session)
+    subprocess.run(["tmux", "kill-window", "-t", f"{OPENCODE_TMUX_SESSION}:{window_name}"], capture_output=True)
+
+    # Build the opencode command. We use `opencode run` for one-shot task execution
+    # with an explicit model. The full interactive TUI is reached via plain `opencode`.
+    quoted_prompt = shlex.quote(prompt)
+    quoted_model = shlex.quote(model)
+    quoted_wd = shlex.quote(workdir)
+    # Use a here-doc to feed the prompt to opencode run. -y auto-approves inside
+    # the opencode session so the user doesn't get blocked by its own approvals;
+    # the voice passthrough is for what the LIVE agent decides to surface.
+    cmd = (
+        f"cd {quoted_wd} && "
+        f"echo {quoted_prompt} | {OPENCODE_BIN} run --model {quoted_model} -y 2>&1 | "
+        f"tee /tmp/opencode-{session_name}.log; "
+        f"echo '[opencode-voice] session ended, window will close in 60s'; "
+        f"sleep 60"
+    )
+
+    create = subprocess.run(
+        ["tmux", "new-window", "-d", "-t", OPENCODE_TMUX_SESSION, "-n", window_name, "bash", "-c", cmd],
+        capture_output=True,
+    )
+    if create.returncode != 0:
+        return {"error": f"tmux new-window failed: {create.stderr.decode(errors='replace').strip()}"}
+
+    _OPENCODE_SESSIONS[session_name] = {
+        "tmux_window": window_name,
+        "created_at": time.time(),
+        "goal": prompt,
+        "model": model,
+        "workdir": workdir,
+        "log_path": f"/tmp/opencode-{session_name}.log",
+    }
+    return {
+        "result": {
+            "name": session_name,
+            "tmux_session": OPENCODE_TMUX_SESSION,
+            "tmux_window": window_name,
+            "model": model,
+            "workdir": workdir,
+            "tail_cmd": f"tmux attach -t {OPENCODE_TMUX_SESSION}:{window_name}",
+            "log": f"/tmp/opencode-{session_name}.log",
+            "next": (
+                "Use opencode_status to poll progress, opencode_send to inject follow-up, "
+                "opencode_stop to kill. Tell the user briefly what you spawned."
+            ),
+        }
+    }
+
+
+def _opencode_status(name: str, tail_lines: int = 40) -> Dict[str, Any]:
+    """Return tail of opencode session log + whether the window still exists."""
+    import subprocess
+
+    meta = _OPENCODE_SESSIONS.get(name)
+    if not meta:
+        return {"error": f"no opencode session named '{name}'. Active: {list(_OPENCODE_SESSIONS.keys())}"}
+
+    log_path = meta["log_path"]
+    window = meta["tmux_window"]
+    log_content = ""
+    if Path(log_path).exists():
+        try:
+            with open(log_path, "r", errors="replace") as f:
+                log_content = "".join(f.readlines()[-tail_lines:])
+        except Exception as exc:
+            log_content = f"[log read failed: {exc}]"
+
+    alive = subprocess.run(
+        ["tmux", "list-windows", "-t", OPENCODE_TMUX_SESSION, "-F", "#{window_name}"],
+        capture_output=True,
+    )
+    windows = alive.stdout.decode(errors="replace").splitlines()
+    is_alive = window in windows
+
+    return {
+        "result": {
+            "name": name,
+            "alive": is_alive,
+            "log_tail": log_content,
+            "goal": meta.get("goal", "")[:200],
+            "model": meta.get("model"),
+        }
+    }
+
+
+def _opencode_send(name: str, message: str) -> Dict[str, Any]:
+    """Send a follow-up message into a running opencode session via tmux send-keys.
+
+    Note: opencode run reads its prompt from stdin once, so for one-shot sessions
+    this only works if the session is still on the `tee |` line awaiting input —
+    i.e. when using interactive `opencode` (not `opencode run`). For run-mode
+    sessions the message is appended to the log file for the agent to pick up.
+    """
+    import subprocess
+
+    meta = _OPENCODE_SESSIONS.get(name)
+    if not meta:
+        return {"error": f"no opencode session named '{name}'"}
+    window = meta["tmux_window"]
+
+    # Try to deliver into the tmux pane (interactive sessions)
+    send = subprocess.run(
+        ["tmux", "send-keys", "-t", f"{OPENCODE_TMUX_SESSION}:{window}", message, "Enter"],
+        capture_output=True,
+    )
+    sent_to_pane = send.returncode == 0
+    # Also append to the log so the agent can read it later regardless
+    try:
+        with open(meta["log_path"], "a") as f:
+            f.write(f"\n[voice-followup] {message}\n")
+    except Exception:
+        pass
+    return {"result": {"name": name, "sent_to_pane": sent_to_pane, "appended_to_log": True}}
+
+
+def _opencode_stop(name: str) -> Dict[str, Any]:
+    """Kill the opencode session's tmux window and remove from registry."""
+    import subprocess
+
+    meta = _OPENCODE_SESSIONS.pop(name, None)
+    if not meta:
+        return {"error": f"no opencode session named '{name}'"}
+    window = meta["tmux_window"]
+    subprocess.run(
+        ["tmux", "kill-window", "-t", f"{OPENCODE_TMUX_SESSION}:{window}"],
+        capture_output=True,
+    )
+    return {"result": {"name": name, "killed": True, "tmux_window": window}}
+
+
+_OPENCODE_FUNCTION_DECLARATIONS = [
+    {
+        "name": "opencode_run",
+        "description": (
+            "Spawn a full OpenCode coding agent in a tmux window to handle a coding/build task "
+            "the user is asking for. Returns a session name to track. Always confirm with the user "
+            "before invoking this if the task is non-trivial — they may want to run it themselves. "
+            "Use for: code changes, refactors, building features, running tests, fixing bugs. "
+            "Do NOT use for: simple questions, lookups, things the live voice channel can answer directly."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {
+                    "type": "string",
+                    "description": "Plain-English description of what opencode should do",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Short session name (lowercase, no spaces), e.g. 'refactor-auth'",
+                },
+                "model": {
+                    "type": "string",
+                    "description": f"Model to use (default {OPENCODE_DEFAULT_MODEL})",
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": "Working directory (default ~/)",
+                },
+            },
+            "required": ["goal", "name"],
+        },
+    },
+    {
+        "name": "opencode_status",
+        "description": (
+            "Poll an opencode session: returns the last 40 log lines and whether the tmux window is "
+            "still alive. Use this between tool calls to report progress to the user."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name returned by opencode_run"},
+                "tail_lines": {"type": "integer", "description": "How many recent log lines (default 40, max 200)"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "opencode_list",
+        "description": "List all tracked opencode sessions (name, tmux window, goal).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "opencode_send",
+        "description": (
+            "Send a follow-up message into a running opencode session. For interactive opencode "
+            "sessions this is delivered live; for one-shot `opencode run` sessions it's appended "
+            "to the log for the next status poll."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name"},
+                "message": {"type": "string", "description": "Message to send"},
+            },
+            "required": ["name", "message"],
+        },
+    },
+    {
+        "name": "opencode_stop",
+        "description": "Kill a running opencode session's tmux window and forget it.",
+        "parameters": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "Session name"}},
+            "required": ["name"],
+        },
+    },
+]
+
+
+def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Dispatch opencode_* tools. All handlers are synchronous and run in executor."""
+    try:
+        if name == "opencode_run":
+            session_name = args.get("name") or f"oc-{int(time.time())}"
+            # Sanitize name: lowercase, hyphens, no spaces, max 32 chars
+            import re
+            session_name = re.sub(r"[^a-z0-9-]", "-", session_name.lower())[:32].strip("-") or f"oc-{int(time.time())}"
+            return _opencode_run_tmux(
+                session_name=session_name,
+                prompt=args.get("goal", ""),
+                model=args.get("model"),
+                workdir=args.get("workdir"),
+            )
+        if name == "opencode_status":
+            return _opencode_status(
+                name=args.get("name", ""),
+                tail_lines=min(max(int(args.get("tail_lines", 40)), 1), 200),
+            )
+        if name == "opencode_list":
+            return {"result": {"sessions": _opencode_list_sessions()}}
+        if name == "opencode_send":
+            return _opencode_send(name=args.get("name", ""), message=args.get("message", ""))
+        if name == "opencode_stop":
+            return _opencode_stop(name=args.get("name", ""))
+        return {"error": f"Unknown opencode tool: {name}"}
+    except Exception as exc:
+        logger.exception("opencode tool %s crashed", name)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+# ── Read-only system inspection tools (allowlisted paths) ──────────────────
+# Lets Gemini Live answer "what's in X file" / "is Y configured" questions
+# without exposing arbitrary shell. Path allowlist is hard-coded to safe dirs.
+SYSINSPECT_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_SYSINSPECT_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+
+_SYSINSPECT_ALLOWED_PREFIXES = (
+    str(Path.home() / ".hermes"),
+    "/etc/systemd",
+    "/home/caps/hermes-workspace",
+    "/home/caps/honcho",
+    str(Path.home() / "hermes-extensions"),
+    str(Path.home() / "projects"),
+    "/var/log",
+)
+
+
+def _sysinspect_path_allowed(path: str) -> bool:
+    try:
+        resolved = str(Path(path).expanduser().resolve())
+    except Exception:
+        return False
+    return any(resolved.startswith(prefix) for prefix in _SYSINSPECT_ALLOWED_PREFIXES)
+
+
+def _run_sysinspect_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Read-only file/grep tools. All paths must be in the allowlist."""
+    if name == "local_inspect_read":
+        path = args.get("path", "")
+        limit = min(max(int(args.get("limit", 200)), 1), 1000)
+        if not _sysinspect_path_allowed(path):
+            return {"error": f"path not in allowlist: {path}"}
+        try:
+            with open(Path(path).expanduser(), "r", errors="replace") as f:
+                content = "".join(f.readlines()[:limit])
+            return {"result": {"path": path, "lines": content.count("\n"), "content": content}}
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
+    if name == "local_inspect_grep":
+        path = args.get("path", "")
+        pattern = args.get("pattern", "")
+        limit = min(max(int(args.get("limit", 50)), 1), 200)
+        if not pattern:
+            return {"error": "pattern is required"}
+        if not _sysinspect_path_allowed(path):
+            return {"error": f"path not in allowlist: {path}"}
+        try:
+            import subprocess
+            proc = subprocess.run(
+                ["rg", "--no-heading", "-n", "--max-count", str(limit), pattern, str(Path(path).expanduser())],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            matches = proc.stdout.splitlines()[:limit]
+            return {"result": {"path": path, "pattern": pattern, "matches": matches, "match_count": len(matches)}}
+        except FileNotFoundError:
+            # rg not installed — fall back to grep
+            try:
+                proc = subprocess.run(
+                    ["grep", "-rn", "--max-count", str(limit), pattern, str(Path(path).expanduser())],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                matches = proc.stdout.splitlines()[:limit]
+                return {"result": {"path": path, "pattern": pattern, "matches": matches, "match_count": len(matches), "fallback": "grep"}}
+            except Exception as exc:
+                return {"error": f"grep fallback failed: {exc}"}
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
+    return {"error": f"Unknown sysinspect tool: {name}"}
+
+
+_SYSINSPECT_FUNCTION_DECLARATIONS = [
+    {
+        "name": "local_inspect_read",
+        "description": (
+            "Read a file's first N lines from an allowlisted path (under ~/.hermes, "
+            "hermes-workspace, honcho, /etc/systemd, /var/log, etc.). Use to inspect configs, "
+            "check service state, look at skills/plugins. Never returns binary."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to the file"},
+                "limit": {"type": "integer", "description": "Max lines to return (default 200, max 1000)"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "local_inspect_grep",
+        "description": (
+            "Search for a regex pattern inside a file or directory under an allowlisted path. "
+            "Returns matching lines with line numbers, capped at `limit`."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to search inside"},
+                "pattern": {"type": "string", "description": "Regex pattern to search for"},
+                "limit": {"type": "integer", "description": "Max matches (default 50, max 200)"},
+            },
+            "required": ["path", "pattern"],
+        },
+    },
+]
 
 
 def _ensure_hermes_agent_path() -> None:
@@ -935,6 +1435,86 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 logger.exception("Email list failed")
                 return {"error": f"Email tool failed: {exc}"}
 
+        elif name == "local_email_read":
+            message_id = args.get("message_id", "")
+            if not message_id:
+                return {"error": "message_id is required"}
+            try:
+                if Path(GOOGLE_API_BIN).exists():
+                    out = subprocess.run(
+                        [sys.executable, GOOGLE_API_BIN, "gmail", "get", message_id],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if out.returncode == 0:
+                        try:
+                            data = json.loads(out.stdout)
+                            payload = data.get("payload", {})
+                            headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+                            body = data.get("snippet", "")
+                            return {"result": {
+                                "from": headers.get("from", ""),
+                                "to": headers.get("to", ""),
+                                "subject": headers.get("subject", ""),
+                                "date": headers.get("date", ""),
+                                "body": body,
+                                "id": message_id,
+                            }}
+                        except (json.JSONDecodeError, AttributeError, KeyError) as parse_exc:
+                            return {"result": {"raw": out.stdout[:5000], "error": str(parse_exc)}}
+                    return {"error": f"google_api.py error: {out.stderr[:300]}"}
+                return {"error": "google_api.py not found, cannot read email"}
+            except Exception as exc:
+                logger.exception("Email read failed")
+                return {"error": f"Email read failed: {exc}"}
+
+        elif name == "local_email_send":
+            to = args.get("to", "")
+            subject = args.get("subject", "")
+            body = args.get("body", "")
+            if not to or not subject or not body:
+                return {"error": "to, subject, and body are all required"}
+            try:
+                if Path(GOOGLE_API_BIN).exists():
+                    out = subprocess.run(
+                        [sys.executable, GOOGLE_API_BIN, "gmail", "send",
+                         "--to", to, "--subject", subject, "--body", body],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if out.returncode == 0:
+                        try:
+                            data = json.loads(out.stdout)
+                            return {"result": {"status": "sent", "id": data.get("id", ""), "threadId": data.get("threadId", "")}}
+                        except json.JSONDecodeError:
+                            return {"result": {"status": "sent", "raw": out.stdout[:2000]}}
+                    return {"error": f"Send failed: {out.stderr[:300]}"}
+                return {"error": "google_api.py not found"}
+            except Exception as exc:
+                logger.exception("Email send failed")
+                return {"error": f"Email send failed: {exc}"}
+
+        elif name == "local_email_reply":
+            message_id = args.get("message_id", "")
+            body = args.get("body", "")
+            if not message_id or not body:
+                return {"error": "message_id and body are required"}
+            try:
+                if Path(GOOGLE_API_BIN).exists():
+                    out = subprocess.run(
+                        [sys.executable, GOOGLE_API_BIN, "gmail", "reply", message_id, "--body", body],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if out.returncode == 0:
+                        try:
+                            data = json.loads(out.stdout)
+                            return {"result": {"status": "replied", "id": data.get("id", ""), "threadId": data.get("threadId", "")}}
+                        except json.JSONDecodeError:
+                            return {"result": {"status": "replied", "raw": out.stdout[:2000]}}
+                    return {"error": f"Reply failed: {out.stderr[:300]}"}
+                return {"error": "google_api.py not found"}
+            except Exception as exc:
+                logger.exception("Email reply failed")
+                return {"error": f"Email reply failed: {exc}"}
+
         elif name == "local_systemd":
             svc = args.get("service")
             try:
@@ -1108,6 +1688,78 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 return {"result": {"excerpts": excerpts[:limit]}}
             except Exception as exc:
                 return {"error": f"Honcho search failed: {exc}"}
+
+        elif name.startswith("local_homeassistant_"):
+            hass_url = os.getenv("HASS_URL", "http://homeassistant.local:8123").rstrip("/")
+            hass_token = os.getenv("HASS_TOKEN", "")
+            if not hass_token:
+                return {"error": "Home Assistant not configured: no HASS_TOKEN set"}
+            try:
+                import requests as _req
+                headers = {
+                    "Authorization": f"Bearer {hass_token}",
+                    "Content-Type": "application/json",
+                }
+                if name == "local_homeassistant_entity_list":
+                    r = _req.get(f"{hass_url}/api/states", headers=headers, timeout=10)
+                    r.raise_for_status()
+                    entities = r.json()
+                    summary = []
+                    for ent in entities:
+                        fid = ent.get("attributes", {}).get("friendly_name", "")
+                        summary.append({
+                            "entity_id": ent["entity_id"],
+                            "state": ent["state"],
+                            "friendly_name": fid,
+                            "domain": ent["entity_id"].split(".")[0],
+                        })
+                    return {"result": {"count": len(summary), "entities": summary[:50]}}
+                elif name == "local_homeassistant_get_state":
+                    entity_id = args.get("entity_id", "")
+                    if not entity_id:
+                        return {"error": "entity_id is required"}
+                    r = _req.get(f"{hass_url}/api/states/{entity_id}", headers=headers, timeout=10)
+                    if r.status_code == 404:
+                        return {"error": f"Entity '{entity_id}' not found"}
+                    r.raise_for_status()
+                    ent = r.json()
+                    return {"result": {
+                        "entity_id": ent["entity_id"],
+                        "state": ent["state"],
+                        "friendly_name": ent.get("attributes", {}).get("friendly_name", ""),
+                        "last_changed": ent.get("last_changed", ""),
+                    }}
+                elif name == "local_homeassistant_call_service":
+                    domain = args.get("domain", "")
+                    service = args.get("service", "")
+                    entity_id = args.get("entity_id", "")
+                    data = args.get("data", {})
+                    if not domain or not service or not entity_id:
+                        return {"error": "domain, service, and entity_id are required"}
+                    payload = {"entity_id": entity_id}
+                    if isinstance(data, dict):
+                        payload.update(data)
+                    r = _req.post(
+                        f"{hass_url}/api/services/{domain}/{service}",
+                        headers=headers, json=payload, timeout=10,
+                    )
+                    r.raise_for_status()
+                    return {"result": {"status": "called", "service": f"{domain}.{service}", "entity_id": entity_id}}
+                elif name == "local_homeassistant_get_services":
+                    r = _req.get(f"{hass_url}/api/services", headers=headers, timeout=10)
+                    r.raise_for_status()
+                    services = r.json()
+                    domains = {}
+                    for svc in services:
+                        domain = svc.get("domain", "")
+                        svc_list = list(svc.get("services", {}).keys())
+                        domains[domain] = svc_list
+                    return {"result": {"domains": domains}}
+                else:
+                    return {"error": f"Unknown HA tool: {name}"}
+            except Exception as exc:
+                logger.exception("HA tool %s failed", name)
+                return {"error": f"HA tool failed: {exc}"}
 
         else:
             return {"error": f"Unknown local tool: {name}"}
@@ -1553,6 +2205,21 @@ class GeminiLiveBridge:
                 setup_payload["tools"] = []
             setup_payload["tools"].append({"functionDeclarations": _LOCAL_FUNCTION_DECLARATIONS})
             logger.info("Local voice tools registered with Gemini Live (count=%d)", len(_LOCAL_FUNCTION_DECLARATIONS))
+        if HA_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _HOMEASSISTANT_FUNCTION_DECLARATIONS})
+            logger.info("HA voice tools registered with Gemini Live (count=%d)", len(_HOMEASSISTANT_FUNCTION_DECLARATIONS))
+        if OPENCODE_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _OPENCODE_FUNCTION_DECLARATIONS})
+            logger.info("OpenCode voice tools registered with Gemini Live (count=%d)", len(_OPENCODE_FUNCTION_DECLARATIONS))
+        if SYSINSPECT_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            setup_payload["tools"].append({"functionDeclarations": _SYSINSPECT_FUNCTION_DECLARATIONS})
+            logger.info("SysInspect voice tools registered with Gemini Live (count=%d)", len(_SYSINSPECT_FUNCTION_DECLARATIONS))
         if handle is not None:
             setup_payload["sessionResumption"] = {"handle": handle}
             logger.info("Session resumption: handle=%s", handle)
@@ -1849,7 +2516,12 @@ class GeminiLiveBridge:
                     elif name.startswith("web_"):
                         result = await loop.run_in_executor(None, _run_web_tool, name, args)
                     elif name.startswith("local_"):
-                        result = await loop.run_in_executor(None, _run_local_tool, name, args)
+                        if name.startswith("local_inspect_"):
+                            result = await loop.run_in_executor(None, _run_sysinspect_tool, name, args)
+                        else:
+                            result = await loop.run_in_executor(None, _run_local_tool, name, args)
+                    elif name.startswith("opencode_"):
+                        result = await loop.run_in_executor(None, _run_opencode_tool, name, args)
                     else:
                         result = {"error": f"No handler for tool: {name}"}
                 except Exception as exc:
