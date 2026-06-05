@@ -449,6 +449,290 @@ EMAIL_VOICE_TOOLS_ENABLED = os.getenv(
 ).lower() in {"1", "true", "yes", "on"}
 
 
+# ── GitHub repo tracker (criterion #22) ──────────────────────────────────
+# Live agent uses the `gh` CLI (already authenticated as Capslockb) to
+# list, inspect, and create issues/PRs on the user's private repos.
+# Notes added via local_github_note are persisted to
+# ~/.hermes/voice-users/voice-session-notes.jsonl so the next Hermes
+# turn can pick them up and apply them.
+
+GITHUB_VOICE_TOOLS_ENABLED = os.getenv(
+    "DISCORD_VOICE_LIVE_GITHUB_TOOLS", "true"
+).lower() in {"1", "true", "yes", "on"}
+_GH_BIN = "/usr/bin/gh"
+_NOTES_PATH = Path.home() / ".hermes" / "voice-users" / "voice-session-notes.jsonl"
+
+
+def _run_github_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """GitHub repo tracker tools (criterion #22). Wraps the `gh` CLI.
+
+    Read-only by default; only `local_github_note` (local file append)
+    and `local_github_issue_create` (network call) are write operations.
+    """
+    import subprocess
+    if not GITHUB_VOICE_TOOLS_ENABLED:
+        return {"error": "GitHub voice tools disabled (DISCORD_VOICE_LIVE_GITHUB_TOOLS=false)"}
+    if not Path(_GH_BIN).exists():
+        return {"error": f"gh CLI not found at {_GH_BIN}"}
+    if name == "local_github_repo_list":
+        try:
+            limit = min(max(int(args.get("limit", 20)), 1), 50)
+        except (TypeError, ValueError):
+            limit = 20
+        try:
+            out = subprocess.run(
+                [_GH_BIN, "repo", "list", "--json",
+                 "name,owner,description,visibility,isPrivate,updatedAt",
+                 "--limit", str(limit)],
+                capture_output=True, text=True, timeout=20,
+            )
+            if out.returncode != 0:
+                return {"error": f"gh repo list failed: {out.stderr[:200]}"}
+            try:
+                repos = json.loads(out.stdout)
+            except json.JSONDecodeError as exc:
+                return {"error": f"gh repo list parse failed: {exc}"}
+            return {"result": {
+                "count": len(repos),
+                "repos": [
+                    {
+                        "name": r.get("name"),
+                        "full_name": f"{r.get('owner', {}).get('login', '?')}/{r.get('name', '?')}",
+                        "description": (r.get("description") or "")[:200],
+                        "private": r.get("isPrivate", False),
+                        "updated_at": r.get("updatedAt", ""),
+                    } for r in repos
+                ],
+            }}
+        except subprocess.TimeoutExpired:
+            return {"error": "gh repo list timed out"}
+        except Exception as exc:
+            return {"error": f"gh repo list crashed: {exc}"}
+
+    if name == "local_github_issues":
+        repo = args.get("repo", "").strip()
+        if not repo:
+            return {"error": "repo is required (e.g. 'Capslockb/gemini-live-discord-bridge')"}
+        state = args.get("state", "open").strip() or "open"
+        try:
+            limit = min(max(int(args.get("limit", 15)), 1), 50)
+        except (TypeError, ValueError):
+            limit = 15
+        try:
+            out = subprocess.run(
+                [_GH_BIN, "issue", "list", "--repo", repo,
+                 "--state", state, "--json",
+                 "number,title,state,author,createdAt,url,labels",
+                 "--limit", str(limit)],
+                capture_output=True, text=True, timeout=20,
+            )
+            if out.returncode != 0:
+                return {"error": f"gh issue list failed: {out.stderr[:200]}"}
+            try:
+                items = json.loads(out.stdout)
+            except json.JSONDecodeError as exc:
+                return {"error": f"gh issue list parse failed: {exc}"}
+            return {"result": {
+                "repo": repo, "state": state, "count": len(items),
+                "issues": [
+                    {
+                        "number": i.get("number"),
+                        "title": i.get("title"),
+                        "state": i.get("state"),
+                        "author": (i.get("author") or {}).get("login", "?"),
+                        "url": i.get("url"),
+                        "labels": [l.get("name") for l in (i.get("labels") or [])],
+                        "created_at": i.get("createdAt", ""),
+                    } for i in items
+                ],
+            }}
+        except subprocess.TimeoutExpired:
+            return {"error": "gh issue list timed out"}
+        except Exception as exc:
+            return {"error": f"gh issue list crashed: {exc}"}
+
+    if name == "local_github_prs":
+        repo = args.get("repo", "").strip()
+        if not repo:
+            return {"error": "repo is required"}
+        state = args.get("state", "open").strip() or "open"
+        try:
+            out = subprocess.run(
+                [_GH_BIN, "pr", "list", "--repo", repo,
+                 "--state", state, "--json",
+                 "number,title,state,author,createdAt,url,headRefName",
+                 "--limit", "15"],
+                capture_output=True, text=True, timeout=20,
+            )
+            if out.returncode != 0:
+                return {"error": f"gh pr list failed: {out.stderr[:200]}"}
+            try:
+                items = json.loads(out.stdout)
+            except json.JSONDecodeError as exc:
+                return {"error": f"gh pr list parse failed: {exc}"}
+            return {"result": {
+                "repo": repo, "state": state, "count": len(items),
+                "prs": [
+                    {
+                        "number": i.get("number"),
+                        "title": i.get("title"),
+                        "state": i.get("state"),
+                        "author": (i.get("author") or {}).get("login", "?"),
+                        "url": i.get("url"),
+                        "branch": i.get("headRefName"),
+                    } for i in items
+                ],
+            }}
+        except Exception as exc:
+            return {"error": f"gh pr list crashed: {exc}"}
+
+    if name == "local_github_issue_create":
+        repo = args.get("repo", "").strip()
+        title = args.get("title", "").strip()
+        body = args.get("body", "").strip()
+        if not repo or not title:
+            return {"error": "repo and title are required"}
+        labels = args.get("labels", "")
+        if isinstance(labels, list):
+            labels = ",".join(labels)
+        cmd = [_GH_BIN, "issue", "create", "--repo", repo, "--title", title,
+               "--body", body or "(no description provided)"]
+        if labels:
+            cmd += ["--label", labels]
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if out.returncode != 0:
+                return {"error": f"gh issue create failed: {out.stderr[:300]}"}
+            # gh issue create prints the issue URL to stdout
+            url = out.stdout.strip().splitlines()[-1] if out.stdout.strip() else ""
+            return {"result": {
+                "status": "created", "repo": repo, "title": title, "url": url,
+            }}
+        except Exception as exc:
+            return {"error": f"gh issue create crashed: {exc}"}
+
+    if name == "local_github_note":
+        # Persist a free-form note to ~/.hermes/voice-users/voice-session-notes.jsonl
+        # so the next Hermes turn (or a future voice session) can pick it up.
+        text = args.get("text", "").strip()
+        category = args.get("category", "general").strip() or "general"
+        if not text:
+            return {"error": "text is required"}
+        try:
+            _NOTES_PATH.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "category": category,
+                "text": text[:4000],
+            }
+            with open(_NOTES_PATH, "a") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            return {"result": {"status": "noted", "category": category, "path": str(_NOTES_PATH)}}
+        except Exception as exc:
+            return {"error": f"note append failed: {exc}"}
+
+    if name == "local_github_notes_read":
+        # Read all persisted notes (most recent first), optionally filtered
+        try:
+            limit = min(max(int(args.get("limit", 20)), 1), 100)
+        except (TypeError, ValueError):
+            limit = 20
+        category = (args.get("category") or "").strip()
+        if not _NOTES_PATH.exists():
+            return {"result": {"count": 0, "notes": []}}
+        try:
+            with open(_NOTES_PATH) as f:
+                lines = [json.loads(l) for l in f if l.strip()]
+        except Exception as exc:
+            return {"error": f"note read failed: {exc}"}
+        if category:
+            lines = [n for n in lines if n.get("category") == category]
+        lines.reverse()  # most recent first
+        return {"result": {
+            "count": len(lines),
+            "notes": lines[:limit],
+            "path": str(_NOTES_PATH),
+        }}
+
+    return {"error": f"Unknown GitHub tool: {name}"}
+
+
+_GITHUB_FUNCTION_DECLARATIONS = [
+    {
+        "name": "local_github_repo_list",
+        "description": "List the user's GitHub repositories using the `gh` CLI. Returns name, full name, description, visibility, and last-updated timestamp. Read-only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max repos to return (default 20, max 50)"},
+            },
+        },
+    },
+    {
+        "name": "local_github_issues",
+        "description": "List issues for a specific GitHub repo. Returns number, title, state, author, URL, labels.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Repo in 'owner/name' format, e.g. 'Capslockb/gemini-live-discord-bridge'"},
+                "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Issue state filter (default: open)"},
+                "limit": {"type": "integer", "description": "Max issues (default 15, max 50)"},
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "name": "local_github_prs",
+        "description": "List pull requests for a specific GitHub repo. Returns number, title, state, author, URL, branch.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Repo in 'owner/name' format"},
+                "state": {"type": "string", "enum": ["open", "closed", "merged", "all"], "description": "PR state filter (default: open)"},
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "name": "local_github_issue_create",
+        "description": "Create a new issue on a GitHub repo. Use sparingly — only when the user explicitly asks. Returns the new issue URL.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Repo in 'owner/name' format"},
+                "title": {"type": "string", "description": "Issue title"},
+                "body": {"type": "string", "description": "Issue body (markdown)"},
+                "labels": {"type": "string", "description": "Comma-separated label names"},
+            },
+            "required": ["repo", "title"],
+        },
+    },
+    {
+        "name": "local_github_note",
+        "description": "Persist a free-form note for the next Hermes turn or future voice session. Notes are written to ~/.hermes/voice-users/voice-session-notes.jsonl in append-only mode. Use this to capture action items, todos, or context that should survive across voice sessions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The note text (max ~4000 chars)"},
+                "category": {"type": "string", "description": "Category for filtering (e.g. 'todo', 'followup', 'context')"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "local_github_notes_read",
+        "description": "Read back persisted voice session notes (most recent first). Use after the call to recall what the user wanted done.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max notes to return (default 20, max 100)"},
+                "category": {"type": "string", "description": "Optional category filter"},
+            },
+        },
+    },
+]
+
+
 # ── Email address auto-correction (criterion #18) ──────────────────────
 # Voice transcription of email addresses is notoriously lossy:
 #   - "at" spoken for "@"            ("alice at example.com" → "alice@example.com")
@@ -3092,6 +3376,13 @@ class GeminiLiveBridge:
             if _si:
                 setup_payload["tools"].append({"functionDeclarations": _si})
                 logger.info("SysInspect voice tools registered (count=%d)", len(_si))
+        if GITHUB_VOICE_TOOLS_ENABLED:
+            if "tools" not in setup_payload:
+                setup_payload["tools"] = []
+            _gh = _filter_for_user(_GITHUB_FUNCTION_DECLARATIONS)
+            if _gh:
+                setup_payload["tools"].append({"functionDeclarations": _gh})
+                logger.info("GitHub voice tools registered (count=%d)", len(_gh))
         if handle is not None:
             setup_payload["sessionResumption"] = {"handle": handle}
             logger.info("Session resumption: handle=%s", handle)
@@ -3417,6 +3708,8 @@ class GeminiLiveBridge:
                     elif name.startswith("local_"):
                         if name.startswith("local_inspect_"):
                             result = await loop.run_in_executor(None, _run_sysinspect_tool, name, args)
+                        elif name.startswith("local_github_"):
+                            result = await loop.run_in_executor(None, _run_github_tool, name, args)
                         else:
                             result = await loop.run_in_executor(None, _run_local_tool, name, args)
                     elif name.startswith("opencode_"):
