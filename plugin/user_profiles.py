@@ -189,6 +189,7 @@ def _default_profile_yaml(discord_id: str) -> Dict[str, Any]:
         "interests": [],                  # populated by Q&A; used for #30 repo recs
         "timezone": "",                   # populated by Q&A
         "communication_style": "",        # populated by Q&A (#28)
+        "pet_peeves": "",                  # populated by Q&A
     }
 
 
@@ -236,6 +237,7 @@ class UserProfile:
     interests: List[str] = field(default_factory=list)
     timezone: str = ""
     communication_style: str = ""
+    pet_peeves: str = ""
 
     def needs_onboarding(self) -> bool:
         """True if this profile is new and hasn't been onboarded yet."""
@@ -359,6 +361,7 @@ def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> User
         interests=list(data.get("interests") or []),
         timezone=str(data.get("timezone", "")),
         communication_style=str(data.get("communication_style", "")),
+        pet_peeves=str(data.get("pet_peeves", "")),
     )
 
 

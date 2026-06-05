@@ -3664,6 +3664,36 @@ class GeminiLiveBridge:
                 )
         except Exception:
             pass
+        # #28: Mirror user's speech/communication preferences. Inject the
+        # user's declared communication_style and pet_peeves (captured
+        # during #32 onboarding) into the system prompt so the agent
+        # adapts its tone to the user's natural speech patterns.
+        try:
+            if self._user_profile is not None and self._user_profile.onboarding_completed:
+                style = (getattr(self._user_profile, 'communication_style', '') or '').strip()
+                peeves = (getattr(self._user_profile, 'pet_peeves', '') or '').strip()
+                parts = []
+                if style:
+                    parts.append(
+                        "--- COMMUNICATION PREFERENCE ---\n"
+                        f"The user has said they prefer: {style}\n"
+                        "Adapt your tone, sentence length, and level of formality "
+                        "to match this. If they're short and direct, be short and direct. "
+                        "If they're conversational, respond conversationally. "
+                        "Mirror their vocabulary and rhythm — if they use technical jargon, "
+                        "use technical jargon. If they use casual language, keep it casual."
+                    )
+                if peeves:
+                    parts.append(
+                        "--- PET PEEVES ---\n"
+                        "The user has explicitly asked me to NEVER do these:\n"
+                        f"{peeves}\n"
+                        "Take these as hard constraints."
+                    )
+                if parts:
+                    system_text = system_text + "\n\n" + "\n\n---\n\n".join(parts)
+        except Exception:
+            pass
         setup_payload: Dict[str, Any] = {
             "model": f"models/{model}",
             "generationConfig": {
