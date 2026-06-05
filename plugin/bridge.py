@@ -719,6 +719,20 @@ def _opencode_session_label(key: Any) -> str:
     return str(key)
 
 
+def _opencode_sanitize_name(raw: str) -> str:
+    """Normalize a session name to the form used as the registry key.
+
+    Must match the sanitization in _run_opencode_tool() so status/stop/send
+    lookups hit the same key that opencode_run created. Without this, a user
+    calling opencode_run with name='Refactor' stores the session as
+    'refactor' but cannot find it later by typing 'Stop session Refactor'.
+    """
+    import re as _re
+    if not raw:
+        return f"oc-{int(time.time())}"
+    return _re.sub(r"[^a-z0-9-]", "-", raw.lower())[:32].strip("-") or f"oc-{int(time.time())}"
+
+
 def _opencode_tmux_window_name(session_name: str) -> str:
     """Return tmux window name for a given opencode voice session.
 
@@ -998,9 +1012,10 @@ def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         if name == "opencode_run":
             session_name = args.get("name") or f"oc-{int(time.time())}"
-            # Sanitize name: lowercase, hyphens, no spaces, max 32 chars
-            import re
-            session_name = re.sub(r"[^a-z0-9-]", "-", session_name.lower())[:32].strip("-") or f"oc-{int(time.time())}"
+            # Sanitize name: lowercase, hyphens, no spaces, max 32 chars.
+            # The same sanitization runs in _opencode_sanitize_name() so
+            # status/send/stop lookups always hit the same registry key.
+            session_name = _opencode_sanitize_name(session_name)
             return _opencode_run_tmux(
                 session_name=session_name,
                 prompt=args.get("goal", ""),
@@ -1009,15 +1024,16 @@ def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             )
         if name == "opencode_status":
             return _opencode_status(
-                name=args.get("name", ""),
+                name=_opencode_sanitize_name(args.get("name", "")),
                 tail_lines=min(max(int(args.get("tail_lines", 40)), 1), 200),
             )
         if name == "opencode_list":
             return {"result": {"sessions": _opencode_list_sessions()}}
         if name == "opencode_send":
-            return _opencode_send(name=args.get("name", ""), message=args.get("message", ""))
+            return _opencode_send(name=_opencode_sanitize_name(args.get("name", "")),
+                                 message=args.get("message", ""))
         if name == "opencode_stop":
-            return _opencode_stop(name=args.get("name", ""))
+            return _opencode_stop(name=_opencode_sanitize_name(args.get("name", "")))
         return {"error": f"Unknown opencode tool: {name}"}
     except Exception as exc:
         logger.exception("opencode tool %s crashed", name)
