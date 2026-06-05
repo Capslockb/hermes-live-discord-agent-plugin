@@ -42,6 +42,9 @@ import numpy as np
 # Register all tool names with the per-user profile system so the allowlist
 # vocabulary stays in sync with the declarations below.
 try:
+    _plugin_dir = str(Path(__file__).parent)
+    if _plugin_dir not in sys.path:
+        sys.path.insert(0, _plugin_dir)
     from user_profiles import register_known_tool as _rkt  # type: ignore
     for _pending_decl_group in ():  # placeholder; real registrations happen after declarations
         pass
@@ -2289,12 +2292,6 @@ class GeminiLiveBridge:
                         "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
                     }
                 },
-                # mediaResolution lives INSIDE generationConfig for the Live API
-                # setup payload (verified via https://ai.google.dev/api/live
-                # on 2026-06-05). The Live generationConfig is a separate
-                # schema from the standard one — top-level videoConfig
-                # causes "Unknown name 'videoConfig' at 'setup'" WebSocket
-                # error 1007. LOW ≈ 100 tokens/frame vs default ~258.
                 "mediaResolution": "LOW",
             },
             "realtimeInputConfig": {
