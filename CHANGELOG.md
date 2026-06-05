@@ -1,21 +1,17 @@
 # CHANGELOG — gemini-live-discord-bridge
 
-## 0.2.2 — 2026-06-05
+## 0.2.3 — 2026-06-05
 
 ### Fixes
-- **Autostart leave/join loop guard** — the autostart thread now exits cleanly when a bridge is already active in the target guild+channel, instead of repeatedly calling `voice_live` which would toggle-leave and re-join. Symptoms: bot kept leaving and re-joining the voice channel, finally exiting with "Bridge failed to start". Cause: the inner `voice_live()` matches the active channel and triggers `voice_live_leave()` as a "toggle" — the next autostart iteration then reverses by re-joining. Fix: explicit already-active short-circuit in `_autostart_voice_live()` that detects the active bridge via `_active_bridges[gid]["vc"]` and returns without re-entering `voice_live`. Also added a NoneType guard in `voice_live_leave()` for the `task` field so a partially-initialized bridge doesn't crash with `'NoneType' object has no attribute 'cancel'`.
-- **Discord adapter: native slash command wiring** — replaced the `ctx.register_command()` workaround (which registered Hermes-CLI / in-session commands that Discord does NOT surface as native `/` commands) with the official pattern: `@tree.command(name="voice-live")` and `@tree.command(name="voice-live-leave")` blocks added to the Discord platform adapter at `gateway/platforms/discord/adapter.py`. These call directly into the plugin's importable `voice_live` / `voice_live_leave` functions, mirror the existing `tree.command` blocks (e.g. `/model`, `/restart`), and go through the same `_check_slash_authorization` gate. Restart the gateway and the commands appear in the Discord `/` autocomplete menu natively. The plugin's `voice_live()` now also auto-infers the invoker's current voice channel when called with empty guild_id+channel_id (the path the slash command takes).
+- **Keyboard typing SFX** — replaced the thin 60ms Mixkit single-click SFX with a real 180ms mechanical keyboard click (sourced from YouTube, "Keyboard Single Strokes SOUND Effect" by SennaFoxy / VirtualZero). Downmixed to mono, resampled to 24 kHz, band-passed 100 Hz - 8 kHz, EBU-normalized to -18 LUFS. Now reads as a natural staccato of real mechanical clicks when looped, not a click track.
 
-### Documentation
-- README + this CHANGELOG updated to reference the slash command architecture.
-- New `scripts/regression_test_voice_loop.py` — focused tests for the autostart loop guard, plugin importability via `hermes_plugins.discord_voice`, and the NoneType guard.
+### Features
+- **OpenCode progress watcher (criterion #16)** — long-running opencode tasks now keep the user informed via voice updates. A background asyncio task on the gateway event loop polls the opencode log every 5s, throttles voice updates to at most one per 30s, and emits an immediate update on milestone events (error, exception, test pass/fail, compile success/fail, build success/fail, done, complete, commit, push, ✓/✗). Sends a final summary when the tmux window dies. Respects "user is currently speaking" gate — drops updates rather than barging in. Per-session weak-ref registry lets the watcher call back into the bridge's send_text() from a different code path. New env vars: `DISCORD_VOICE_LIVE_OPENCODE_WATCHER` (master toggle), `..._POLL_SECONDS`, `..._MIN_VOICE_GAP_SECONDS`, `..._INITIAL_DELAY_SECONDS`.
 
-### Known issues
-- See [`docs/KNOWN_BUGS.md`](docs/KNOWN_BUGS.md). The `mediaResolution` placement fix landed in 0.2.1 (camelCase `mediaResolution: "LOW"` inside `generationConfig`).
+### Tests
+- New `scripts/regression_test_opencode_watcher.py` — 13 checks across 6 sets covering the watcher end-to-end. All 13 pass.
 
 ---
-
-# CHANGELOG — gemini-live-discord-bridge
 
 ## 0.2.1 — 2026-06-05
 
