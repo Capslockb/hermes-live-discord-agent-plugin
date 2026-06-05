@@ -1,5 +1,35 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.2.4 — 2026-06-05
+
+### Features
+- **Webhook dispatcher (criterion #17)** — per-event-class Discord webhook delivery. New module `webhook_dispatcher.py` with a background thread, per-class throttling, Discord embed formatting, and `allowed_mentions: {parse: []}` to disable @everyone pings. Event classes: `voice.transcript`, `opencode.status`, `opencode.transcript`, `email.sent`, `bridge.status`, `tool.called`. Each class has its own env var (`DISCORD_VOICE_LIVE_WEBHOOK_<CLASS>=url[,url2,...]`). Wire-up points emit on bridge start/stop, every transcript line, every tool call, opencode lifecycle events (start/progress/milestone/finished/stopped), and email sends.
+- **Email address auto-correction + send fix (criterion #18)** — new `_autocorrect_email_address()` helper handles common STT errors when users speak addresses in voice (`"at"` → `@`, `"dot"` → `.`, case-insensitive, whitespace/double-space cleanup, lowercase). `local_email_send` now applies the correction and surfaces the change notes in the tool result so the agent can confirm with the user. Bails and returns the original if the result still doesn't look like an email, so the agent can ask for character-by-character spelling.
+- **Email reminder poller (criterion #19)** — new background `asyncio` task that runs while the bridge is up. Polls the Gmail inbox via `google_api.py` every `DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS` (default 300s = 5 min) and voice-reminds the user about important non-spam emails. Filter `_should_remind_email()` rejects automated senders (noreply, no-reply, GitHub/GitLab/Stripe/PayPal/etc. domains), newsletter/receipt/invoice/Pull-Request keywords, and GitHub-style `[repo] PR #123:` patterns. Throttled to `DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR` (3 by default) to avoid nagging. Seen-IDs persisted to `~/.hermes/voice-users/email-reminder-seen.json` so restarts don't re-nag on already-seen emails.
+- **Voice to Aoede (criterion #20)** — already the default (`GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Aoede")`). No code change needed.
+
+### Fixes
+- **Email compose/send broken** (#18) — was a missing auto-correction path; the spoken email address was passed verbatim to `google_api.py` which would fail on STT artifacts. The new `_autocorrect_email_address()` runs before send.
+
+### Tests
+- New `scripts/regression_test_criteria_17_18_19.py` — 50 checks across 3 sets covering webhook dispatcher routing/throttling/embed format, `_autocorrect_email_address` common cases, `_should_remind_email` spam filtering. All 50 pass.
+
+### Configuration additions
+```
+DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_EMAIL=...
+DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED=...
+DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS=2
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_ENABLED=true
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS=300
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3
+```
+
+---
+
 ## 0.2.3 — 2026-06-05
 
 ### Fixes
