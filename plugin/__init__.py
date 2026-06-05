@@ -191,7 +191,7 @@ def register(ctx):
         if not inferred:
             return "Could not infer your current voice channel. Join a voice channel first."
         guild_id_str, channel_id_str = inferred
-        result = json.loads(await voice_live(adapter, guild_id_str, channel_id_str))
+        result = json.loads(await voice_live(adapter, guild_id_str, channel_id_str, user_id=str(user_id)))
         status = result.get("status", "error")
         msg = result.get("message", "")
         if status == "success":
@@ -424,7 +424,7 @@ async def _autostart_voice_live() -> None:
                 await asyncio.sleep(10.0)
                 continue
 
-            result = json.loads(await voice_live(adapter, str(guild_id), str(channel_id)))
+            result = json.loads(await voice_live(adapter, str(guild_id), str(channel_id), user_id=str(user_id)))
             if result.get("status") == "success":
                 if not KEEP_AUTOSTART_FILE:
                     try:
@@ -472,7 +472,7 @@ def _schedule_autostart_thread() -> None:
     thread.start()
 
 
-async def voice_live(adapter, guild_id: str, channel_id: str) -> str:
+async def voice_live(adapter, guild_id: str, channel_id: str, user_id: Optional[str] = None) -> str:
     guild_id_int = int(guild_id)
 
     if _starting.get(guild_id_int):
@@ -523,9 +523,21 @@ async def voice_live(adapter, guild_id: str, channel_id: str) -> str:
         bridge_mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(bridge_mod)
 
+        # Resolve per-user profile (auto-creates a new profile on first contact)
+        user_profile = None
+        effective_user_id = user_id or DEFAULT_USER_ID
+        try:
+            from user_profiles import get_or_create_profile  # type: ignore
+            user_profile = get_or_create_profile(effective_user_id)
+            logger.info("VoiceLive: loaded profile for user %s (owner=%s, tools=%d)",
+                        user_profile.discord_id, user_profile.is_owner, len(user_profile.enabled_tools))
+        except Exception as exc:
+            logger.warning("VoiceLive: could not load user profile, falling back to single-user mode: %s", exc)
+            user_profile = None
+
         loop = asyncio.get_running_loop()
         ready_future = loop.create_future()
-        bridge_task = asyncio.create_task(bridge_mod.run_sidecar(channel, adapter, ready_future))
+        bridge_task = asyncio.create_task(bridge_mod.run_sidecar(channel, adapter, ready_future, user_profile))
         bridge_task.add_done_callback(
             lambda _task, _gid=guild_id_int: _active_bridges.pop(_gid, None)
         )
@@ -534,6 +546,8 @@ async def voice_live(adapter, guild_id: str, channel_id: str) -> str:
             "adapter": adapter,
             "task": bridge_task,
             "bridge_mod": bridge_mod,
+            "user_profile": user_profile,
+            "user_id": effective_user_id,
         }
 
         try:

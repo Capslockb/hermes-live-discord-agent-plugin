@@ -39,6 +39,15 @@ from typing import Any, Optional, Dict, List, Callable
 
 import numpy as np
 
+# Register all tool names with the per-user profile system so the allowlist
+# vocabulary stays in sync with the declarations below.
+try:
+    from user_profiles import register_known_tool as _rkt  # type: ignore
+    for _pending_decl_group in ():  # placeholder; real registrations happen after declarations
+        pass
+except Exception:  # user_profiles not importable in some test contexts
+    _rkt = None
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -150,11 +159,14 @@ BASE_SYSTEM_PROMPT = (
     "TOOL BEHAVIOUR: When you need to run a tool (Spotify, web search, etc.), you will hear a brief typing click sound while it executes. This is normal — it means the tool is working. Tools run in background threads and will not freeze or delay the conversation. Wait for the result, then respond naturally. Do not apologise for using tools."
 )
 
-async def _build_honcho_context() -> str:
+async def _build_honcho_context(peer_name_override: Optional[str] = None) -> str:
     """Fetch peer representation + card from Honcho for the system prompt.
 
     Uses the honcho client SDK (from honcho.client import Honcho) to avoid
     __init__.py export issues. Falls back to HTTP if SDK is unavailable.
+
+    If peer_name_override is provided, use it as the Honcho peer (per-user isolation).
+    Otherwise fall back to the module-level HONCHO_PEER_NAME (legacy single-user mode).
     """
     if not HONCHO_CONTEXT_ENABLED:
         return ""
@@ -171,9 +183,10 @@ async def _build_honcho_context() -> str:
         host = data.get("hosts", {}).get("hermes", {})
         base_url = host.get("baseUrl") or data.get("baseUrl") or data.get("base_url") or "http://127.0.0.1:8000"
         workspace = host.get("workspace") or data.get("workspace") or data.get("app_id") or "hermes"
-        # Allow honcho.json to override the env-derived peer name
+        # Allow honcho.json / caller to override the env-derived peer name
         peer_name = (
-            host.get("peerName")
+            peer_name_override
+            or host.get("peerName")
             or data.get("peerName")
             or host.get("peer_name")
             or data.get("peer_name")
@@ -676,25 +689,64 @@ OPENCODE_BIN = os.getenv("OPENCODE_BIN", "/home/caps/.local/bin/opencode")
 OPENCODE_DEFAULT_MODEL = os.getenv("OPENCODE_DEFAULT_MODEL", "anthropic/claude-sonnet-4")
 OPENCODE_TMUX_SESSION = os.getenv("OPENCODE_TMUX_SESSION", "opencode-voice")
 
-# Active session registry: name -> {"tmux_window": str, "created_at": float, "goal": str}
-_OPENCODE_SESSIONS: Dict[str, Dict[str, Any]] = {}
+# Active session registry: key (user_id, session_name) -> metadata dict.
+# When user_id is None (legacy single-user mode), keys are just session_name.
+_OPENCODE_SESSIONS: Dict[Any, Dict[str, Any]] = {}
+
+
+# Module-level "current user" context for the opencode tool layer. This is
+# set by the bridge's executor before each tool call so that the synchronous
+# tool runners know which Discord user invoked them. The registry keys
+# are (user_id, session_name) tuples so two users never collide.
+_OPENCODE_CURRENT_USER: Optional[str] = None
+
+
+def _opencode_set_user(user_id: Optional[str]) -> None:
+    """Set the current opencode user context (called from bridge executor before dispatch)."""
+    global _OPENCODE_CURRENT_USER
+    _OPENCODE_CURRENT_USER = user_id or None
+
+
+def _opencode_key(session_name: str) -> Any:
+    """Return the registry key for the current user + session."""
+    return (_OPENCODE_CURRENT_USER, session_name)
+
+
+def _opencode_session_label(key: Any) -> str:
+    """Return a human-readable label for a session key (e.g. 'user42/refactor' or 'refactor')."""
+    if isinstance(key, tuple):
+        return f"{key[0]}/{key[1]}"
+    return str(key)
 
 
 def _opencode_tmux_window_name(session_name: str) -> str:
-    """Return tmux window name for a given opencode voice session."""
+    """Return tmux window name for a given opencode voice session.
+
+    Per-user tmux session names: oc-<user_prefix>-<session> so two users
+    running 'refactor' don't collide in the same tmux server.
+    """
+    prefix = ""
+    if _OPENCODE_CURRENT_USER:
+        prefix = re.sub(r"[^a-z0-9]", "", str(_OPENCODE_CURRENT_USER).lower())[:8] or "anon"
+        return f"oc-{prefix}-{session_name}"
     return f"oc-{session_name}"
 
 
 def _opencode_list_sessions() -> List[Dict[str, Any]]:
-    """Return summary of tracked opencode sessions (most recent first)."""
+    """Return summary of tracked opencode sessions for the CURRENT user only."""
+    if _OPENCODE_CURRENT_USER is None:
+        items = [(k, v) for k, v in _OPENCODE_SESSIONS.items() if not isinstance(k, tuple)]
+    else:
+        items = [(k, v) for k, v in _OPENCODE_SESSIONS.items() if isinstance(k, tuple) and k[0] == _OPENCODE_CURRENT_USER]
     return [
         {
-            "name": n,
+            "name": (k[1] if isinstance(k, tuple) else k),
+            "user": (k[0] if isinstance(k, tuple) else None),
             "tmux_window": meta.get("tmux_window"),
             "goal": meta.get("goal", "")[:200],
             "created_at": meta.get("created_at"),
         }
-        for n, meta in sorted(_OPENCODE_SESSIONS.items(), key=lambda kv: -kv[1].get("created_at", 0))
+        for k, meta in sorted(items, key=lambda kv: -kv[1].get("created_at", 0))
     ]
 
 
@@ -730,10 +782,11 @@ def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], wor
     # Use a here-doc to feed the prompt to opencode run. -y auto-approves inside
     # the opencode session so the user doesn't get blocked by its own approvals;
     # the voice passthrough is for what the LIVE agent decides to surface.
+    log_path = f"/tmp/opencode-{window_name}.log"
     cmd = (
         f"cd {quoted_wd} && "
         f"echo {quoted_prompt} | {OPENCODE_BIN} run --model {quoted_model} -y 2>&1 | "
-        f"tee /tmp/opencode-{session_name}.log; "
+        f"tee {shlex.quote(log_path)}; "
         f"echo '[opencode-voice] session ended, window will close in 60s'; "
         f"sleep 60"
     )
@@ -745,13 +798,14 @@ def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], wor
     if create.returncode != 0:
         return {"error": f"tmux new-window failed: {create.stderr.decode(errors='replace').strip()}"}
 
-    _OPENCODE_SESSIONS[session_name] = {
+    _OPENCODE_SESSIONS[_opencode_key(session_name)] = {
         "tmux_window": window_name,
         "created_at": time.time(),
         "goal": prompt,
         "model": model,
         "workdir": workdir,
-        "log_path": f"/tmp/opencode-{session_name}.log",
+        "log_path": f"/tmp/opencode-{window_name}.log",
+        "user_id": _OPENCODE_CURRENT_USER,
     }
     return {
         "result": {
@@ -774,9 +828,9 @@ def _opencode_status(name: str, tail_lines: int = 40) -> Dict[str, Any]:
     """Return tail of opencode session log + whether the window still exists."""
     import subprocess
 
-    meta = _OPENCODE_SESSIONS.get(name)
+    meta = _OPENCODE_SESSIONS.get(_opencode_key(name))
     if not meta:
-        return {"error": f"no opencode session named '{name}'. Active: {list(_OPENCODE_SESSIONS.keys())}"}
+        return {"error": f"no opencode session named '{name}'. Active: {[_opencode_session_label(k) for k in _OPENCODE_SESSIONS if (not isinstance(k, tuple)) or k[0] == _OPENCODE_CURRENT_USER]}"}
 
     log_path = meta["log_path"]
     window = meta["tmux_window"]
@@ -798,6 +852,7 @@ def _opencode_status(name: str, tail_lines: int = 40) -> Dict[str, Any]:
     return {
         "result": {
             "name": name,
+            "user": _OPENCODE_CURRENT_USER,
             "alive": is_alive,
             "log_tail": log_content,
             "goal": meta.get("goal", "")[:200],
@@ -816,9 +871,9 @@ def _opencode_send(name: str, message: str) -> Dict[str, Any]:
     """
     import subprocess
 
-    meta = _OPENCODE_SESSIONS.get(name)
+    meta = _OPENCODE_SESSIONS.get(_opencode_key(name))
     if not meta:
-        return {"error": f"no opencode session named '{name}'"}
+        return {"error": f"no opencode session named '{name}' for current user"}
     window = meta["tmux_window"]
 
     # Try to deliver into the tmux pane (interactive sessions)
@@ -840,9 +895,9 @@ def _opencode_stop(name: str) -> Dict[str, Any]:
     """Kill the opencode session's tmux window and remove from registry."""
     import subprocess
 
-    meta = _OPENCODE_SESSIONS.pop(name, None)
+    meta = _OPENCODE_SESSIONS.pop(_opencode_key(name), None)
     if not meta:
-        return {"error": f"no opencode session named '{name}'"}
+        return {"error": f"no opencode session named '{name}' for current user"}
     window = meta["tmux_window"]
     subprocess.run(
         ["tmux", "kill-window", "-t", f"{OPENCODE_TMUX_SESSION}:{window}"],
@@ -930,6 +985,12 @@ _OPENCODE_FUNCTION_DECLARATIONS = [
         },
     },
 ]
+
+
+def _run_opencode_tool_with_user(name: str, args: Dict[str, Any], user_id: Optional[str]) -> Dict[str, Any]:
+    """Bridge entry point: set the per-user context then dispatch."""
+    _opencode_set_user(user_id)
+    return _run_opencode_tool(name, args)
 
 
 def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -2057,6 +2118,7 @@ class GeminiLiveBridge:
         on_wake: Callable[[], None] = None,
         on_leave_request: Callable[[str], None] = None,
         on_reconnect: Callable[[], None] = None,
+        user_profile: Optional[Any] = None,
     ):
         self._ws = None
         self._output_source = output_source
@@ -2068,6 +2130,9 @@ class GeminiLiveBridge:
         self._reconnecting = False
         self._user_disconnect = False
         self._reconnect_count = 0
+        # Per-user profile (Honcho peer, tool allowlist, prompt overrides).
+        # When None, fall back to module-level defaults (legacy single-user mode).
+        self._user_profile = user_profile
         self._send_q: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=256)
         self._video_q: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(maxsize=2)
         self._tasks: List[asyncio.Task] = []
@@ -2184,8 +2249,21 @@ class GeminiLiveBridge:
 
     async def _connect_model(self, websockets, ws_url: str, model: str, handle=None):
         self._ws = await websockets.connect(ws_url, ping_interval=20, ping_timeout=10)
-        honcho_ctx = await _build_honcho_context()
-        system_text = BASE_SYSTEM_PROMPT + honcho_ctx
+        # Per-user Honcho peer: when this bridge was created with a profile, use
+        # that profile's honcho_peer_name so memory is fully isolated per user.
+        # Falls back to module-level HONCHO_PEER_NAME if no profile was provided.
+        peer_override: Optional[str] = None
+        base_prompt = BASE_SYSTEM_PROMPT
+        if self._user_profile is not None:
+            try:
+                peer_override = getattr(self._user_profile, "honcho_peer_name", None)
+                overrides = getattr(self._user_profile, "system_prompt_overrides", "") or ""
+                if overrides.strip():
+                    base_prompt = base_prompt + "\n\n--- PER-USER OVERRIDES ---\n" + overrides.strip() + "\n--- END PER-USER OVERRIDES ---"
+            except Exception:
+                peer_override = None
+        honcho_ctx = await _build_honcho_context(peer_name_override=peer_override)
+        system_text = base_prompt + honcho_ctx
         setup_payload: Dict[str, Any] = {
             "model": f"models/{model}",
             "generationConfig": {
@@ -2218,36 +2296,57 @@ class GeminiLiveBridge:
                 }]
             },
         }
+        # Helper: filter a function-declaration list by per-user allowlist.
+        def _filter_for_user(decls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            if self._user_profile is None:
+                return decls
+            try:
+                return [d for d in decls if self._user_profile.is_tool_allowed(d.get("name", ""))]
+            except Exception:
+                return decls
+
         if SPOTIFY_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _SPOTIFY_FUNCTION_DECLARATIONS})
-            logger.info("Spotify voice tools registered with Gemini Live (count=%d)", len(_SPOTIFY_FUNCTION_DECLARATIONS))
+            _spotify = _filter_for_user(_SPOTIFY_FUNCTION_DECLARATIONS)
+            if _spotify:
+                setup_payload["tools"].append({"functionDeclarations": _spotify})
+                logger.info("Spotify voice tools registered (count=%d)", len(_spotify))
         if WEB_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _WEB_FUNCTION_DECLARATIONS})
-            logger.info("Web voice tools registered with Gemini Live (count=%d)", len(_WEB_FUNCTION_DECLARATIONS))
+            _web = _filter_for_user(_WEB_FUNCTION_DECLARATIONS)
+            if _web:
+                setup_payload["tools"].append({"functionDeclarations": _web})
+                logger.info("Web voice tools registered (count=%d)", len(_web))
         if LOCAL_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _LOCAL_FUNCTION_DECLARATIONS})
-            logger.info("Local voice tools registered with Gemini Live (count=%d)", len(_LOCAL_FUNCTION_DECLARATIONS))
+            _local = _filter_for_user(_LOCAL_FUNCTION_DECLARATIONS)
+            if _local:
+                setup_payload["tools"].append({"functionDeclarations": _local})
+                logger.info("Local voice tools registered (count=%d)", len(_local))
         if HA_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _HOMEASSISTANT_FUNCTION_DECLARATIONS})
-            logger.info("HA voice tools registered with Gemini Live (count=%d)", len(_HOMEASSISTANT_FUNCTION_DECLARATIONS))
+            _ha = _filter_for_user(_HOMEASSISTANT_FUNCTION_DECLARATIONS)
+            if _ha:
+                setup_payload["tools"].append({"functionDeclarations": _ha})
+                logger.info("HA voice tools registered (count=%d)", len(_ha))
         if OPENCODE_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _OPENCODE_FUNCTION_DECLARATIONS})
-            logger.info("OpenCode voice tools registered with Gemini Live (count=%d)", len(_OPENCODE_FUNCTION_DECLARATIONS))
+            _oc = _filter_for_user(_OPENCODE_FUNCTION_DECLARATIONS)
+            if _oc:
+                setup_payload["tools"].append({"functionDeclarations": _oc})
+                logger.info("OpenCode voice tools registered (count=%d)", len(_oc))
         if SYSINSPECT_VOICE_TOOLS_ENABLED:
             if "tools" not in setup_payload:
                 setup_payload["tools"] = []
-            setup_payload["tools"].append({"functionDeclarations": _SYSINSPECT_FUNCTION_DECLARATIONS})
-            logger.info("SysInspect voice tools registered with Gemini Live (count=%d)", len(_SYSINSPECT_FUNCTION_DECLARATIONS))
+            _si = _filter_for_user(_SYSINSPECT_FUNCTION_DECLARATIONS)
+            if _si:
+                setup_payload["tools"].append({"functionDeclarations": _si})
+                logger.info("SysInspect voice tools registered (count=%d)", len(_si))
         if handle is not None:
             setup_payload["sessionResumption"] = {"handle": handle}
             logger.info("Session resumption: handle=%s", handle)
@@ -2538,6 +2637,17 @@ class GeminiLiveBridge:
                 if name.startswith("web_") and isinstance(args, dict):
                     args = _normalize_voice_web_args(name, args)
                 logger.info("Gemini tool call: %s id=%s args=%s", name, call_id, args)
+                # Defense-in-depth per-user allowlist check. Even if a tool
+                # declaration snuck through, refuse to execute it for a user
+                # who isn't allowed to invoke it.
+                if self._user_profile is not None:
+                    try:
+                        if not self._user_profile.is_tool_allowed(name):
+                            result = {"error": f"Tool '{name}' is not enabled for this user"}
+                            responses.append({"id": call_id, "name": name, "response": result})
+                            continue
+                    except Exception:
+                        pass
                 try:
                     if name.startswith("spotify_"):
                         result = await loop.run_in_executor(None, _run_spotify_tool, name, args)
@@ -2549,7 +2659,13 @@ class GeminiLiveBridge:
                         else:
                             result = await loop.run_in_executor(None, _run_local_tool, name, args)
                     elif name.startswith("opencode_"):
-                        result = await loop.run_in_executor(None, _run_opencode_tool, name, args)
+                        # Bind the per-user opencode context in the worker thread.
+                        _user_id = self._user_profile.discord_id if self._user_profile is not None else None
+                        result = await loop.run_in_executor(
+                            None,
+                            _run_opencode_tool_with_user,
+                            name, args, _user_id,
+                        )
                     else:
                         result = {"error": f"No handler for tool: {name}"}
                 except Exception as exc:
@@ -2601,11 +2717,12 @@ class GeminiLiveBridge:
 
 
 class VoiceLiveBridge:
-    def __init__(self, voice_channel, discord_adapter):
+    def __init__(self, voice_channel, discord_adapter, user_profile: Optional[Any] = None):
         self._channel = voice_channel
         self._vc = None
         self._adapter = discord_adapter
         self._guild_id = voice_channel.guild.id
+        self._user_profile = user_profile
         self._audio_source = LiveAudioSource()
         self._listener = None
         self._leave_requested = False
@@ -2614,6 +2731,7 @@ class VoiceLiveBridge:
             on_wake=self._wake_playback,
             on_leave_request=self._request_leave,
             on_reconnect=self._recreate_pcm_sink,
+            user_profile=user_profile,
         )
         self._running = False
         self._started_at = None
@@ -2984,9 +3102,9 @@ async def handle_http_request(reader, writer):
     writer.close()
 
 
-async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None):
+async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None, user_profile: Optional[Any] = None):
     global BRIDGE
-    BRIDGE = VoiceLiveBridge(vc, adapter)
+    BRIDGE = VoiceLiveBridge(vc, adapter, user_profile=user_profile)
     server = None
     try:
         server = await asyncio.start_server(handle_http_request, "127.0.0.1", HTTP_PORT)
@@ -3026,6 +3144,30 @@ async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None
             await server.wait_closed()
         if BRIDGE:
             await BRIDGE.stop()
+
+
+# Register all known tool names with the per-user profile system so the
+# allowlist vocabulary is in sync with the declarations above.
+def _register_all_known_tools():
+    if _rkt is None:
+        return
+    for decl_list in (
+        _SPOTIFY_FUNCTION_DECLARATIONS,
+        _WEB_FUNCTION_DECLARATIONS,
+        _LOCAL_FUNCTION_DECLARATIONS,
+        _HOMEASSISTANT_FUNCTION_DECLARATIONS,
+        _OPENCODE_FUNCTION_DECLARATIONS,
+        _SYSINSPECT_FUNCTION_DECLARATIONS,
+    ):
+        try:
+            for d in decl_list:
+                if isinstance(d, dict) and d.get("name"):
+                    _rkt(d["name"])
+        except Exception as exc:
+            logger.debug("tool registration failed: %s", exc)
+
+
+_register_all_known_tools()
 
 
 if __name__ == "__main__":
