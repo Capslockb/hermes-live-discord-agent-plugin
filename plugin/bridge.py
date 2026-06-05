@@ -654,6 +654,60 @@ def _run_github_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             "path": str(_NOTES_PATH),
         }}
 
+
+    if name == "local_github_suggest_repos":
+        """Search GitHub for repos matching the user's interests and return curated suggestions."""
+        interests_raw = args.get("interests", [])
+        limit = min(max(int(args.get("limit_per_topic", 3)), 1), 5)
+        if not interests_raw:
+            return {"error": "interests list is required"}
+        if isinstance(interests_raw, str):
+            topics = [t.strip() for t in interests_raw.split(",") if t.strip()]
+        else:
+            topics = [str(t).strip() for t in interests_raw if str(t).strip()]
+        if not topics:
+            return {"error": "at least one interest keyword is required"}
+        import subprocess as _sp, json as _json
+        recommendations = {}
+        total = 0
+        for topic in topics[:5]:  # max 5 topics per call
+            try:
+                out = _sp.run(
+                    ["gh", "search", "repos", topic, "--limit", str(limit),
+                     "--json", "fullName,description,url"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if out.returncode != 0:
+                    continue
+                try:
+                    results = _json.loads(out.stdout)
+                except _json.JSONDecodeError:
+                    continue
+                curated = []
+                for r in results:
+                    if not isinstance(r, dict):
+                        continue
+                    full_name = r.get("fullName", "")
+                    desc = r.get("description", "")
+                    repo_url = r.get("url", "")
+                    curated.append({
+                        "full_name": full_name,
+                        "description": (desc or "")[:200],
+                        "url": repo_url,
+                    })
+                if curated:
+                    recommendations[topic] = curated
+                    total += len(curated)
+            except Exception as exc:
+                continue
+        if not recommendations:
+            return {"error": "No results found for any of the provided interests"}
+        return {"result": {
+            "recommendations": recommendations,
+            "total_count": total,
+            "note": "These are top matches by relevance. Browse and see what looks interesting!"
+        }}
+    
     return {"error": f"Unknown GitHub tool: {name}"}
 
 
@@ -728,6 +782,32 @@ _GITHUB_FUNCTION_DECLARATIONS = [
                 "limit": {"type": "integer", "description": "Max notes to return (default 20, max 100)"},
                 "category": {"type": "string", "description": "Optional category filter"},
             },
+        },
+    },
+    {
+        "name": "local_github_suggest_repos",
+        "description": (
+            "Suggest interesting GitHub repos based on topics or interests. "
+            "Searches GitHub for popular repos matching the given keywords, "
+            "checks if you already starred them, and returns a curated "
+            "recommendation list with descriptions, stars, and URLs. "
+            "Proactively suggest this when you learn the user's interests "
+            "or during idle moments (criterion #30)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "interests": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Keywords to search (e.g. ['hermes agent', 'discord bots'])",
+                },
+                "limit_per_topic": {
+                    "type": "integer",
+                    "description": "Max results per topic (default 3, max 5)",
+                },
+            },
+            "required": ["interests"],
         },
     },
 ]
