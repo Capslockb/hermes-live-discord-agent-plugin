@@ -1,5 +1,15 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.2.1 — 2026-06-05
+
+### Fixes
+- **Case-insensitive opencode session name lookup** — `opencode_run` sanitizes session names to lowercase/hyphens (`'Refactor'` → `'refactor'`), but `opencode_status` / `opencode_send` / `opencode_stop` were looking up the registry with the raw name. A user could spawn a session with `name='Refactor'` but then could not stop it. New `_opencode_sanitize_name()` helper called from all five opencode_* dispatch paths fixes it.
+
+### Tests
+- **New `scripts/regression_test_user_isolation.py`** — 50 checks across 11 sets exercising the full per-user isolation surface (legacy fallback, owner privilege, new-user safe defaults, explicit disable, cross-user opencode denial, profile round-trip, index tracking, auto-owner promotion, "all" override, list API). Run with `python3 scripts/regression_test_user_isolation.py`. All 50 pass.
+
+---
+
 ## 0.2.0 — 2026-06-05
 
 Major feature drop: per-user profiles, OpenCode delegation, real keyboard SFX, and the full 40-tool surface for Gemini Live.
