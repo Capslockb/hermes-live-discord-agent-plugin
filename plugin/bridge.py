@@ -1277,6 +1277,108 @@ _LOCAL_FUNCTION_DECLARATIONS = [
         ),
         "parameters": {"type": "object", "properties": {}},
     },
+    # ── Multi-CLI delegation tools (criterion #23-#25) ─────────────────
+    {
+        "name": "local_delegate_suggest",
+        "description": (
+            "Analyze a task and suggest the best delegation platform + ETA. "
+            "Call this before delegating a task to determine which CLI to use "
+            "(opencode, codex, gemini, numasec, or hermes-api). "
+            "Returns platform suggestion, reason, ETA, rate-limits, and context-fit warnings. "
+            "The user should confirm the suggestion before proceeding."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "The user's full original goal"},
+                "project_size": {
+                    "type": "string",
+                    "enum": ["tiny", "small", "medium", "large", "xlarge"],
+                    "description": "Estimated size: tiny (1 file), small (2-5 files), medium (multi-file), large (new feature), xlarge (project-level)",
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": ["code", "refactor", "security", "research", "analysis", "build", "test"],
+                    "description": "Type of work",
+                },
+                "complexity": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high", "extreme"],
+                    "description": "Complexity: low = straightforward, extreme = uncharted territory",
+                },
+                "project_root": {
+                    "type": "string",
+                    "description": "Optional project root directory for context-fit estimation",
+                },
+            },
+            "required": ["goal", "project_size", "scope", "complexity"],
+        },
+    },
+    {
+        "name": "local_delegate_assemble",
+        "description": (
+            "Assemble a platform-optimized system prompt for the target CLI. "
+            "Call AFTER local_delegate_suggest and the user confirms the platform. "
+            "The output is a ready-to-send prompt that includes sub-goals, constraints, "
+            "and platform-specific instructions."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "The main goal"},
+                "subgoals": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Ordered sub-goals (broken down by the agent)",
+                },
+                "platform": {
+                    "type": "string",
+                    "enum": ["opencode", "codex", "gemini", "numasec", "hermes-api"],
+                    "description": "The platform chosen by local_delegate_suggest",
+                },
+                "project_root": {"type": "string", "description": "Optional project root"},
+            },
+            "required": ["goal", "subgoals", "platform"],
+        },
+    },
+    {
+        "name": "local_delegate_execute",
+        "description": (
+            "Execute a delegation on the chosen platform. "
+            "Pass the assembled prompt from local_delegate_assemble and the platform "
+            "name. Returns a session_id that can be tracked via opencode_status or "
+            "checked via progress watcher."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "The assembled system prompt from local_delegate_assemble"},
+                "platform": {
+                    "type": "string",
+                    "enum": ["opencode", "codex", "gemini", "numasec", "hermes-api"],
+                    "description": "Target platform",
+                },
+                "session_id": {"type": "string", "description": "A unique session name (lowercase, no spaces)"},
+                "workdir": {"type": "string", "description": "Working directory (default ~/)"},
+            },
+            "required": ["prompt", "platform", "session_id"],
+        },
+    },
+    {
+        "name": "local_delegate_eta",
+        "description": (
+            "Update the ETA estimation for future tasks based on how long the "
+            "last delegation actually took vs the estimate. Improves accuracy over time."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "actual_seconds": {"type": "integer", "description": "How long the task actually took"},
+                "estimated_seconds": {"type": "integer", "description": "What was estimated"},
+            },
+            "required": ["actual_seconds", "estimated_seconds"],
+        },
+    },
 ]
 
 LOCAL_VOICE_TOOLS_ENABLED = os.getenv(
@@ -2886,6 +2988,91 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 "answers_so_far": list(updated.onboarding_answers.keys()),
                 "onboarding_completed": updated.onboarding_completed,
             }}
+
+        # ── Multi-CLI delegation tools (criterion #23-#25) ─────────────────
+        elif name in ("local_delegate_suggest", "local_delegate_assemble",
+                       "local_delegate_execute", "local_delegate_eta"):
+            try:
+                from delegation_agent import (
+                    suggest_platform,
+                    assemble_prompt,
+                    execute_delegation,
+                    estimate_eta,
+                    _USER_ETA_CORRECTION,
+                )
+            except Exception as exc:
+                return {"error": f"delegation module import failed: {exc}"}
+
+            if name == "local_delegate_suggest":
+                result = suggest_platform(
+                    goal=args.get("goal", ""),
+                    project_size=args.get("project_size", "medium"),
+                    scope=args.get("scope", "code"),
+                    complexity=args.get("complexity", "medium"),
+                    user_id=None,  # per-user tracking TBD
+                )
+                # Webhook
+                try:
+                    from webhook_dispatcher import emit_bridge_status
+                    emit_bridge_status(
+                        "info",
+                        f"Delegation suggested: {result.get('suggestion')} "
+                        f"for '{args.get('goal', '')[:60]}' "
+                        f"(ETA: {result.get('estimated_eta_display')})",
+                    )
+                except Exception:
+                    pass
+                return {"result": result}
+
+            if name == "local_delegate_assemble":
+                prompt = assemble_prompt(
+                    goal=args.get("goal", ""),
+                    subgoals=args.get("subgoals", []),
+                    platform=args.get("platform", "opencode"),
+                    project_root=args.get("project_root"),
+                )
+                return {"result": {
+                    "prompt": prompt,
+                    "platform": args.get("platform"),
+                    "length": len(prompt),
+                    "tokens_est": len(prompt.split()) * 10,
+                }}
+
+            if name == "local_delegate_execute":
+                import time as _t
+                session_id = args.get("session_id", f"del-{int(_t.time())}")
+                result = execute_delegation(
+                    prompt=args.get("prompt", ""),
+                    platform=args.get("platform", "opencode"),
+                    session_id=session_id,
+                    workdir=args.get("workdir"),
+                )
+                # Webhook
+                try:
+                    from webhook_dispatcher import emit_opencode_status
+                    sid = result.get("session_id", session_id)
+                    emit_opencode_status(
+                        "opencode_started", sid,
+                        f"Delegated to {args.get('platform')}",
+                        fields=[{"name": "Session", "value": sid, "inline": True}],
+                    )
+                except Exception:
+                    pass
+                return {"result": result}
+
+            if name == "local_delegate_eta":
+                actual = args.get("actual_seconds", 0)
+                estimated = args.get("estimated_seconds", 0)
+                if not actual or not estimated:
+                    return {"error": "actual_seconds and estimated_seconds are required"}
+                correction = actual / max(estimated, 1)
+                # Store per-current-user (user_id=None for now)
+                _USER_ETA_CORRECTION[None] = correction
+                return {"result": {
+                    "correction_factor": correction,
+                    "applied": True,
+                    "note": "Future ETA estimates will be adjusted by {:.2f}x".format(correction),
+                }}
 
         elif name.startswith("local_homeassistant_"):
             hass_url = os.getenv("HASS_URL", "http://homeassistant.local:8123").rstrip("/")
