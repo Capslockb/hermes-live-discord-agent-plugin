@@ -2289,6 +2289,13 @@ class GeminiLiveBridge:
                         "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
                     }
                 },
+                # mediaResolution lives INSIDE generationConfig for the Live API
+                # setup payload (verified via https://ai.google.dev/api/live
+                # on 2026-06-05). The Live generationConfig is a separate
+                # schema from the standard one — top-level videoConfig
+                # causes "Unknown name 'videoConfig' at 'setup'" WebSocket
+                # error 1007. LOW ≈ 100 tokens/frame vs default ~258.
+                "mediaResolution": "LOW",
             },
             "realtimeInputConfig": {
                 "activityHandling": "START_OF_ACTIVITY_INTERRUPTS",
@@ -2303,9 +2310,6 @@ class GeminiLiveBridge:
             },
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
-            "videoConfig": {
-                "mediaResolution": "LOW",
-            },
             "systemInstruction": {
                 "parts": [{
                     "text": system_text
