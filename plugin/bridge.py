@@ -373,6 +373,29 @@ _SPOTIFY_FUNCTION_DECLARATIONS = [
             "required": ["uri"],
         },
     },
+    {
+        "name": "spotify_playlists",
+        "description": "Manage Spotify playlists — list your playlists, get details, create new ones, add/remove tracks. For hyper-personalized 'mood' or 'recommended' playlists, use action='create' with a creative name matching the user's request, then action='add_items' with track URIs found via spotify_search.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "get", "create", "add_items", "remove_items", "update_details"],
+                    "description": "Action to perform"
+                },
+                "name": {"type": "string", "description": "Playlist name (required for create, optional for update_details)"},
+                "playlist_id": {"type": "string", "description": "Spotify playlist ID (for get, add_items, remove_items, update_details)"},
+                "description": {"type": "string", "description": "Playlist description (for create, update_details)"},
+                "public": {"type": "boolean", "description": "Make playlist publicly visible (for create, update_details)"},
+                "collaborative": {"type": "boolean", "description": "Allow collaborators (for create, update_details)"},
+                "uris": {"type": "array", "items": {"type": "string"}, "description": "Track URIs to add/remove (required for add_items, remove_items)"},
+                "limit": {"type": "integer", "description": "Max playlists to list (default 20, for list action)"},
+                "position": {"type": "integer", "description": "Insert position in playlist (for add_items)"},
+            },
+            "required": ["action"],
+        },
+    },
 ]
 
 _WEB_FUNCTION_DECLARATIONS = [
@@ -1103,6 +1126,8 @@ def _run_spotify_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 "uri": args.get("uri"),
                 "device_id": args.get("device_id"),
             })
+        elif name == "spotify_playlists":
+            result = spotify_tools._handle_spotify_playlists(args)
         else:
             return {"error": f"Unknown Spotify tool: {name}"}
 
