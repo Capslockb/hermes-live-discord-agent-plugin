@@ -3008,15 +3008,26 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             query = args.get("query", "")
             limit = args.get("limit", 5)
             try:
-                import requests
-                r = requests.get(
-                    "http://127.0.0.1:8000/api/v1/search",
-                    params={"query": query, "limit": limit, "peer": "user"},
+                import json, requests
+                from pathlib import Path
+                honcho_json = Path.home() / ".hermes" / "honcho.json"
+                if not honcho_json.exists():
+                    return {"error": "~/.hermes/honcho.json not found"}
+                hc = json.loads(honcho_json.read_text())
+                host = hc.get("hosts", {}).get("hermes", {})
+                base_url = host.get("baseUrl") or hc.get("baseUrl") or "http://127.0.0.1:8000"
+                workspace = host.get("workspace") or hc.get("workspace") or "hermes"
+                api_key = host.get("apiKey") or hc.get("apiKey") or ""
+                peer_name = host.get("peerName") or hc.get("peerName") or "user"
+                r = requests.post(
+                    f"{base_url}/v3/workspaces/{workspace}/peers/{peer_name}/search",
+                    json={"query": query, "limit": limit},
+                    headers={"Authorization": f"Bearer {api_key}"},
                     timeout=10,
                 )
                 r.raise_for_status()
                 data = r.json()
-                excerpts = [item.get("text", "") for item in data.get("results", [])]
+                excerpts = [item.get("content", "") for item in (data or [])]
                 return {"result": {"excerpts": excerpts[:limit]}}
             except Exception as exc:
                 return {"error": f"Honcho search failed: {exc}"}
