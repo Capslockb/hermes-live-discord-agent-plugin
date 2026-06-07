@@ -52,16 +52,14 @@
   </aside>
 
   <article>
-    <section class="hero-page viewport tilt-target">
-      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="index.html#features">Docs</a><span class="sep">/</span> Architecture</div>
+    <div class="page-header">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Architecture</div>
       <span class="eyebrow">Documentation</span>
-      <h1 class="display">Architecture <span class="accent">Architecture.</span></h1>
-      <p class="dek">A deep dive into the audio pipeline, threading model, lifecycle, idempotency, function calling, cost control, and failure modes of the Gemini Live Discord bridge.</p>
-    </section>
+      <h1>Architecture</h1>
+      <p class="dek reveal">A deep dive into the audio pipeline, threading model, and lifecycle of the Gemini Live Discord bridge.</p>
+    </div>
 
-    <div class="viz-frame viewport" id="audio-flow-host"><canvas id="audio-flow-canvas" aria-hidden="true"></canvas><span class="viz-caption"><b>Audio pipeline</b> · 5 rails · pulses every ~1s</span></div>
-
-<h2 id="high-level-data-flow">High-level data flow <a class="anchor" href="#high-level-data-flow" aria-label="Anchor link">#</a></h2>
+    <h2 id="high-level-data-flow">High-level data flow <a class="anchor" href="#high-level-data-flow" aria-label="Anchor link">#</a></h2>
 
 <pre><code>                                  ┌─────────────────────────────────────────────┐
                                   │             Gemini Live API                 │
@@ -248,7 +246,7 @@ return success         bridge runs until:
       </tbody>
     </table></div>
 
-    <nav class="docnav viewport" aria-label="Doc navigation">
+    <nav class="docnav" aria-label="Doc navigation">
       <a class="prev" href="index.html">
         <span class="label">← Home</span>
         <span class="title">Project overview</span>
@@ -259,7 +257,7 @@ return success         bridge runs until:
       </a>
     </nav>
 
-  <section class="reveal viewport" aria-label="Continue exploring">
+  <section class="reveal" aria-label="Continue exploring">
     <h2 style="margin-top: 0.5em;">Continue exploring</h2>
     <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
     <div class="continue reveal-stagger">
@@ -406,8 +404,5 @@ return success         bridge runs until:
   })();
 
 </script>
-<script src="assets/viz/ambient.js" defer></script>
-<script src="assets/viz/ui.js" defer></script>
-<script src="assets/viz/audio-flow.js" defer></script>
 </body>
 </html>
