@@ -75,6 +75,137 @@
   .btn.primary { background: linear-gradient(180deg, #00d4ff, #0bb1d6); color: #001621; border-color: transparent; }
   .btn.primary:hover { filter: brightness(1.05); }
   .btn.ghost { background: transparent; }
+
+  /* Hero download CTA — big, prominent, shows detected OS */
+  .dl-hero {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin-top: 30px;
+  }
+  .dl-hero .big {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 16px 26px;
+    font-size: 17px; font-weight: 700;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #00d4ff, #0bb1d6);
+    color: #001621;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.25);
+    transition: transform 0.05s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .dl-hero .big:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 6px 28px rgba(0, 212, 255, 0.4);
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .dl-hero .big .icon { display: inline-flex; }
+  .dl-hero .detected {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(122, 240, 200, 0.1);
+    border: 1px solid rgba(122, 240, 200, 0.3);
+    color: var(--accent-2);
+    font-weight: 600; letter-spacing: 0.3px;
+  }
+  .dl-hero .detected .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 8px var(--accent-2);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .dl-hero .other {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px; font-weight: 500;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .dl-hero .other:hover { border-color: var(--accent); color: var(--text); text-decoration: none; }
+
+  /* OS picker — 3 cards, detected one glows */
+  .ospicker {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 22px;
+  }
+  @media (max-width: 760px) { .ospicker { grid-template-columns: 1fr; } }
+  .os {
+    position: relative;
+    background: linear-gradient(180deg, var(--panel), var(--bg-2));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px 16px;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+  .os.detected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 30px rgba(0, 212, 255, 0.18);
+  }
+  .os.detected::after {
+    content: "✓ Detected";
+    position: absolute; top: 12px; right: 12px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #001621;
+  }
+  .os-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .os-head .osicon {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    color: var(--accent);
+  }
+  .os h3 { margin: 0; font-size: 16px; }
+  .os p.tag { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  .os ul { margin: 0 0 12px; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .os ul li { margin: 3px 0; }
+  .os ul li::marker { color: var(--accent); }
+
+  .os .cmdpick {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    overflow-x: auto;
+    color: var(--text);
+    margin: 0 0 8px;
+    white-space: pre;
+  }
+  .os .cmdpick .p { color: var(--accent); }
+  .os .cmdpick .c { color: var(--muted); }
+  .os .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .os .copy {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px; font-weight: 600;
+    border-radius: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: inherit;
+  }
+  .os .copy:hover { color: var(--text); border-color: var(--accent); }
+  .os .copy.copied { color: var(--accent-2); border-color: var(--accent-2); }
+  .os .size { margin-left: auto; color: var(--muted); font-size: 12px; }
   .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 22px; }
   .meta b { color: var(--text); }
 
@@ -184,9 +315,92 @@
       Open source, MIT, and actively under development.
     </p>
 
-    <div class="cta-row">
-      <a class="btn primary" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub</a>
-      <a class="btn" href="#install">⚡ Install in 3 minutes</a>
+    <div class="dl-hero" data-os-block>
+      <a class="big" data-dl-primary href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip">
+        <span class="icon" data-os-icon></span>
+        <span data-dl-label>Download for Linux</span>
+      </a>
+      <span class="detected" data-detected-pill>
+        <span class="dot"></span>
+        <span data-detected-text>Detecting your OS…</span>
+      </span>
+      <a class="other" data-dl-other="macos" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip" title="Download for macOS">macOS</a>
+      <a class="other" data-dl-other="windows" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip" title="Download for Windows">Windows</a>
+    </div>
+
+    <p style="margin-top: 14px; color: var(--muted); font-size: 13px;">
+      Or pick your platform below to get the exact install command. <strong style="color:var(--text)">Auto-detected</strong> via your browser — no tracking, no fingerprinting, just <code style="background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12px;">navigator.userAgent</code>.
+    </p>
+
+    <div class="ospicker" data-os-picker>
+
+      <div class="os" data-os="linux">
+        <div class="os-head">
+          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-2 0-3 1.5-3 3.5 0 1 .5 1.8 1 2.5C9 9 8 10 8 12c0 1 .5 2 1 2.5C7.5 15 6 16.5 6 19c0 1.5 1 3 3 3 1 0 2-.5 3-.5s2 .5 3 .5c2 0 3-1.5 3-3 0-2.5-1.5-4-3-4.5.5-.5 1-1.5 1-2.5 0-2-1-3-2-4 .5-.7 1-1.5 1-2.5C15 3.5 14 2 12 2z"/></svg></span>
+          <h3>Linux</h3>
+        </div>
+        <p class="tag">Tested on Ubuntu 22.04+, Debian 12, Fedora 39+. Any distro with Python 3.10+ and <code>git</code>.</p>
+        <ul>
+          <li>Uses <code>git</code> + <code>python3</code> — already on most distros</li>
+          <li>Auto-installs <code>discord.py</code>, <code>numpy</code>, <code>rich</code> into the Hermes venv</li>
+          <li>Runs as a systemd user service</li>
+        </ul>
+<pre class="cmdpick mono" data-cmd-linux><span class="c"># one-line install</span>
+<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="p">$</span> python3 installer/install.py</pre>
+        <div class="row">
+          <button type="button" class="copy" data-copy="linux">📋 Copy</button>
+          <span class="size">~ 0.5 MB · MIT</span>
+        </div>
+      </div>
+
+      <div class="os" data-os="macos">
+        <div class="os-head">
+          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg></span>
+          <h3>macOS</h3>
+        </div>
+        <p class="tag">Tested on macOS 13+ (Ventura) on Apple Silicon and Intel. Requires Homebrew for <code>python3</code>.</p>
+        <ul>
+          <li>Same <code>git</code> + <code>python3</code> flow as Linux</li>
+          <li>Hermes venv lives at <code>~/.hermes/hermes-agent/venv/</code> as usual</li>
+          <li>Apple Silicon works out of the box (PyPI wheels available)</li>
+        </ul>
+<pre class="cmdpick mono" data-cmd-macos><span class="c"># one-line install (Homebrew already installed)</span>
+<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="p">$</span> python3 installer/install.py</pre>
+        <div class="row">
+          <button type="button" class="copy" data-copy="macos">📋 Copy</button>
+          <span class="size">~ 0.5 MB · MIT</span>
+        </div>
+      </div>
+
+      <div class="os" data-os="windows">
+        <div class="os-head">
+          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.4 10.5 4.5v7.4H3V5.4zM11.5 4.3 21 3v9h-9.5V4.3zM3 12.6h7.5V20L3 19.1v-6.5zM11.5 12.6H21V21l-9.5-1.3v-7.1z"/></svg></span>
+          <h3>Windows</h3>
+        </div>
+        <p class="tag">Tested on Windows 11 + PowerShell 7. WSL2 also works — the Linux instructions apply.</p>
+        <ul>
+          <li>Needs Python 3.10+ from <a href="https://python.org/downloads" target="_blank" rel="noopener">python.org</a> (tick "Add to PATH")</li>
+          <li>Needs Git from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a></li>
+          <li>PowerShell-friendly — paste the block below as one unit</li>
+        </ul>
+<pre class="cmdpick mono" data-cmd-windows><span class="c"># PowerShell — run as your normal user (no admin needed)</span>
+<span class="p">PS&gt;</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">PS&gt;</span> cd hermes-live-discord-agent-plugin
+<span class="p">PS&gt;</span> py installer\install.py</pre>
+        <div class="row">
+          <button type="button" class="copy" data-copy="windows">📋 Copy</button>
+          <span class="size">~ 0.5 MB · MIT</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="cta-row" style="margin-top: 28px;">
+      <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub</a>
       <a class="btn ghost" href="#roadmap">🛣️ See the roadmap</a>
     </div>
 
@@ -470,6 +684,136 @@
     </div>
   </div>
 </footer>
+
+<script>
+  // ============================================================
+  // OS auto-detection + dynamic download button
+  // Pure client-side. Reads navigator.userAgent + navigator.platform
+  // (no fingerprinting, no network calls). Falls back gracefully.
+  // ============================================================
+  (function () {
+    var OS_LABELS = {
+      linux:   { label: 'Download for Linux',  short: 'Linux',   ua: ['Linux', 'X11', 'Ubuntu', 'Debian', 'Fedora', 'Arch', 'Manjaro'] },
+      macos:   { label: 'Download for macOS',  short: 'macOS',   ua: ['Mac OS', 'Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'] },
+      windows: { label: 'Download for Windows', short: 'Windows', ua: ['Windows NT', 'Win64', 'Win32', 'WOW64'] }
+    };
+
+    function detectOS() {
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var platform = (navigator.platform || '').toLowerCase();
+      // navigator.userAgentData is the modern API (Chromium). Fall back to UA.
+      var uaData = navigator.userAgentData;
+      if (uaData && uaData.platform) {
+        var p = uaData.platform.toLowerCase();
+        if (p.indexOf('mac') === 0) return 'macos';
+        if (p.indexOf('win') === 0) return 'windows';
+        if (p.indexOf('linux') === 0 || p.indexOf('chrome') === 0) return 'linux';
+      }
+      // Primary detection: substring match in UA
+      if (/windows nt/.test(ua) || /win64/.test(ua) || /wow64/.test(ua)) return 'windows';
+      if (/mac os x/.test(ua) || /macintosh/.test(ua) || /macintel/.test(ua)) return 'macos';
+      if (/linux|x11|ubuntu|debian|fedora|arch|manjaro/.test(ua)) return 'linux';
+      // Tertiary: platform string
+      if (platform.indexOf('mac') === 0) return 'macos';
+      if (platform.indexOf('win') === 0) return 'windows';
+      if (platform.indexOf('linux') === 0) return 'linux';
+      return 'linux'; // safe default — the installer is most common on Linux
+    }
+
+    function iconSVG(name) {
+      // 16px inline SVGs matching the card icons
+      if (name === 'macos') {
+        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#001621"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>';
+      }
+      if (name === 'windows') {
+        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#001621"><path d="M3 5.4 10.5 4.5v7.4H3V5.4zM11.5 4.3 21 3v9h-9.5V4.3zM3 12.6h7.5V20L3 19.1v-6.5zM11.5 12.6H21V21l-9.5-1.3v-7.1z"/></svg>';
+      }
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#001621"><path d="M12 2c-2 0-3 1.5-3 3.5 0 1 .5 1.8 1 2.5C9 9 8 10 8 12c0 1 .5 2 1 2.5C7.5 15 6 16.5 6 19c0 1.5 1 3 3 3 1 0 2-.5 3-.5s2 .5 3 .5c2 0 3-1.5 3-3 0-2.5-1.5-4-3-4.5.5-.5 1-1.5 1-2.5 0-2-1-3-2-4 .5-.7 1-1.5 1-2.5C15 3.5 14 2 12 2z"/></svg>';
+    }
+
+    var os = detectOS();
+    var label = OS_LABELS[os].label;
+
+    // Update hero download button
+    var heroLabel = document.querySelector('[data-dl-label]');
+    if (heroLabel) heroLabel.textContent = label;
+    var heroIcon = document.querySelector('[data-os-icon]');
+    if (heroIcon) heroIcon.innerHTML = iconSVG(os);
+
+    // Update "Detected" pill text
+    var detectedText = document.querySelector('[data-detected-text]');
+    if (detectedText) detectedText.textContent = 'Detected: ' + OS_LABELS[os].short;
+
+    // Hide the other-OS button for the detected platform, show the other two
+    var others = document.querySelectorAll('[data-dl-other]');
+    others.forEach(function (a) {
+      if (a.getAttribute('data-dl-other') === os) {
+        a.style.display = 'none';
+      }
+    });
+
+    // Mark the matching OS card
+    var detectedCard = document.querySelector('.os[data-os="' + os + '"]');
+    if (detectedCard) detectedCard.classList.add('detected');
+
+    // Smooth-scroll the detected card into view if user lands here from a deep link
+    // and the hero button is not already focused (so we don't surprise mobile users).
+    if (location.hash === '#download' && detectedCard) {
+      setTimeout(function () { detectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200);
+    }
+
+    // ============================================================
+    // Copy-to-clipboard for the per-OS command blocks
+    // Uses the modern Clipboard API where available, falls back to
+    // a hidden textarea + execCommand for older browsers.
+    // ============================================================
+    var PLAIN_COMMANDS = {
+      linux:   'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
+      macos:   'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
+      windows: 'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npy installer\\install.py'
+    };
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      // Fallback: hidden textarea + execCommand
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        try {
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('copy failed'));
+        } catch (e) { document.body.removeChild(ta); reject(e); }
+      });
+    }
+
+    document.querySelectorAll('.os .copy').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-copy');
+        var text = PLAIN_COMMANDS[key] || '';
+        copyToClipboard(text).then(function () {
+          var prev = btn.textContent;
+          btn.textContent = '✓ Copied!';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = prev;
+            btn.classList.remove('copied');
+          }, 1500);
+        }).catch(function () {
+          btn.textContent = '✗ Failed — select & copy manually';
+          setTimeout(function () { btn.textContent = '📋 Copy'; }, 2500);
+        });
+      });
+    });
+  })();
+</script>
 
 </body>
 </html>
