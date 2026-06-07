@@ -1,8 +1,14 @@
 /* ============================================================
    Hermes Live Discord Agent Plugin — shared doc stylesheet
-   Self-contained, no external fonts, no JS. Dark theme, AAA
-   contrast, responsive. Used by every docs/*.html page.
+   Self-hosted Google Fonts (Space Grotesk display, Inter body,
+   JetBrains Mono code). Dark navy + cyan brand, AAA contrast.
+   Responsive, mobile-first. Powers all five doc pages.
    ============================================================ */
+
+/* Display font for hero, h1, h2 — matches the official Hermes
+   "Rules Expanded" / "Collapse Bold" feel. System-ui fallback
+   keeps the look if the font fails to load. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   --bg: #0b1020;
@@ -29,7 +35,7 @@ body {
               radial-gradient(900px 500px at 90% 10%, #06384a 0%, transparent 55%),
               var(--bg);
   color: var(--text);
-  font: 17px/1.7 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+  font: 17px/1.7 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   position: relative;
@@ -74,6 +80,23 @@ em { color: var(--accent-2); font-style: normal; }
 code, pre, .mono {
   font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.92em;
+}
+
+/* Display font: h1 + hero use Space Grotesk; body stays Inter.
+   This matches the official Hermes site's "Rules Expanded" /
+   "Collapse Bold" feel — a tight, modern display sans. */
+.display, h1.display, .hero h1 {
+  font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+
+/* All headings get the display font. Body keeps Inter. */
+h1, h2, h3, h4, h5, h6, .display {
+  font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 :not(pre) > code {
   background: var(--code-bg);
@@ -721,4 +744,207 @@ pre { position: relative; }
     transition: none !important;
   }
   .brand-link:hover .brand-mark { transform: none; }
+}
+
+/* ============================================================
+   v2 ADDITIONS — native-feel design system
+   (Layered ambient, mix-blend display, viewport in/out, glow,
+   big buttons, gyroscope-tilted hero, mobile alignment fix)
+   ============================================================ */
+
+/* ---- Layered ambient backdrop ----
+   ambient.js draws two fullscreen canvas layers behind content.
+   The grain layer (body::before) stays at z:1. Real content goes
+   to z:2. */
+body > #ambient-canvas,
+body > #ambient-canvas-2 {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+body > #ambient-canvas-2 { z-index: 0 !important; opacity: 0.55; }
+body > header, body > main, body > footer, body > .wrap, body > noscript {
+  position: relative; z-index: 2;
+}
+
+/* ---- Display heading with mix-blend-mode ----
+   Mirrors the official Hermes site's `mix-blend-mode: plus-lighter`
+   on display text. */
+h1, h2, .display, .page-title {
+  mix-blend-mode: plus-lighter;
+}
+h3, h4, h5, h6 { mix-blend-mode: normal; }
+.callout h1, .callout h2, .callout h3,
+.panel h1, .panel h2, .panel h3,
+.bug h1, .bug h2, .bug h3,
+.release h1, .release h2, .release h3 {
+  mix-blend-mode: normal;
+}
+
+/* ---- Hero ----
+   Per-page hero block. Big, one-line display heading. */
+.hero-page {
+  position: relative;
+  padding: clamp(56px, 12vw, 140px) 0 clamp(40px, 8vw, 80px);
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  isolation: isolate;
+}
+.hero-page .eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+  mix-blend-mode: plus-lighter;
+}
+.hero-page h1.display {
+  font-size: clamp(40px, 7vw, 88px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+  margin: 0 0 18px;
+  max-width: 12ch;
+  mix-blend-mode: plus-lighter;
+  text-shadow: 0 0 60px rgba(0, 212, 255, 0.25);
+}
+.hero-page h1.display .accent {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-page p.dek {
+  color: var(--muted);
+  font-size: clamp(16px, 1.6vw, 19px);
+  max-width: 56ch;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+.hero-page .crumbs {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  letter-spacing: 0.3px;
+}
+.hero-page .crumbs a { color: var(--muted); }
+.hero-page .crumbs a:hover { color: var(--text); text-decoration: none; }
+.hero-page .crumbs .sep { margin: 0 6px; opacity: 0.6; }
+@media (max-width: 600px) {
+  .hero-page { padding: 44px 0 32px; }
+  .hero-page h1.display {
+    max-width: 100%;
+    font-size: clamp(34px, 11vw, 56px);
+    text-align: left;
+  }
+  .hero-page p.dek { text-align: left; }
+}
+
+/* ---- Visualisation wrappers ---- */
+.viz-frame {
+  position: relative;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  overflow: hidden;
+  margin: 1.6em 0;
+}
+#audio-flow-canvas,
+#grid-flow-canvas,
+#timeline-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+}
+#audio-flow-host { width: 100%; height: clamp(240px, 38vw, 380px); position: relative; }
+#grid-flow-host { width: 100%; height: clamp(80px, 12vw, 140px); position: relative; }
+#timeline-host { position: relative; width: 100%; height: 100%; min-height: 600px; }
+.viz-caption {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: rgba(5, 8, 17, 0.5);
+}
+.viz-caption b { color: var(--accent); font-weight: 600; letter-spacing: 0.5px; }
+
+/* ---- Glow on foreground ---- */
+.glow, .brand-mark { filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.35)); }
+.glow-soft { text-shadow: 0 0 12px rgba(0, 212, 255, 0.35), 0 0 32px rgba(0, 212, 255, 0.15); }
+.btn-primary, .dl-hero .big { box-shadow: 0 4px 24px rgba(0, 212, 255, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.btn-primary:hover, .dl-hero .big:hover { box-shadow: 0 6px 32px rgba(0, 212, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.continue-card, .doclink, .card { box-shadow: 0 1px 0 rgba(0, 212, 255, 0.05) inset; }
+.continue-card:hover, .doclink:hover { box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.4), 0 8px 30px rgba(0, 212, 255, 0.18); }
+
+/* ---- Big buttons ---- */
+.btn, .doclink, .continue-card, .dl-hero .big {
+  min-height: 44px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+.dl-hero .big { padding: 16px 26px; font-size: 17px; min-height: 56px; }
+@media (max-width: 600px) {
+  .dl-hero .big { padding: 18px 22px; font-size: 16px; min-height: 56px; }
+  .doclink, .continue-card { padding: 18px 20px; min-height: 56px; }
+}
+
+/* ---- Viewport in/out animation ----
+   Two-way IntersectionObserver. Elements slide in from the
+   nearest side and slide out + blur when leaving. */
+.viewport {
+  transition: opacity 0.7s cubic-bezier(.2,.7,.2,1), transform 0.7s cubic-bezier(.2,.7,.2,1), filter 0.7s ease;
+  will-change: opacity, transform;
+}
+.viewport.in    { opacity: 1; transform: translateY(0)    scale(1);    filter: blur(0); }
+.viewport.up    { opacity: 0; transform: translateY(-20px) scale(0.98); filter: blur(2px); }
+.viewport.down  { opacity: 0; transform: translateY(20px)  scale(0.98); filter: blur(2px); }
+.viewport.left  { opacity: 0; transform: translateX(-22px) scale(0.98); filter: blur(2px); }
+.viewport.right { opacity: 0; transform: translateX(22px)  scale(0.98); filter: blur(2px); }
+.viewport-fade { transition: opacity 0.5s ease; }
+.viewport-fade.in  { opacity: 1; }
+.viewport-fade.out { opacity: 0.35; }
+
+/* Gyroscope / tilt hooks */
+@media (prefers-reduced-motion: no-preference) {
+  .tilt-target {
+    transform: translate3d(calc(var(--tilt-x, 0) * 8px), calc(var(--tilt-y, 0) * 6px), 0);
+    transition: transform 0.4s ease-out;
+  }
+}
+
+/* ---- Mobile copy-button clip fix ---- */
+@media (max-width: 600px) {
+  pre { padding-right: 80px; }
+  .copy-pre {
+    top: 6px; right: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 32px;
+    opacity: 1;
+  }
+  pre { -webkit-overflow-scrolling: touch; }
+}
+.copy-pre { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.continue-card:hover .eyebrow { text-shadow: 0 0 12px rgba(0, 212, 255, 0.5); }
+aside.toc a.active { color: var(--accent); border-left-color: var(--accent); box-shadow: inset 2px 0 12px rgba(0,212,255,0.2); }
+a:focus-visible, button:focus-visible, pre:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.severity:hover { box-shadow: 0 0 14px currentColor; }
+@media print {
+  #ambient-canvas, #ambient-canvas-2,
+  #audio-flow-canvas, #grid-flow-canvas, #timeline-canvas,
+  .viz-frame, .severity-canvas { display: none !important; }
+  .hero-page h1.display { mix-blend-mode: normal; text-shadow: none; }
 }

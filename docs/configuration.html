@@ -45,14 +45,16 @@
   </aside>
 
   <article>
-    <div class="page-header">
-      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Configuration</div>
+    <section class="hero-page viewport tilt-target">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="index.html#features">Docs</a><span class="sep">/</span> Configuration</div>
       <span class="eyebrow">Documentation</span>
-      <h1>Configuration</h1>
-      <p class="dek reveal">Every env var the plugin understands, what it does, what its default is, and how to tune it.</p>
-    </div>
+      <h1 class="display">Configuration <span class="accent">Configuration.</span></h1>
+      <p class="dek">Every env var the plugin understands, what it does, what its default is, and how to tune it.</p>
+    </section>
 
-    <div class="callout info">
+    
+<div class="viz-frame viewport" id="grid-flow-host"><canvas id="grid-flow-canvas" aria-hidden="true"></canvas><span class="viz-caption"><b>Live</b> · ambient signal grid</span></div>
+<div class="callout info">
       <span class="title">Where settings live</span>
       <p>All settings go in <code>~/.hermes/.env</code> (chmod 600). The installer writes/merges them automatically. After changing anything, restart the gateway:</p>
     </div>
@@ -209,7 +211,7 @@ chmod 600 ~/.hermes/voice-live-autostart.json</code></pre>
       <li><strong>Multiple bots</strong> — bind each gateway instance to a different <code>DISCORD_VOICE_LIVE_PORT</code> (e.g. 18943, 18953, 18963) and run them under separate Hermes profiles (<code>~/.hermes-bob/</code>, etc.).</li>
     </ul>
 
-    <nav class="docnav" aria-label="Doc navigation">
+    <nav class="docnav viewport" aria-label="Doc navigation">
       <a class="prev" href="architecture.html">
         <span class="label">← Previous</span>
         <span class="title">Architecture</span>
@@ -220,7 +222,7 @@ chmod 600 ~/.hermes/voice-live-autostart.json</code></pre>
       </a>
     </nav>
 
-  <section class="reveal" aria-label="Continue exploring">
+  <section class="reveal viewport" aria-label="Continue exploring">
     <h2 style="margin-top: 0.5em;">Continue exploring</h2>
     <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
     <div class="continue reveal-stagger">
@@ -366,5 +368,8 @@ chmod 600 ~/.hermes/voice-live-autostart.json</code></pre>
   })();
 
 </script>
+<script src="assets/viz/ambient.js" defer></script>
+<script src="assets/viz/ui.js" defer></script>
+<script src="assets/viz/grid-flow.js" defer></script>
 </body>
 </html>
