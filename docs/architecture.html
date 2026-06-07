@@ -256,6 +256,32 @@ return success         bridge runs until:
         <span class="title">Configuration</span>
       </a>
     </nav>
+
+  <section class="reveal" aria-label="Continue exploring">
+    <h2 style="margin-top: 0.5em;">Continue exploring</h2>
+    <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
+    <div class="continue reveal-stagger">
+      <a class="continue-card" href="configuration.html">
+        <span class="eyebrow">Next read</span>
+        <h4>Configuration</h4>
+        <p>Every env var, defaults, ranges, and tuning tips for self-hosted installs.</p>
+        <span class="arrow">Continue →</span>
+      </a>
+      <a class="continue-card" href="known-bugs.html">
+        <span class="eyebrow">Next read</span>
+        <h4>Known bugs & quirks</h4>
+        <p>Discord CDN 4006, stale rejoin, playback semantics, and compatibility caveats.</p>
+        <span class="arrow">Continue →</span>
+      </a>
+      <a class="continue-card" href="changelog.html">
+        <span class="eyebrow">Next read</span>
+        <h4>Changelog</h4>
+        <p>Version-by-version features, fixes, tests, and config additions.</p>
+        <span class="arrow">Continue →</span>
+      </a>
+    </div>
+  </section>
+
   </article>
 </main>
 
@@ -318,6 +344,65 @@ return success         bridge runs until:
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
     nodes.forEach(function (n) { io.observe(n); });
   })();
+</script>
+<script>
+
+  // ============================================================
+  // Copy button on every <pre> block (doc pages)
+  // ============================================================
+  (function () {
+    function copyToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        try {
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('copy failed'));
+        } catch (e) { document.body.removeChild(ta); reject(e); }
+      });
+    }
+
+    document.querySelectorAll('pre').forEach(function (pre) {
+      // Skip if already has a button (e.g. manually added)
+      if (pre.querySelector('.copy-pre')) return;
+      // Skip empty <pre>s
+      var raw = pre.textContent;
+      if (!raw || !raw.trim()) return;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-pre';
+      btn.setAttribute('aria-label', 'Copy code to clipboard');
+      btn.textContent = '📋 Copy';
+      pre.appendChild(btn);
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        copyToClipboard(raw).then(function () {
+          var prev = btn.textContent;
+          btn.textContent = '✓ Copied!';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = prev;
+            btn.classList.remove('copied');
+          }, 1500);
+        }).catch(function () {
+          btn.textContent = '✗ Failed';
+          setTimeout(function () { btn.textContent = '📋 Copy'; }, 2000);
+        });
+      });
+    });
+  })();
+
 </script>
 </body>
 </html>

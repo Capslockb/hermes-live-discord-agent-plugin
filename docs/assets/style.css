@@ -557,6 +557,80 @@ td { word-break: break-word; }
   .docnav a.next { text-align: left; margin-left: 0; }
 }
 
+/* ============================================================
+   Continue-exploring block — 3 cards linking to the OTHER docs.
+   Sits below the docnav so you can chain through all 4 doc pages.
+   ============================================================ */
+.continue {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 24px;
+}
+@media (max-width: 900px) { .continue { grid-template-columns: 1fr; gap: 12px; } }
+.continue-card {
+  display: flex; flex-direction: column;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.continue-card:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-2px); background: var(--panel); }
+.continue-card .eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 6px;
+}
+.continue-card h4 { margin: 0 0 4px; font-size: 16px; color: var(--text); }
+.continue-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.continue-card .arrow {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+.continue-card:hover .arrow { color: var(--accent); transform: translateX(3px); }
+
+/* ============================================================
+   Copy-button on every <pre> block.
+   JS injects a button; CSS positions it without breaking pre layout.
+   ============================================================ */
+.copy-pre {
+  position: absolute;
+  top: 8px; right: 8px;
+  z-index: 2;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px;
+  font: 600 11px/1 "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.3px;
+  border-radius: 6px;
+  background: rgba(11, 16, 32, 0.92);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  font-family: inherit;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+pre:hover .copy-pre,
+.copy-pre:focus,
+.copy-pre.copied {
+  opacity: 1;
+}
+.copy-pre:hover { color: var(--text); border-color: var(--accent); }
+.copy-pre.copied { color: var(--accent-2); border-color: var(--accent-2); }
+/* On touch devices, always show (no hover state) */
+@media (hover: none) {
+  .copy-pre { opacity: 1; }
+}
+/* Position context for the absolute copy-pre button. */
+pre { position: relative; }
+
 /* Roadmap grid: stack on phones. */
 @media (max-width: 600px) {
   .rm { grid-template-columns: 1fr; gap: 6px; }
