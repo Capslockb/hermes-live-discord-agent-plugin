@@ -501,13 +501,51 @@ table, thead, tbody, tr, th, td { min-width: 0; }
 .tablewrap::-webkit-scrollbar { height: 6px; }
 .tablewrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 
-/* Long inline code: allow it to wrap, instead of forcing horizontal scroll. */
+/* Long inline code: allow it to wrap, but never break INSIDE a word.
+   word-break: break-word respects word boundaries; overflow-wrap: anywhere
+   is a fallback that lets the browser break at any character ONLY when
+   there's no other option (very long unbreakable tokens like URLs).
+   For env-var names like DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS,
+   the browser will break on the underscore, which reads correctly. */
 :not(pre) > code {
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
+  hyphens: none;
 }
-.dl-grid code, .bug code { word-break: break-all; }
+/* Specifically: don't let bug-card and dl-grid code break mid-token.
+   They're inline definitions like "<code>repo</code> not <code>re\npo</code>". */
+.dl-grid code, .bug code {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+/* Table cells: env-var names like DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS
+   are 38 chars long. On mobile the first column is ~60-80px wide, which fits
+   maybe 5-7 chars. Let the code wrap on its underscores (which the browser
+   treats as soft-break opportunities) and let the cell scroll horizontally
+   only as a last resort. */
+td code, th code {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: none;
+  font-size: 0.88em;  /* smaller code in tables for mobile readability */
+  letter-spacing: -0.2px;
+}
+/* Tighter table padding + smaller code on phones so the first column
+   can fit more chars per line. */
+@media (max-width: 600px) {
+  table { font-size: 0.9em; }
+  th, td { padding: 8px 10px; }
+  th, td code { font-size: 0.85em; }
+  table code { font-size: 0.82em; }
+  /* First column gets more breathing room — env var names are long */
+  table td:first-child, table th:first-child {
+    min-width: 110px;
+  }
+}
+/* The regular cell text (not code) can wrap normally. */
+td { word-break: break-word; }
 
 /* Bug card / release block / panel: same horizontal-scroll fallback. */
 .bug, .release, .panel { overflow-x: auto; }
