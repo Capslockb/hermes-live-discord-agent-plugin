@@ -1,0 +1,4 @@
+discord-ext-voice-recv==0.5.2a179
+numpy==2.4.3
+websockets==15.0.1
+davey==0.1.5
