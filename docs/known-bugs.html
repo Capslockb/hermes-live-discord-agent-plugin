@@ -63,12 +63,12 @@
   </aside>
 
   <article>
-    <div class="page-header">
-      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Known bugs &amp; quirks</div>
+    <section class="hero-page viewport tilt-target">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="index.html#features">Docs</a><span class="sep">/</span> Known bugs</div>
       <span class="eyebrow">Documentation</span>
-      <h1>Known bugs &amp; quirks</h1>
-      <p class="dek reveal">This is the canonical bug list. If you hit something not on here, please open an issue with the reproduction steps.</p>
-    </div>
+      <h1 class="display">Known <span class="accent">Bugs.</span></h1>
+      <p class="dek">The canonical bug list — Discord CDN 4006, stale rejoin hang, playback restart semantics, function calling executor pitfalls, and how to report new bugs.</p>
+    </section>
 
     <h2 id="critical">Critical <a class="anchor" href="#critical" aria-label="Anchor link">#</a></h2>
 
@@ -177,7 +177,7 @@ server.serve_forever()</code></pre>
       <li><strong>Repro steps</strong> — <code>/voice-live</code> then <code>...</code> then expected vs actual</li>
     </ol>
 
-    <nav class="docnav" aria-label="Doc navigation">
+    <nav class="docnav viewport" aria-label="Doc navigation">
       <a class="prev" href="configuration.html">
         <span class="label">← Previous</span>
         <span class="title">Configuration</span>
@@ -188,7 +188,7 @@ server.serve_forever()</code></pre>
       </a>
     </nav>
 
-  <section class="reveal" aria-label="Continue exploring">
+  <section class="reveal viewport" aria-label="Continue exploring">
     <h2 style="margin-top: 0.5em;">Continue exploring</h2>
     <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
     <div class="continue reveal-stagger">
@@ -334,5 +334,8 @@ server.serve_forever()</code></pre>
   })();
 
 </script>
+<script src="assets/viz/ambient.js" defer></script>
+<script src="assets/viz/ui.js" defer></script>
+<script src="assets/viz/severity-pulse.js" defer></script>
 </body>
 </html>

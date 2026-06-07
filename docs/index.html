@@ -274,6 +274,64 @@
   .os .copy:hover { color: var(--text); border-color: var(--accent); }
   .os .copy.copied { color: var(--accent-2); border-color: var(--accent-2); }
   .os .size { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+  /* ============================================================
+     "See it in action" — responsive platform preview cards
+     Uses the CSS aspect-ratio technique from the research report
+     (zero JS, zero library, works on every viewport).
+     ============================================================ */
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; gap: 14px; } }
+  .demo-card {
+    display: flex; flex-direction: column;
+    background: linear-gradient(180deg, var(--panel), var(--bg-2));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;                  /* clip the inner terminal to the card */
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .demo-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .demo-card .demo-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid var(--line);
+    font: 600 12px "JetBrains Mono", ui-monospace, monospace;
+    color: var(--muted);
+  }
+  .demo-card .demo-head .dots {
+    display: inline-flex; gap: 5px;
+  }
+  .demo-card .demo-head .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--line);
+  }
+  .demo-card .demo-head .dot.r { background: #ff5d6c; }
+  .demo-card .demo-head .dot.y { background: #ffb347; }
+  .demo-card .demo-head .dot.g { background: #4ade80; }
+  .demo-card .demo-head .label { margin-left: 6px; }
+  .demo-card .demo-frame {
+    /* The CSS aspect-ratio technique: container has fixed aspect,
+       inner content scales to fill it. Works on every viewport. */
+    aspect-ratio: 16 / 10;
+    padding: 16px 18px;
+    font: 13px/1.55 "JetBrains Mono", ui-monospace, monospace;
+    color: var(--accent-2);
+    background: #050811;
+    overflow: hidden;
+  }
+  .demo-card .demo-frame .prompt { color: var(--accent); }
+  .demo-card .demo-frame .muted { color: var(--muted); }
+  .demo-card .demo-frame .ok    { color: var(--accent-2); }
+  .demo-card .demo-frame .err   { color: var(--hot); }
+  /* iPhone-size: keep readable */
+  @media (max-width: 600px) {
+    .demo-card .demo-frame { font-size: 12px; padding: 12px 14px; }
+  }
   .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 22px; }
   .meta b { color: var(--text); }
 
@@ -522,10 +580,10 @@
   </div>
 </header>
 
-<section class="hero viewport tilt-target">
+<section class="hero">
   <div class="wrap">
     <span class="pill">NEW — first public release · v0.3.0 · 2026-06-07</span>
-    <h1 class="display">Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
+    <h1>Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
     <p class="sub reveal">
       Full-duplex audio, vision, function calling, idle hangup, post-call transcripts.
       Built on Google Gemini Multimodal Live, packaged as a self-hostable plugin for Hermes Agent.
@@ -640,11 +698,68 @@
 <span class="c">#   → the bot joins you, listens, talks back. done.</span></pre>
   </div>
 </section>
+</section>
 
-
-<div class="viz-frame viewport" id="grid-flow-host"><canvas id="grid-flow-canvas" aria-hidden="true"></canvas><span class="viz-caption"><b>Live</b> · ambient signal grid</span></div>
 <section id="features">
   <div class="wrap">
+    <h2 class="reveal">See it in action</h2>
+    <p class="lede reveal">The one-line install works the same on every platform. The terminal snapshots below are <span class="kbd">16:10</span> aspect-ratio previews — they scale fluidly to your viewport, no iframe, no JS, no library. Based on the technique from <a href="research.html">the research note</a>.</p>
+
+    <div class="demo-grid reveal-stagger">
+
+      <div class="demo-card">
+        <div class="demo-head">
+          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
+          <span class="label">Linux · bash</span>
+        </div>
+<pre class="demo-frame mono"><span class="prompt">$</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
+<span class="prompt">$</span> cd hermes-live-discord-agent-plugin
+<span class="prompt">$</span> python3 installer/install.py
+<span class="muted">  ↳ preflight: python3.11, git, rich</span>
+<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
+<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
+<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
+<span class="ok">  ✓ Gemini API OK — 50 models</span>
+<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
+<span class="ok">  ✓ done. /voice-live to start.</span></pre>
+      </div>
+
+      <div class="demo-card">
+        <div class="demo-head">
+          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
+          <span class="label">macOS · zsh</span>
+        </div>
+<pre class="demo-frame mono"><span class="prompt">%</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
+<span class="prompt">%</span> cd hermes-live-discord-agent-plugin
+<span class="prompt">%</span> python3 installer/install.py
+<span class="muted">  ↳ preflight: python3.11, git, rich</span>
+<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
+<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
+<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
+<span class="ok">  ✓ Gemini API OK — 50 models</span>
+<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
+<span class="ok">  ✓ done. /voice-live to start.</span></pre>
+      </div>
+
+      <div class="demo-card">
+        <div class="demo-head">
+          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
+          <span class="label">Windows · PowerShell</span>
+        </div>
+<pre class="demo-frame mono"><span class="prompt">PS&gt;</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
+<span class="prompt">PS&gt;</span> cd hermes-live-discord-agent-plugin
+<span class="prompt">PS&gt;</span> py installer\install.py
+<span class="muted">  ↳ preflight: python3.11, git, rich</span>
+<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
+<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
+<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
+<span class="ok">  ✓ Gemini API OK — 50 models</span>
+<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
+<span class="ok">  ✓ done. /voice-live to start.</span></pre>
+      </div>
+
+    </div>
+
     <h2 class="reveal">What's in the box</h2>
     <p class="lede reveal">Everything you need to put a real-time multimodal agent in a Discord voice channel. No external services to babysit.</p>
 
@@ -856,7 +971,6 @@
       <a class="doclink" href="configuration.html"><b>Configuration</b><span>Every env var, defaults, ranges, and tuning tips</span></a>
       <a class="doclink" href="known-bugs.html"><b>Known bugs &amp; quirks</b><span>Discord CDN 4006, stale rejoin, playback semantics, compatibility caveats</span></a>
       <a class="doclink" href="changelog.html"><b>Changelog</b><span>Version-by-version features, fixes, and config additions</span></a>
-      <a class="doclink" href="research.html"><b>Research</b><span>Web repos for responsive preview / dynamic-resize that work on PC and mobile</span></a>
       <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/README.md" target="_blank" rel="noopener"><b>README</b><span>On GitHub — quick start, usage, troubleshooting</span></a>
       <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/CONFIGURATION.md" target="_blank" rel="noopener"><b>Markdown source</b><span>Raw .md files in the repo, if you prefer reading offline</span></a>
     </div>
