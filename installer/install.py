@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Gemini Live Discord Bridge — Oneshot TUI Installer
-====================================================
+Hermes Live Discord Agent Plugin — Oneshot TUI Installer
+=========================================================
+
+Public name  : Hermes Live Discord Agent Plugin
+Internal name: discord-voice  (kept as-is to avoid touching code paths)
 
 Walks the user through:
   1. API key collection (Discord bot token, Gemini API key, optional)
@@ -54,8 +57,10 @@ except ImportError:  # pragma: no cover
 # Configuration
 # ============================================================================
 
-REPO_NAME = "gemini-live-discord-bridge"
-PLUGIN_NAME = "discord-voice"          # plugin dir name Hermes expects
+# Public display name (shown in banners, README, URLs) — keep code identifiers untouched.
+REPO_NAME = "hermes-live-discord-agent-plugin"
+DISPLAY_NAME = "Hermes Live Discord Agent Plugin"
+PLUGIN_NAME = "discord-voice"          # plugin dir name Hermes expects (do not rename — wired into imports)
 DEFAULT_HERMES_HOME = Path.home() / ".hermes"
 DEFAULT_PLUGIN_DEST = DEFAULT_HERMES_HOME / "plugins" / PLUGIN_NAME
 DEFAULT_ENV_FILE = DEFAULT_HERMES_HOME / ".env"
@@ -176,11 +181,12 @@ class UI:
 
     # -- output --
     def banner(self) -> None:
-        text = f"╔═ {REPO_NAME} installer ═╗"
+        text = f"╔═ {DISPLAY_NAME} installer ═╗"
         if self.has_rich:
             self.console.print(Panel.fit(
-                f"[bold cyan]{REPO_NAME}[/bold cyan]\n"
-                "[dim]Discord ↔ Gemini Multimodal Live API bridge for Hermes Agent[/dim]",
+                f"[bold cyan]{DISPLAY_NAME}[/bold cyan]\n"
+                f"[dim]Full-duplex Discord voice ↔ Google Gemini Multimodal Live[/dim]\n"
+                f"[dim]Repo: {REPO_NAME}[/dim]",
                 border_style="cyan",
             ))
         else:

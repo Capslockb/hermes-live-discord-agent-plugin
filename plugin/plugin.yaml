@@ -1,8 +1,8 @@
 name: discord-voice
-version: 0.1.0
+version: 0.3.0
 kind: standalone
 platforms: [linux]
-description: High-performance Discord Voice bridge via Gemini Multimodal Live API
+description: Hermes Live Discord Agent Plugin — full-duplex Discord voice ↔ Google Gemini Multimodal Live (audio + vision + function calling + transcripts + multi-CLI delegation)
 python_requirements:
   - requirements.txt
 provides_tools:

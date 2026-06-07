@@ -1,16 +1,18 @@
-# Gemini Live Discord Bridge
+# Hermes Live Discord Agent Plugin
 
-> Full‑duplex Discord voice channel ↔ Google Gemini Multimodal Live API bridge, packaged as a [Hermes Agent](https://hermes‑agent.nousresearch.com) plugin.
+> Full‑duplex Discord voice channel ↔ Google Gemini Multimodal Live API, packaged as a [Hermes Agent](https://hermes‑agent.nousresearch.com) plugin. Speak to a real-time multimodal AI in any Discord voice channel — with Spotify control, email, Home Assistant, OpenCode/Codex/Gemini‑CLI delegation, per‑user profiles, webhooks, post‑call transcripts, idle hangup, and a 3‑minute oneshot installer.
 
-Bring Gemini's multimodal real‑time reasoning (audio + images + tool calls) into any Discord voice channel. Speak to it, it speaks back — with Spotify control, email, Home Assistant, OpenCode/Codex/Gemini‑CLI delegation, per‑user profiles, webhooks, post‑call transcripts, idle hangup, and a 3‑minute oneshot installer.
+---
+
+> **🆕 New name, new site.** This plugin is now branded **Hermes Live Discord Agent Plugin** and has a public promo site at <https://capslockb.github.io/hermes-live-discord-agent-plugin/> with the feature showcase, roadmap, and collaboration info. The internal plugin directory is still `discord-voice` — renaming it would force refactors across the Hermes plugin registry, the autostart filename, and the import paths.
 
 ---
 
 ## ✦ Quick install
 
 ```bash
-git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
-cd gemini-live-discord-bridge
+git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+cd hermes-live-discord-agent-plugin
 python3 installer/install.py     # interactive (add --yes for defaults)
 ```
 
@@ -273,8 +275,8 @@ The bridge is **in‑process** — it lives inside the Hermes gateway's asyncio 
 ## ✦ Development
 
 ```bash
-git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
-cd gemini-live-discord-bridge
+git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+cd hermes-live-discord-agent-plugin
 pip install -r plugin/requirements.txt
 python3 installer/install.py          # pick "symlink" mode
 python3 -m py_compile plugin/*.py      # compile check
@@ -292,7 +294,7 @@ python3 scripts/regression_test_criterion_22.py      # 22 checks
 ## ✦ Project layout
 
 ```
-gemini-live-discord-bridge/
+hermes-live-discord-agent-plugin/
 ├── README.md
 ├── CHANGELOG.md
 ├── plugin/                        # the Hermes plugin

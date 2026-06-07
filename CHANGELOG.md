@@ -1,4 +1,12 @@
-# CHANGELOG — gemini-live-discord-bridge
+# CHANGELOG — hermes-live-discord-agent-plugin
+
+## 0.3.0 — 2026-06-07
+
+### Brand + public release
+- **Renamed** to **Hermes Live Discord Agent Plugin** (`hermes-live-discord-agent-plugin`). Internal plugin directory `discord-voice` kept untouched to avoid refactoring ~1.5k lines of cross-references.
+- **Public release** — repo is now public.
+- **Promo site** at `docs/index.html`, auto-deployed to GitHub Pages via `.github/workflows/pages.yml`. Live at `https://capslockb.github.io/hermes-live-discord-agent-plugin/`.
+- Installer banner + status strings updated to the new public name; REPO_NAME constant and `.env` keys unchanged so existing installs keep working.
 
 ## 0.2.7 — 2026-06-05
 

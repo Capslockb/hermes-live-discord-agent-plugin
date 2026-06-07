@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="Drop a real-time multimodal AI into any Discord voice channel. Full-duplex audio, vision, function calling, idle hangup, transcripts. Open source, self-hostable, free.">
+<meta name="keywords" content="discord voice bot, gemini live, multimodal ai, realtime voice, hermes agent, self-hosted, plugin, open source">
+<meta name="theme-color" content="#0b1020">
+<meta property="og:title" content="Hermes Live Discord Agent Plugin">
+<meta property="og:description" content="Full-duplex Discord voice ↔ Google Gemini Multimodal Live. Open source. Open for collaboration.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://capslockb.github.io/hermes-live-discord-agent-plugin/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-2: #0f1530;
+    --panel: #11183a;
+    --line: #1f2a55;
+    --text: #e6ecff;
+    --muted: #8a96c2;
+    --accent: #00d4ff;
+    --accent-2: #7af0c8;
+    --warn: #ffb347;
+    --hot: #ff6e9c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #182058 0%, transparent 60%),
+                radial-gradient(900px 500px at 90% 10%, #06384a 0%, transparent 55%),
+                var(--bg);
+    color: var(--text);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(10px);
+    background: rgba(11,16,32,0.7);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .nav .links a { color: var(--muted); margin-left: 18px; font-size: 14px; }
+  .nav .links a:hover { color: var(--text); }
+
+  .hero { padding: 88px 0 64px; }
+  .pill {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--accent-2);
+    background: rgba(122,240,200,0.06);
+    font-size: 12px; letter-spacing: 0.3px;
+  }
+  h1 {
+    font-size: clamp(34px, 5.4vw, 60px); line-height: 1.05;
+    margin: 18px 0 14px; letter-spacing: -0.5px;
+  }
+  h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); max-width: 720px; font-size: 18px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 18px; border-radius: 10px; font-weight: 600;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    transition: transform 0.05s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .btn:hover { border-color: var(--accent); text-decoration: none; }
+  .btn.primary { background: linear-gradient(180deg, #00d4ff, #0bb1d6); color: #001621; border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.ghost { background: transparent; }
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 22px; }
+  .meta b { color: var(--text); }
+
+  pre.terminal {
+    margin: 36px 0 0; padding: 16px 18px; border-radius: 12px;
+    background: #050811; border: 1px solid var(--line);
+    overflow-x: auto; font-size: 14px;
+  }
+  pre.terminal .p { color: var(--accent); }
+  pre.terminal .c { color: var(--muted); }
+
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: 28px; margin: 0 0 8px; }
+  section .lede { color: var(--muted); margin: 0 0 28px; max-width: 720px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-2));
+    border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 18px 16px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .card .icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--accent); margin-bottom: 12px; font-weight: 700;
+  }
+
+  .roadmap { display: grid; gap: 10px; }
+  .rm {
+    display: grid; grid-template-columns: 80px 1fr auto; gap: 14px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .rm .tag { font-size: 11px; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; text-align: center; }
+  .rm.now .tag  { background: rgba(0,212,255,0.12); color: var(--accent); border: 1px solid rgba(0,212,255,0.35); }
+  .rm.next .tag { background: rgba(255,179,71,0.12); color: var(--warn); border: 1px solid rgba(255,179,71,0.35); }
+  .rm.later .tag{ background: rgba(255,110,156,0.10); color: var(--hot);  border: 1px solid rgba(255,110,156,0.30); }
+  .rm .name { font-weight: 600; }
+  .rm .desc { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .rm .meta { color: var(--muted); font-size: 12px; }
+
+  .arch {
+    background: #050811; border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.55;
+  }
+  .arch .box { color: var(--accent); font-weight: 600; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+  }
+  .panel h3 { margin-top: 0; }
+  .panel ul { padding-left: 18px; color: var(--muted); }
+  .panel ul li { margin: 6px 0; }
+
+  .docgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .doclink {
+    display: block; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg-2);
+    color: var(--text);
+  }
+  .doclink:hover { border-color: var(--accent); text-decoration: none; }
+  .doclink b { display: block; margin-bottom: 2px; }
+  .doclink span { color: var(--muted); font-size: 13px; }
+
+  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--muted); font-size: 13px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+  footer a { color: var(--muted); margin-left: 12px; }
+  footer a:hover { color: var(--text); }
+
+  .kbd { background: #050811; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font-size: 12px; color: var(--accent); }
+  .warn-box {
+    margin: 16px 0 0; padding: 12px 14px; border-radius: 10px;
+    background: rgba(255,179,71,0.08); border: 1px solid rgba(255,179,71,0.3);
+    color: #ffd9a0; font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> Hermes Live Discord Agent Plugin</div>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#install">Install</a>
+      <a href="#docs">Docs</a>
+      <a href="#contact">Contact</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <span class="pill">NEW — first public release · v0.3.0 · 2026-06-07</span>
+    <h1>Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
+    <p class="sub">
+      Full-duplex audio, vision, function calling, idle hangup, post-call transcripts.
+      Built on Google Gemini Multimodal Live, packaged as a self-hostable plugin for Hermes Agent.
+      Open source, MIT, and actively under development.
+    </p>
+
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <a class="btn" href="#install">⚡ Install in 3 minutes</a>
+      <a class="btn ghost" href="#roadmap">🛣️ See the roadmap</a>
+    </div>
+
+    <div class="meta">
+      <div><b>License</b> · MIT</div>
+      <div><b>Status</b> · <span style="color:var(--accent-2)">early but running</span></div>
+      <div><b>Cost</b> · ~$0.03–0.06 / hour of voice</div>
+      <div><b>Stack</b> · Python 3.10+ · discord.py · Gemini Live WSS</div>
+    </div>
+
+<pre class="terminal mono"><span class="c"># install in 3 minutes</span>
+<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="p">$</span> python3 installer/install.py
+<span class="c">#   → walks you through Discord token + Gemini key with live validation</span>
+<span class="c">#   → deploys the plugin into ~/.hermes/plugins/ and writes .env (chmod 600)</span>
+
+<span class="c"># in Discord, join a voice channel and run</span>
+/voice-live
+<span class="c">#   → the bot joins you, listens, talks back. done.</span></pre>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What's in the box</h2>
+    <p class="lede">Everything you need to put a real-time multimodal agent in a Discord voice channel. No external services to babysit.</p>
+
+    <div class="grid">
+      <div class="card"><div class="icon">🎙️</div><h3>Full-duplex voice</h3><p>Discord UDP → NaCl → Opus → 16 kHz mono → Gemini WSS. Real two-way conversation with sub-second latency.</p></div>
+      <div class="card"><div class="icon">👁️</div><h3>Vision + frame feed</h3><p>Send images or stream a 1 fps feed — the model sees what you see. Audio-gated, 512 KB cap, &lt;$0.05/hr on Flex.</p></div>
+      <div class="card"><div class="icon">🛠️</div><h3>Function calling</h3><p>Synchronous tool dispatch from inside the live session. Wire any Hermes tool — calendar, mail, home assistant, your own.</p></div>
+      <div class="card"><div class="icon">😴</div><h3>Idle hangup</h3><p>Two-phase: prompt the user after N seconds of silence, then auto-leave. No more silent ghost calls.</p></div>
+      <div class="card"><div class="icon">📝</div><h3>JSONL transcripts</h3><p>Every call writes a word-level transcript with tool calls, turns, and idle events. Post-call summary CLI included.</p></div>
+      <div class="card"><div class="icon">⚡</div><h3>3-minute installer</h3><p>Pure stdlib + rich. Live network validation of your Discord token and Gemini key. Symlink, copy, or local.</p></div>
+      <div class="card"><div class="icon">🩺</div><h3>Health + control API</h3><p>Local HTTP on <span class="mono">127.0.0.1:18943</span> — <span class="mono">/health</span>, <span class="mono">/say?text=…</span>, <span class="mono">/leave</span>. Curl-friendly.</p></div>
+      <div class="card"><div class="icon">🎵</div><h3>Spotify, mail, HA, delegation</h3><p>Bundled integrations: Spotify playback control, email, Home Assistant, OpenCode/Codex/Gemini-CLI delegation. Per-user profiles.</p></div>
+      <div class="card"><div class="icon">🪶</div><h3>Self-hostable</h3><p>No SaaS, no third-party relay. Runs in your existing Hermes gateway's asyncio loop. Tailscale-friendly.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <h2>How it fits together</h2>
+    <p class="lede">The bridge lives in-process inside the Hermes gateway. Audio is decrypted and resampled in a worker thread, and the WSS session with Gemini runs as an async task. No separate services, no queues, no message buses.</p>
+<pre class="arch mono">  <span class="box">Discord voice channel</span>  (UDP, Opus 48 kHz, NaCl-encrypted)
+        │
+        ▼
+  <span class="box">VoiceListener</span>            (rx thread: decode → 16 kHz mono)
+        │
+        ▼
+  <span class="box">GeminiLiveBridge</span>        (async: WSS session, function calls, vision)
+        │
+        ▼
+  <span class="box">Gemini Multimodal Live API</span>  (Google AI Studio)
+        ▲
+        │  base64 PCM 24 kHz mono
+  <span class="box">LiveAudioSource</span>         (queue, played by VoiceClient)
+        ▲
+        │
+  <span class="box">Discord voice channel</span></pre>
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">
+      Full breakdown in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">docs/ARCHITECTURE.md</a> ·
+      all knobs in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/CONFIGURATION.md" target="_blank" rel="noopener">docs/CONFIGURATION.md</a> ·
+      warts in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/KNOWN_BUGS.md" target="_blank" rel="noopener">docs/KNOWN_BUGS.md</a>.
+    </p>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <h2>What's coming next</h2>
+    <p class="lede">This is an early public release — the bones are solid, and there's a lot of "extremely awesome" on the way. PRs welcome on any of these.</p>
+
+    <div class="roadmap">
+
+      <div class="rm now">
+        <span class="tag">SHIPPED</span>
+        <div>
+          <div class="name">v0.3.0 — public release + rebrand</div>
+          <div class="desc">Promo site, public visibility, new name. Full-duplex bridge, idle hangup, JSONL transcripts, health API, multi-CLI delegation, per-user profiles, video awareness, new-user onboarding.</div>
+        </div>
+        <span class="meta">2026-06-07</span>
+      </div>
+
+      <div class="rm next">
+        <span class="tag">NEXT</span>
+        <div>
+          <div class="name">Multi-channel party mode</div>
+          <div class="desc">One bot instance serves several voice channels simultaneously with per-channel context and turn-taking. Currently the bot is one-call-at-a-time per guild.</div>
+        </div>
+        <span class="meta">v0.4</span>
+      </div>
+
+      <div class="rm next">
+        <span class="tag">NEXT</span>
+        <div>
+          <div class="name">Group conversation turn-taking</div>
+          <div class="desc">When multiple humans talk in the same channel, the agent waits for natural pauses and addresses the right person. Voice Activity Detection + diarization lite.</div>
+        </div>
+        <span class="meta">v0.4</span>
+      </div>
+
+      <div class="rm next">
+        <span class="tag">NEXT</span>
+        <div>
+          <div class="name">Per-user voice cloning</div>
+          <div class="desc">Optional ElevenLabs / OpenAI TTS voice override so the agent can sound like a chosen persona. Plug in any HTTP TTS endpoint.</div>
+        </div>
+        <span class="meta">v0.4</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">SOON</span>
+        <div>
+          <div class="name">Persistent conversation memory</div>
+          <div class="desc">Cross-call memory backed by Honcho (or any vector store). The agent remembers previous calls with the same people and can recall context.</div>
+        </div>
+        <span class="meta">v0.5</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">SOON</span>
+        <div>
+          <div class="name">Live web dashboard</div>
+          <div class="desc">A small web UI (Tailscale-friendly) for transcript search, live call metrics, call recording playback, model picker.</div>
+        </div>
+        <span class="meta">v0.5</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">SOON</span>
+        <div>
+          <div class="name">Plugin marketplace one-click install</div>
+          <div class="desc"><span class="mono">hermes plugins install hermes-live</span> from a registry, with dependency resolution. No more cloning + running the installer manually.</div>
+        </div>
+        <span class="meta">v0.5</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">PLANNED</span>
+        <div>
+          <div class="name">Screen-share + multi-frame vision</div>
+          <div class="desc">Stream your screen at 1 fps and have the agent narrate, answer questions about what's on screen, or run UI tasks.</div>
+        </div>
+        <span class="meta">v0.6</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">PLANNED</span>
+        <div>
+          <div class="name">Outbound agent calls</div>
+          <div class="desc">The agent dials into a voice channel unprompted — scheduled standups, "remind the team in 5 minutes", alert broadcasts.</div>
+        </div>
+        <span class="meta">v0.6</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">PLANNED</span>
+        <div>
+          <div class="name">Multi-provider support</div>
+          <div class="desc">Pluggable realtime backends: OpenAI Realtime, Mistral Voxtral, local Whisper + Ollama, anything WSS-shaped. Today: Gemini Live only.</div>
+        </div>
+        <span class="meta">v0.7</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">IDEAS</span>
+        <div>
+          <div class="name">Voice rooms with bot guests</div>
+          <div class="desc">Spawn a temporary voice channel for a focused 1:1 / small-group session. Auto-archive the transcript on room close.</div>
+        </div>
+        <span class="meta">v0.7+</span>
+      </div>
+
+      <div class="rm later">
+        <span class="tag">IDEAS</span>
+        <div>
+          <div class="name">Cross-server federation</div>
+          <div class="desc">The same agent identity across multiple Discord guilds with shared memory (opt-in). Useful for communities and small orgs.</div>
+        </div>
+        <span class="meta">later</span>
+      </div>
+
+    </div>
+
+    <p style="margin-top:18px; color:var(--muted); font-size:14px;">
+      Have an idea? <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/new" target="_blank" rel="noopener">Open an issue</a> or <a href="#contact">drop a note</a>.
+    </p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install it</h2>
+    <p class="lede">Three minutes from <span class="kbd">git clone</span> to a working voice agent.</p>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>Prereqs</h3>
+        <ul>
+          <li>Python 3.10+</li>
+          <li>A Discord bot token (free) — <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">create one</a></li>
+          <li>A Google Gemini API key (free tier is plenty) — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one</a></li>
+          <li>Bot needs intents: <span class="mono">Server Members</span>, <span class="mono">Message Content</span>, <span class="mono">Voice States</span></li>
+          <li>Invite URL needs scope <span class="mono">bot</span> + perms <span class="mono">connect</span>, <span class="mono">speak</span>, <span class="mono">use_voice_activity</span></li>
+          <li>(Recommended) Hermes Agent: <span class="mono">pip install hermes-agent</span></li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Steps</h3>
+<ol style="padding-left:18px; color:var(--muted);">
+  <li><span class="mono">git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git</span></li>
+  <li><span class="mono">cd hermes-live-discord-agent-plugin</span></li>
+  <li><span class="mono">python3 installer/install.py</span></li>
+  <li>Pick install mode (copy / symlink / local)</li>
+  <li>Drop your tokens — the installer pings Discord + Gemini to validate them in real time</li>
+  <li>Restart the Hermes gateway (or pick "autostart" so it joins a voice channel on boot)</li>
+  <li>In Discord: join a voice channel → <span class="mono">/voice-live</span></li>
+</ol>
+        <div class="warn-box">⚠️ Heads up: on first join, Discord's CDN rejects the first ~5 voice handshakes (code 4006). It self-heals in ~27s. Don't restart the gateway — wait it out.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="docs">
+  <div class="wrap">
+    <h2>Documentation</h2>
+    <p class="lede">Rich docs in the repo — every knob, every edge case.</p>
+    <div class="docgrid">
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/README.md" target="_blank" rel="noopener"><b>README</b><span>Quick start, usage, troubleshooting</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener"><b>Architecture</b><span>Audio pipeline, threading, lifecycle</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/CONFIGURATION.md" target="_blank" rel="noopener"><b>Configuration</b><span>Every env var, defaults, ranges</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/KNOWN_BUGS.md" target="_blank" rel="noopener"><b>Known bugs</b><span>Quirks with repro steps</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/CHANGELOG.md" target="_blank" rel="noopener"><b>Changelog</b><span>Release-by-release changes</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/tree/main/docs/diagrams" target="_blank" rel="noopener"><b>Diagrams</b><span>ASCII dataflow, audio pipeline, idle</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <h2>Open for collaboration</h2>
+    <p class="lede">
+      This is brand new, actively developed, and shaped by what its early users want it to be.
+      If you'd like to build with it, report a bug, or pitch a feature — pick a door.
+    </p>
+    <div class="cols">
+      <div class="panel">
+        <h3>🐙 GitHub</h3>
+        <p style="color:var(--muted); margin-top:0;">Issues, PRs, and discussions all live on GitHub. The cleanest place to start.</p>
+        <p>
+          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">Repository →</a>
+          &nbsp;
+          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/new" target="_blank" rel="noopener">New issue →</a>
+        </p>
+      </div>
+      <div class="panel">
+        <h3>✉️ Direct</h3>
+        <p style="color:var(--muted); margin-top:0;">For collab, press, or "I built something cool with it" — open a GitHub Discussion or open an issue tagged <span class="mono">showcase</span> and I'll see it.</p>
+        <p>
+          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/discussions" target="_blank" rel="noopener">Discussions →</a>
+          &nbsp;
+          <a class="btn" href="https://github.com/Capslockb" target="_blank" rel="noopener">@Capslockb →</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed · Made with ⌨️ and 🎙️</div>
+    <div>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">Repo</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/discussions" target="_blank" rel="noopener">Discussions</a>
+      <a href="https://hermes-agent.nousresearch.com" target="_blank" rel="noopener">Hermes Agent</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
