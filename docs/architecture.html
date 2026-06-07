@@ -115,7 +115,7 @@
 
     <h2 id="threading">Threading model <a class="anchor" href="#threading" aria-label="Anchor link">#</a></h2>
 
-    <table>
+    <div class="tablewrap"><table>
       <thead>
         <tr><th>Thread / task</th><th>Owner</th><th>Role</th></tr>
       </thead>
@@ -125,7 +125,7 @@
         <tr><td>discord.py voice tx</td><td>internal</td><td>encodes + sends outbound Opus</td></tr>
         <tr><td><code>_shutdown_watcher</code> (poll task)</td><td>bridge</td><td>polls <code>BRIDGE._running</code> and closes the sidecar HTTP server</td></tr>
       </tbody>
-    </table>
+    </table></div>
 
     <p>The bridge is <strong>cooperatively async</strong>. The only blocking work is Opus encoding/decoding, which discord.py does off-thread for us.</p>
 
@@ -163,7 +163,7 @@ return success         bridge runs until:
     <h2 id="control-api">Control API (HTTP) <a class="anchor" href="#control-api" aria-label="Anchor link">#</a></h2>
     <p>The sidecar HTTP server runs on <code>127.0.0.1:18943</code> (configurable via <code>DISCORD_VOICE_LIVE_PORT</code>).</p>
 
-    <table>
+    <div class="tablewrap"><table>
       <thead>
         <tr><th>Endpoint</th><th>Method</th><th>Effect</th></tr>
       </thead>
@@ -173,7 +173,7 @@ return success         bridge runs until:
         <tr><td><code>/leave</code></td><td>GET</td><td>Stops the bridge, disconnects</td></tr>
         <tr><td><code>/note</code></td><td>GET</td><td>Returns the most recent transcript entry</td></tr>
       </tbody>
-    </table>
+    </table></div>
 
     <div class="callout info">
       <span class="title">Bound to loopback only</span>
@@ -208,7 +208,7 @@ return success         bridge runs until:
 
     <h2 id="failure-modes">Failure modes <a class="anchor" href="#failure-modes" aria-label="Anchor link">#</a></h2>
 
-    <table>
+    <div class="tablewrap"><table>
       <thead>
         <tr><th>Symptom</th><th>Where it happens</th><th>Recovery</th></tr>
       </thead>
@@ -239,7 +239,7 @@ return success         bridge runs until:
           <td>Plugin auto-cleans; if not, <code>pkill -9</code> the gateway and restart</td>
         </tr>
       </tbody>
-    </table>
+    </table></div>
 
     <nav class="docnav" aria-label="Doc navigation">
       <a class="prev" href="index.html">

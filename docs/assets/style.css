@@ -439,6 +439,81 @@ footer a:hover { color: var(--text); }
 @media (max-width: 600px) { footer a { margin-left: 0; margin-right: 12px; } }
 
 /* ============================================================
+   RESPONSIVE OVERRIDES — keep every page usable on mobile
+   ============================================================ */
+
+/* The single biggest mobile gotcha: any element inside a flex or
+   grid container defaults to min-width: auto, which means long
+   text or fixed-width children blow out the viewport. Force 0
+   everywhere inside our responsive grids. */
+main, article, aside.toc,
+.dl-hero, .dl-hero > *,
+.grid, .grid > *, .cols, .cols > *,
+.docgrid, .docgrid > *,
+.card, .panel, .bug, .release {
+  min-width: 0;
+}
+table, thead, tbody, tr, th, td { min-width: 0; }
+
+/* Tables: make them scrollable on mobile instead of blowing out the layout. */
+.tablewrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.4em 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.tablewrap > table { margin: 0; border: none; border-radius: 0; }
+.tablewrap::-webkit-scrollbar { height: 6px; }
+.tablewrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+/* Long inline code: allow it to wrap, instead of forcing horizontal scroll. */
+:not(pre) > code {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.dl-grid code, .bug code { word-break: break-all; }
+
+/* Pre blocks: ensure they scroll within themselves, never push the body. */
+pre {
+  min-width: 0;
+  max-width: 100%;
+  white-space: pre;
+}
+
+/* Bug card / release block / panel: same horizontal-scroll fallback. */
+.bug, .release, .panel { overflow-x: auto; }
+
+/* docnav: stack vertically on phones. */
+@media (max-width: 600px) {
+  .docnav { flex-direction: column; }
+  .docnav a { max-width: 100%; }
+  .docnav a.next { text-align: left; margin-left: 0; }
+}
+
+/* Roadmap grid: stack on phones. */
+@media (max-width: 600px) {
+  .rm { grid-template-columns: 1fr; gap: 6px; }
+  .rm .tag { justify-self: start; }
+}
+
+/* Smaller nav links on tiny screens. */
+@media (max-width: 480px) {
+  .nav .wrap { padding: 8px 14px; }
+  .nav .brand { font-size: 14px; }
+  .nav .links a { padding: 5px 8px; font-size: 13px; }
+}
+
+/* Tighter body type on phones. */
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  pre { font-size: 13px; padding: 12px 14px; }
+  .release { padding: 18px 18px 18px 70px; }
+  .release::before { left: 14px; top: 18px; font-size: 11px; }
+}
+
+/* ============================================================
    Page header
    ============================================================ */
 .page-header {

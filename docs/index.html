@@ -48,8 +48,8 @@
   .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
   .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
-  .nav .links a { color: var(--muted); margin-left: 18px; font-size: 14px; }
-  .nav .links a:hover { color: var(--text); }
+  .nav .links a { color: var(--muted); margin-left: 6px; padding: 8px 12px; font-size: 14px; border-radius: 6px; }
+  .nav .links a:hover { color: var(--text); background: var(--panel); }
 
   .hero { padding: 88px 0 64px; }
   .pill {
@@ -258,6 +258,112 @@
   .arch .box { color: var(--accent); font-weight: 600; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  /* ============================================================
+     RESPONSIVE OVERRIDES — keep every page usable on mobile
+     ============================================================ */
+
+  /* The single biggest mobile gotcha: any element inside a flex or
+     grid container defaults to min-width: auto, which means long
+     text or fixed-width children blow out the viewport. Force 0
+     everywhere inside our responsive grids. */
+  .ospicker, .ospicker > *,
+  .cols, .cols > *,
+  .grid, .grid > *,
+  .card, .docgrid, .docgrid > *,
+  .panel, .dl-hero, .dl-hero > * {
+    min-width: 0;
+  }
+  table, thead, tbody, tr, th, td { min-width: 0; }
+
+  /* Tables: make them scrollable on mobile instead of blowing out the layout.
+     The page itself doesn't horizontal-scroll, the table does. */
+  .tablewrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.4em 0;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .tablewrap > table { margin: 0; border: none; border-radius: 0; }
+  .tablewrap::-webkit-scrollbar { height: 6px; }
+  .tablewrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  /* Long inline code: allow it to wrap, instead of forcing horizontal scroll. */
+  :not(pre) > code {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Inline code inside bug dl-grids needs to look the same — same rule. */
+  .dl-grid code, .bug code { word-break: break-all; }
+
+  /* Pre blocks: ensure they scroll within themselves, never push the body.
+     min-width: 0 lets them shrink; overflow-x: auto scrolls the content. */
+  pre {
+    min-width: 0;
+    max-width: 100%;
+    white-space: pre;
+  }
+
+  /* The hero download block: stack on small screens, full width, bigger tap target. */
+  @media (max-width: 900px) {
+    .dl-hero { flex-direction: column; align-items: stretch; }
+    .dl-hero .big, .dl-hero .other, .dl-hero .detected {
+      width: 100%;
+      justify-content: center;
+    }
+    .dl-hero .big { font-size: 16px; padding: 18px 20px; min-height: 56px; }
+    .dl-hero .other { padding: 14px 18px; min-height: 48px; }
+  }
+
+  /* OS picker: stack to 1 column earlier and tighten padding on mobile. */
+  @media (max-width: 900px) {
+    .ospicker { grid-template-columns: 1fr; gap: 12px; }
+    .os { padding: 16px 18px 14px; }
+  }
+  /* The original 760px rule still applies for 760-900px (tablet portrait). */
+
+  /* Feature grid + doc grid + cols: already collapse via their own rules,
+     but on phones the gap can be tighter. */
+  @media (max-width: 600px) {
+    .grid { gap: 12px; }
+    .docgrid { grid-template-columns: 1fr; }
+    .card { padding: 16px 18px 14px; }
+  }
+
+  /* Nav: hide the secondary links on tiny screens, keep brand + the most
+     important CTA. The full nav scrolls horizontally already. */
+  @media (max-width: 480px) {
+    .nav .wrap { padding: 8px 14px; }
+    .nav .brand { font-size: 14px; }
+    .nav .links { width: 100%; overflow-x: auto; }
+    .nav .links a { padding: 9px 10px; font-size: 13px; min-height: 32px; }
+  }
+
+  /* Code blocks in OS cards: slightly larger font on mobile for thumb-readability. */
+  @media (max-width: 600px) {
+    .os .cmdpick { font-size: 13px; padding: 12px 14px; }
+  }
+
+  /* Tables in bug cards + dl-grids: same tablewrap treatment via JS-less trick.
+     We add a CSS-only horizontal scroll by allowing table to overflow its card. */
+  .bug, .release, .panel { overflow-x: auto; }
+
+  /* docnav: stack vertically on phones so prev/next cards take full width. */
+  @media (max-width: 600px) {
+    .docnav { flex-direction: column; }
+    .docnav a { max-width: 100%; }
+    .docnav a.next { text-align: left; margin-left: 0; }
+  }
+
+  /* Roadmap items: keep the 3-col grid but stack on very small screens. */
+  @media (max-width: 600px) {
+    .rm { grid-template-columns: 1fr; gap: 6px; }
+    .rm .tag { justify-self: start; }
+  }
+
+  /* Pre-existing breakpoint for cols (kept for compatibility). */
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
