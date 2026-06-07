@@ -522,10 +522,10 @@
   </div>
 </header>
 
-<section class="hero">
+<section class="hero viewport tilt-target">
   <div class="wrap">
     <span class="pill">NEW — first public release · v0.3.0 · 2026-06-07</span>
-    <h1>Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
+    <h1 class="display">Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
     <p class="sub reveal">
       Full-duplex audio, vision, function calling, idle hangup, post-call transcripts.
       Built on Google Gemini Multimodal Live, packaged as a self-hostable plugin for Hermes Agent.
@@ -641,6 +641,8 @@
   </div>
 </section>
 
+
+<div class="viz-frame viewport" id="grid-flow-host"><canvas id="grid-flow-canvas" aria-hidden="true"></canvas><span class="viz-caption"><b>Live</b> · ambient signal grid</span></div>
 <section id="features">
   <div class="wrap">
     <h2 class="reveal">What's in the box</h2>
@@ -1067,5 +1069,8 @@
   })();
 </script>
 
+<script src="assets/viz/ambient.js" defer></script>
+<script src="assets/viz/ui.js" defer></script>
+<script src="assets/viz/grid-flow.js" defer></script>
 </body>
 </html>
