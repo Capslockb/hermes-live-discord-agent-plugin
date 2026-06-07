@@ -13,7 +13,12 @@
 
 <header class="nav">
   <div class="wrap">
-    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
     <nav class="links" aria-label="Primary">
       <a href="index.html#features">Features</a>
       <a href="index.html#roadmap">Roadmap</a>
@@ -45,7 +50,7 @@
       <p class="dek">Release history of <code>hermes-live-discord-agent-plugin</code>. Newest first.</p>
     </div>
 
-    <article class="release" id="v0-3-0" data-version="0.3.0">
+    <article class="release reveal" id="v0-3-0" data-version="0.3.0">
       <span class="date">2026-06-07</span>
       <h3>Brand + public release <a class="anchor" href="#v0-3-0" aria-label="Anchor link">#</a></h3>
       <ul>
@@ -56,7 +61,7 @@
       </ul>
     </article>
 
-    <article class="release" id="v0-2-7" data-version="0.2.7">
+    <article class="release reveal" id="v0-2-7" data-version="0.2.7">
       <span class="date">2026-06-05</span>
       <h3>Video awareness + new-user onboarding <a class="anchor" href="#v0-2-7" aria-label="Anchor link">#</a></h3>
       <h4>Features</h4>
@@ -71,7 +76,7 @@
       </ul>
     </article>
 
-    <article class="release" id="v0-2-6" data-version="0.2.6">
+    <article class="release reveal" id="v0-2-6" data-version="0.2.6">
       <span class="date">2026-06-05</span>
       <h3>Remove <code>mediaResolution</code> from Live API setup <a class="anchor" href="#v0-2-6" aria-label="Anchor link">#</a></h3>
       <h4>Fixes</h4>
@@ -80,7 +85,7 @@
       </ul>
     </article>
 
-    <article class="release" id="v0-2-5" data-version="0.2.5">
+    <article class="release reveal" id="v0-2-5" data-version="0.2.5">
       <span class="date">2026-06-05</span>
       <h3>GitHub repo tracker tools <a class="anchor" href="#v0-2-5" aria-label="Anchor link">#</a></h3>
       <h4>Features</h4>
@@ -98,7 +103,7 @@
       </ul>
     </article>
 
-    <article class="release" id="v0-2-4" data-version="0.2.4">
+    <article class="release reveal" id="v0-2-4" data-version="0.2.4">
       <span class="date">2026-06-05</span>
       <h3>Webhooks, email fixes, voice to Aoede <a class="anchor" href="#v0-2-4" aria-label="Anchor link">#</a></h3>
       <h4>Features</h4>
@@ -129,7 +134,7 @@ DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS=300
 DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3</code></pre>
     </article>
 
-    <article class="release" id="v0-2-3" data-version="0.2.3">
+    <article class="release reveal" id="v0-2-3" data-version="0.2.3">
       <span class="date">2026-06-05</span>
       <h3>Real keyboard SFX + OpenCode progress watcher <a class="anchor" href="#v0-2-3" aria-label="Anchor link">#</a></h3>
       <h4>Fixes</h4>
@@ -196,5 +201,27 @@ DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3</code></pre>
   })();
 </script>
 
+<script>  // ============================================================
+  // Scroll-reveal observer (same as landing page)
+  // ============================================================
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+</script>
 </body>
 </html>

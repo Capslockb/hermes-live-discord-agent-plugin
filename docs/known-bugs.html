@@ -13,7 +13,12 @@
 
 <header class="nav">
   <div class="wrap">
-    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
     <nav class="links" aria-label="Primary">
       <a href="index.html#features">Features</a>
       <a href="index.html#roadmap">Roadmap</a>
@@ -62,12 +67,12 @@
       <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Known bugs &amp; quirks</div>
       <span class="eyebrow">Documentation</span>
       <h1>Known bugs &amp; quirks</h1>
-      <p class="dek">This is the canonical bug list. If you hit something not on here, please open an issue with the reproduction steps.</p>
+      <p class="dek reveal">This is the canonical bug list. If you hit something not on here, please open an issue with the reproduction steps.</p>
     </div>
 
     <h2 id="critical">Critical <a class="anchor" href="#critical" aria-label="Anchor link">#</a></h2>
 
-    <article class="bug" id="bug-1">
+    <article class="bug reveal" id="bug-1">
       <h3>#1 Discord CDN handshake rejection <code>code 4006</code> <span class="severity critical">Critical</span> <a class="anchor" href="#bug-1" aria-label="Anchor link">#</a></h3>
       <dl class="dl-grid">
         <dt>Symptom</dt><dd><code>channel.connect()</code> takes ~27 seconds to complete. The first ~5 handshakes are rejected with code 4006; the 6th succeeds.</dd>
@@ -80,7 +85,7 @@
       </div>
     </article>
 
-    <article class="bug" id="bug-2">
+    <article class="bug reveal" id="bug-2">
       <h3>#2 Stale rejoin — "Bridge still starting" hang <span class="severity high">High</span> <a class="anchor" href="#bug-2" aria-label="Anchor link">#</a></h3>
       <dl class="dl-grid">
         <dt>Symptom</dt><dd>Calling <code>/voice-live</code> after a previous disconnect sometimes returns <code>pending: "Bridge is being started"</code> forever.</dd>
@@ -104,7 +109,7 @@
         _starting.pop(guild_id_int, None)</code></pre>
     </article>
 
-    <article class="bug" id="bug-3">
+    <article class="bug reveal" id="bug-3">
       <h3>#3 Sidecar HTTP server hangs <code>serve_forever()</code> <span class="severity high">High</span> <a class="anchor" href="#bug-3" aria-label="Anchor link">#</a></h3>
       <dl class="dl-grid">
         <dt>Symptom</dt><dd><code>bridge.py:run_sidecar()</code> uses <code>http.server.HTTPServer.serve_forever()</code> which never returns on its own. Without a shutdown signal, you can't cleanly stop the bridge.</dd>
@@ -122,25 +127,25 @@ server.serve_forever()</code></pre>
 
     <h2 id="workarounds">Workarounds (not yet "fixed") <a class="anchor" href="#workarounds" aria-label="Anchor link">#</a></h2>
 
-    <article class="bug" id="bug-4">
+    <article class="bug reveal" id="bug-4">
       <h3>#4 Playback restarts only on new audio <span class="severity medium">Medium</span> <a class="anchor" href="#bug-4" aria-label="Anchor link">#</a></h3>
       <p><strong>Symptom:</strong> If playback stops during a 2-second natural silence, the green ring turns off. New audio from the user restarts it via <code>_wake_playback</code>.</p>
       <p><strong>Why not just loop?</strong> The old <code>_ensure_playback</code> callback created a tight restart loop (empty source → silence → play() → empty → ...). The new code intentionally only restarts when there's new Gemini audio to play.</p>
     </article>
 
-    <article class="bug" id="bug-5">
+    <article class="bug reveal" id="bug-5">
       <h3>#5 Module import path is dash-normalized <span class="severity low">Low</span> <a class="anchor" href="#bug-5" aria-label="Anchor link">#</a></h3>
       <p>The plugin directory is <code>discord-voice</code>, but the Python import is <code>discord_voice</code>. If you're importing it manually, use the underscore form.</p>
     </article>
 
-    <article class="bug" id="bug-6">
+    <article class="bug reveal" id="bug-6">
       <h3>#6 Discord voice rate limits <span class="severity medium">Medium</span> <a class="anchor" href="#bug-6" aria-label="Anchor link">#</a></h3>
       <p>If you call <code>/voice-live</code> repeatedly without waiting, Discord will throttle. The bridge has a <code>_starting</code> guard that returns <code>pending</code> for 30 s, but be patient.</p>
     </article>
 
     <h2 id="performance">Performance <a class="anchor" href="#performance" aria-label="Anchor link">#</a></h2>
 
-    <article class="bug" id="bug-7">
+    <article class="bug reveal" id="bug-7">
       <h3>#7 Opus decoder state corruption under packet loss <span class="severity medium">Medium</span> <a class="anchor" href="#bug-7" aria-label="Anchor link">#</a></h3>
       <dl class="dl-grid">
         <dt>Symptom</dt><dd><code>undecodable Opus frame</code> errors in the logs.</dd>
@@ -150,12 +155,12 @@ server.serve_forever()</code></pre>
 
     <h2 id="compatibility">Compatibility <a class="anchor" href="#compatibility" aria-label="Anchor link">#</a></h2>
 
-    <article class="bug" id="bug-8">
+    <article class="bug reveal" id="bug-8">
       <h3>#8 Older Gemini Live models don't support <code>mediaResolution: LOW</code> <span class="severity low">Low</span> <a class="anchor" href="#bug-8" aria-label="Anchor link">#</a></h3>
       <p>If <code>GEMINI_MODEL</code> is set to a non-2.5 model, the session config will be rejected. Either upgrade the model or remove the override.</p>
     </article>
 
-    <article class="bug" id="bug-9">
+    <article class="bug reveal" id="bug-9">
       <h3>#9 Function calling requires the executor to be non-blocking <span class="severity high">High</span> <a class="anchor" href="#bug-9" aria-label="Anchor link">#</a></h3>
       <p>If a custom <code>functionCalls</code> handler blocks for &gt;10 seconds, the WSS times out. Keep tool handlers quick or push long work to a background task.</p>
     </article>
@@ -222,5 +227,27 @@ server.serve_forever()</code></pre>
   })();
 </script>
 
+<script>  // ============================================================
+  // Scroll-reveal observer (same as landing page)
+  // ============================================================
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+</script>
 </body>
 </html>

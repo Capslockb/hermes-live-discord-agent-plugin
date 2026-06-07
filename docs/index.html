@@ -28,13 +28,39 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    background: radial-gradient(1200px 600px at 20% -10%, #182058 0%, transparent 60%),
-                radial-gradient(900px 500px at 90% 10%, #06384a 0%, transparent 55%),
-                var(--bg);
+    overflow-x: hidden;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #182058 0%, transparent 60%),
+      radial-gradient(900px 500px at 90% 10%, #06384a 0%, transparent 55%),
+      var(--bg);
     color: var(--text);
     font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
     -webkit-font-smoothing: antialiased;
+    position: relative;
   }
+
+  /* Grain / noise texture overlay — adds depth from the flat gradients.
+     Inline SVG noise so there are no extra HTTP requests, no PNG/SVG asset
+     404s on Pages. pointer-events: none so taps pass through to the page.
+     Very low opacity — you feel the texture, you don't see it. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0.6  0 0 0 0 0.85  0 0 0 0 1  0 0 0 0.85 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 240px 240px;
+  }
+  /* On mobile, kill the grain entirely — it eats GPU on phones for almost
+     no visual benefit at small viewports. */
+  @media (max-width: 768px) {
+    body::before { display: none; }
+  }
+  /* Push all real content above the grain layer. */
+  body > * { position: relative; z-index: 1; }
   code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -69,12 +95,32 @@
     display: inline-flex; align-items: center; gap: 8px;
     padding: 12px 18px; border-radius: 10px; font-weight: 600;
     border: 1px solid var(--line); background: var(--panel); color: var(--text);
-    transition: transform 0.05s ease, border-color 0.15s ease, background 0.15s ease;
+    transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), border-color 0.15s ease, background 0.15s ease, box-shadow 0.18s ease;
+    position: relative;
+    overflow: hidden;
   }
-  .btn:hover { border-color: var(--accent); text-decoration: none; }
-  .btn.primary { background: linear-gradient(180deg, #00d4ff, #0bb1d6); color: #001621; border-color: transparent; }
-  .btn.primary:hover { filter: brightness(1.05); }
-  .btn.ghost { background: transparent; }
+  .btn:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 255, 0.18); }
+  .btn:active { transform: translateY(0); }
+  .btn .arrow {
+    display: inline-block;
+    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
+  }
+  .btn:hover .arrow { transform: translateX(4px); }
+  .btn .arrow.down { transform: rotate(90deg); }
+  .btn:hover .arrow.down { transform: rotate(90deg) translateX(4px); }
+  .btn-primary { background: linear-gradient(180deg, #00d4ff, #0bb1d6); color: #001621; border-color: transparent; }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; }
+  /* Sweep highlight on hover for primary CTA */
+  .btn::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+  }
+  .btn:hover::after { transform: translateX(100%); }
 
   /* Hero download CTA — big, prominent, shows detected OS */
   .dl-hero {
@@ -104,7 +150,6 @@
     font-size: 12px; padding: 5px 10px;
     border-radius: 999px;
     background: rgba(122, 240, 200, 0.1);
-    border: 1px solid rgba(122, 240, 200, 0.3);
     color: var(--accent-2);
     font-weight: 600; letter-spacing: 0.3px;
   }
@@ -118,6 +163,29 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
   }
+
+  /* ============================================================
+     Brand mark — official Hermes Agent mark from lobehub/lobe-icons
+     ============================================================ */
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; }
+  .brand-link {
+    display: inline-flex; align-items: center; gap: 10px;
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background 0.18s ease, transform 0.18s ease;
+  }
+  .brand-link:hover { background: var(--panel); text-decoration: none; transform: translateY(-1px); }
+  .brand-mark {
+    width: 22px; height: 22px;
+    color: var(--accent);
+    transition: transform 0.5s cubic-bezier(.34,1.56,.64,1), color 0.2s ease;
+    flex: none;
+  }
+  .brand-link:hover .brand-mark { transform: rotate(-12deg) scale(1.08); color: var(--accent-2); }
+  .brand-text { font-size: 15px; letter-spacing: -0.1px; }
+  .brand-accent { color: var(--accent); }
+  .brand .dot { display: none; } /* replaced by the official mark */
   .dl-hero .other {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 14px;
@@ -365,6 +433,44 @@
 
   /* Pre-existing breakpoint for cols (kept for compatibility). */
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+
+  /* ============================================================
+     Scroll-reveal animations — fade + slide on enter viewport
+     Vanilla IntersectionObserver, respects prefers-reduced-motion.
+     ============================================================ */
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.7s cubic-bezier(.2,.7,.2,1), transform 0.7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+  /* Stagger children */
+  .reveal-stagger > * { opacity: 0; transform: translateY(12px); transition: opacity 0.6s cubic-bezier(.2,.7,.2,1), transform 0.6s cubic-bezier(.2,.7,.2,1); }
+  .reveal-stagger.in > * { opacity: 1; transform: translateY(0); }
+  .reveal-stagger.in > *:nth-child(1) { transition-delay: 0.05s; }
+  .reveal-stagger.in > *:nth-child(2) { transition-delay: 0.10s; }
+  .reveal-stagger.in > *:nth-child(3) { transition-delay: 0.15s; }
+  .reveal-stagger.in > *:nth-child(4) { transition-delay: 0.20s; }
+  .reveal-stagger.in > *:nth-child(5) { transition-delay: 0.25s; }
+  .reveal-stagger.in > *:nth-child(6) { transition-delay: 0.30s; }
+  .reveal-stagger.in > *:nth-child(7) { transition-delay: 0.35s; }
+  .reveal-stagger.in > *:nth-child(8) { transition-delay: 0.40s; }
+  .reveal-stagger.in > *:nth-child(9) { transition-delay: 0.45s; }
+  .reveal-stagger.in > *:nth-child(10) { transition-delay: 0.50s; }
+  .reveal-stagger.in > *:nth-child(11) { transition-delay: 0.55s; }
+  .reveal-stagger.in > *:nth-child(12) { transition-delay: 0.60s; }
+  /* Variant: slide in from side */
+  .reveal-left { opacity: 0; transform: translateX(-18px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.7,.2,1); }
+  .reveal-left.in { opacity: 1; transform: translateX(0); }
+  .reveal-right { opacity: 0; transform: translateX(18px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.7,.2,1); }
+  .reveal-right.in { opacity: 1; transform: translateX(0); }
+  /* Disable entirely if user prefers reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, .reveal-stagger > *, .reveal-left, .reveal-right {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    .brand-link:hover .brand-mark { transform: none; }
+    .btn:hover { transform: none; }
+    .btn .arrow, .btn:hover .arrow { transform: none; }
+  }
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
   }
@@ -399,7 +505,12 @@
 
 <header class="nav">
   <div class="wrap">
-    <div class="brand"><span class="dot"></span> Hermes Live Discord Agent Plugin</div>
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
     <div class="links">
       <a href="#features">Features</a>
       <a href="#roadmap">Roadmap</a>
@@ -415,13 +526,13 @@
   <div class="wrap">
     <span class="pill">NEW — first public release · v0.3.0 · 2026-06-07</span>
     <h1>Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
-    <p class="sub">
+    <p class="sub reveal">
       Full-duplex audio, vision, function calling, idle hangup, post-call transcripts.
       Built on Google Gemini Multimodal Live, packaged as a self-hostable plugin for Hermes Agent.
       Open source, MIT, and actively under development.
     </p>
 
-    <div class="dl-hero" data-os-block>
+    <div class="dl-hero reveal-left" data-os-block>
       <a class="big" data-dl-primary href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip">
         <span class="icon" data-os-icon></span>
         <span data-dl-label>Download for Linux</span>
@@ -438,7 +549,7 @@
       Or pick your platform below to get the exact install command. <strong style="color:var(--text)">Auto-detected</strong> via your browser — no tracking, no fingerprinting, just <code style="background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12px;">navigator.userAgent</code>.
     </p>
 
-    <div class="ospicker" data-os-picker>
+    <div class="ospicker reveal-stagger" data-os-picker>
 
       <div class="os" data-os="linux">
         <div class="os-head">
@@ -506,8 +617,8 @@
     </div>
 
     <div class="cta-row" style="margin-top: 28px;">
-      <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub</a>
-      <a class="btn ghost" href="#roadmap">🛣️ See the roadmap</a>
+      <a class="btn btn-primary" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub <span class="arrow">→</span></a>
+      <a class="btn btn-ghost" href="#roadmap">🛣️ See the roadmap <span class="arrow down">→</span></a>
     </div>
 
     <div class="meta">
@@ -532,10 +643,10 @@
 
 <section id="features">
   <div class="wrap">
-    <h2>What's in the box</h2>
-    <p class="lede">Everything you need to put a real-time multimodal agent in a Discord voice channel. No external services to babysit.</p>
+    <h2 class="reveal">What's in the box</h2>
+    <p class="lede reveal">Everything you need to put a real-time multimodal agent in a Discord voice channel. No external services to babysit.</p>
 
-    <div class="grid">
+    <div class="grid reveal-stagger">
       <div class="card"><div class="icon">🎙️</div><h3>Full-duplex voice</h3><p>Discord UDP → NaCl → Opus → 16 kHz mono → Gemini WSS. Real two-way conversation with sub-second latency.</p></div>
       <div class="card"><div class="icon">👁️</div><h3>Vision + frame feed</h3><p>Send images or stream a 1 fps feed — the model sees what you see. Audio-gated, 512 KB cap, &lt;$0.05/hr on Flex.</p></div>
       <div class="card"><div class="icon">🛠️</div><h3>Function calling</h3><p>Synchronous tool dispatch from inside the live session. Wire any Hermes tool — calendar, mail, home assistant, your own.</p></div>
@@ -551,9 +662,9 @@
 
 <section id="architecture">
   <div class="wrap">
-    <h2>How it fits together</h2>
-    <p class="lede">The bridge lives in-process inside the Hermes gateway. Audio is decrypted and resampled in a worker thread, and the WSS session with Gemini runs as an async task. No separate services, no queues, no message buses.</p>
-<pre class="arch mono">  <span class="box">Discord voice channel</span>  (UDP, Opus 48 kHz, NaCl-encrypted)
+    <h2 class="reveal">How it fits together</h2>
+    <p class="lede reveal">The bridge lives in-process inside the Hermes gateway. Audio is decrypted and resampled in a worker thread, and the WSS session with Gemini runs as an async task. No separate services, no queues, no message buses.</p>
+<pre class="arch mono reveal">  <span class="box">Discord voice channel</span>  (UDP, Opus 48 kHz, NaCl-encrypted)
         │
         ▼
   <span class="box">VoiceListener</span>            (rx thread: decode → 16 kHz mono)
@@ -579,10 +690,10 @@
 
 <section id="roadmap">
   <div class="wrap">
-    <h2>What's coming next</h2>
-    <p class="lede">This is an early public release — the bones are solid, and there's a lot of "extremely awesome" on the way. PRs welcome on any of these.</p>
+    <h2 class="reveal">What's coming next</h2>
+    <p class="lede reveal">This is an early public release — the bones are solid, and there's a lot of "extremely awesome" on the way. PRs welcome on any of these.</p>
 
-    <div class="roadmap">
+    <div class="roadmap reveal-stagger">
 
       <div class="rm now">
         <span class="tag">SHIPPED</span>
@@ -702,10 +813,10 @@
 
 <section id="install">
   <div class="wrap">
-    <h2>Install it</h2>
-    <p class="lede">Three minutes from <span class="kbd">git clone</span> to a working voice agent.</p>
+    <h2 class="reveal">Install it</h2>
+    <p class="lede reveal">Three minutes from <span class="kbd">git clone</span> to a working voice agent.</p>
 
-    <div class="cols">
+    <div class="cols reveal-stagger">
       <div class="panel">
         <h3>Prereqs</h3>
         <ul>
@@ -736,9 +847,9 @@
 
 <section id="docs">
   <div class="wrap">
-    <h2>Documentation</h2>
-    <p class="lede">Rich docs in the repo — every knob, every edge case.</p>
-    <div class="docgrid">
+    <h2 class="reveal">Documentation</h2>
+    <p class="lede reveal">Rich docs in the repo — every knob, every edge case.</p>
+    <div class="docgrid reveal-stagger">
       <a class="doclink" href="architecture.html"><b>Architecture</b><span>Audio pipeline, threading, lifecycle, idempotency, function calling, cost control, failure modes</span></a>
       <a class="doclink" href="configuration.html"><b>Configuration</b><span>Every env var, defaults, ranges, and tuning tips</span></a>
       <a class="doclink" href="known-bugs.html"><b>Known bugs &amp; quirks</b><span>Discord CDN 4006, stale rejoin, playback semantics, compatibility caveats</span></a>
@@ -751,12 +862,12 @@
 
 <section id="contact">
   <div class="wrap">
-    <h2>Open for collaboration</h2>
-    <p class="lede">
+    <h2 class="reveal">Open for collaboration</h2>
+    <p class="lede reveal">
       This is brand new, actively developed, and shaped by what its early users want it to be.
       If you'd like to build with it, report a bug, or pitch a feature — pick a door.
     </p>
-    <div class="cols">
+    <div class="cols reveal-stagger">
       <div class="panel">
         <h3>🐙 GitHub</h3>
         <p style="color:var(--muted); margin-top:0;">Issues, PRs, and discussions all live on GitHub. The cleanest place to start.</p>
@@ -918,6 +1029,41 @@
         });
       });
     });
+  })();
+
+  // ============================================================
+  // Scroll-reveal observer — fade + slide on enter viewport
+  // Vanilla IntersectionObserver, no library, no deps. Respects
+  // prefers-reduced-motion (CSS handles the actual disabling).
+  // Falls back to .in immediately if the API is missing.
+  // ============================================================
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+
+    // Fallback: no IntersectionObserver support → show everything now.
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target); // one-shot reveal, then stop watching
+        }
+      });
+    }, {
+      // Trigger when 12% of the element is in the viewport.
+      // Slightly negative bottom margin so the reveal fires a hair
+      // before the element is fully on-screen — feels more responsive.
+      threshold: 0.12,
+      rootMargin: '0px 0px -8% 0px',
+    });
+
+    nodes.forEach(function (n) { io.observe(n); });
   })();
 </script>
 

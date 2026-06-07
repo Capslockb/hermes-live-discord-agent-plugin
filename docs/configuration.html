@@ -13,7 +13,12 @@
 
 <header class="nav">
   <div class="wrap">
-    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
     <nav class="links" aria-label="Primary">
       <a href="index.html#features">Features</a>
       <a href="index.html#roadmap">Roadmap</a>
@@ -44,7 +49,7 @@
       <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Configuration</div>
       <span class="eyebrow">Documentation</span>
       <h1>Configuration</h1>
-      <p class="dek">Every env var the plugin understands, what it does, what its default is, and how to tune it.</p>
+      <p class="dek reveal">Every env var the plugin understands, what it does, what its default is, and how to tune it.</p>
     </div>
 
     <div class="callout info">
@@ -56,7 +61,7 @@
 
     <h2 id="required">Required <a class="anchor" href="#required" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Type</th><th>Example</th><th>Notes</th></tr>
       </thead>
@@ -78,7 +83,7 @@
 
     <h2 id="model-selection">Model selection <a class="anchor" href="#model-selection" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
       </thead>
@@ -98,7 +103,7 @@
 
     <h2 id="networking">Networking <a class="anchor" href="#networking" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
       </thead>
@@ -113,7 +118,7 @@
 
     <h2 id="auto-leave">Auto-leave <a class="anchor" href="#auto-leave" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
       </thead>
@@ -138,7 +143,7 @@
 
     <h2 id="idle-prompt">Idle prompt ("Are you still there?") <a class="anchor" href="#idle-prompt" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
       </thead>
@@ -163,7 +168,7 @@
 
     <h2 id="notes">Notes / transcripts <a class="anchor" href="#notes" aria-label="Anchor link">#</a></h2>
 
-    <div class="tablewrap"><table>
+    <div class="tablewrap reveal"><table>
       <thead>
         <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
       </thead>
@@ -254,5 +259,27 @@ chmod 600 ~/.hermes/voice-live-autostart.json</code></pre>
   })();
 </script>
 
+<script>  // ============================================================
+  // Scroll-reveal observer (same as landing page)
+  // ============================================================
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+</script>
 </body>
 </html>
