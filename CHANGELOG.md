@@ -6,6 +6,7 @@
 - **Renamed** to **Hermes Live Discord Agent Plugin** (`hermes-live-discord-agent-plugin`). Internal plugin directory `discord-voice` kept untouched to avoid refactoring ~1.5k lines of cross-references.
 - **Public release** — repo is now public.
 - **Promo site** at `docs/index.html`, auto-deployed to GitHub Pages via `.github/workflows/pages.yml`. Live at `https://capslockb.github.io/hermes-live-discord-agent-plugin/`.
+- **Doc pages** — markdown docs (`docs/ARCHITECTURE.md`, `CONFIGURATION.md`, `KNOWN_BUGS.md`, `CHANGELOG.md`) now have rendered, on-brand HTML versions (`docs/architecture.html`, `configuration.html`, `known-bugs.html`, `changelog.html`) on the same GitHub Pages site, sharing a single `docs/assets/style.css`. In-page TOC, scroll-spy, severity badges, callouts, and prev/next nav throughout.
 - Installer banner + status strings updated to the new public name; REPO_NAME constant and `.env` keys unchanged so existing installs keep working.
 
 ## 0.2.7 — 2026-06-05

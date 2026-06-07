@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="Deep dive into the audio pipeline, threading model, lifecycle, idempotency, function calling, cost control, and failure modes of the Gemini Live Discord bridge.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>
+      <li><a href="#high-level-data-flow">High-level data flow</a></li>
+      <li><a href="#audio-pipeline">Audio pipeline</a>
+        <ul>
+          <li><a href="#receive-path">Receive (Discord → Gemini)</a></li>
+          <li><a href="#send-path">Send (Gemini → Discord)</a></li>
+          <li><a href="#why-queue">Why a thread-safe queue?</a></li>
+        </ul>
+      </li>
+      <li><a href="#threading">Threading model</a></li>
+      <li><a href="#lifecycle">Lifecycle</a></li>
+      <li><a href="#idempotency">Idempotency</a></li>
+      <li><a href="#control-api">Control API (HTTP)</a></li>
+      <li><a href="#function-calling">Function calling</a></li>
+      <li><a href="#cost-control">Cost control</a></li>
+      <li><a href="#failure-modes">Failure modes</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <div class="page-header">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Architecture</div>
+      <span class="eyebrow">Documentation</span>
+      <h1>Architecture</h1>
+      <p class="dek">A deep dive into the audio pipeline, threading model, and lifecycle of the Gemini Live Discord bridge.</p>
+    </div>
+
+    <h2 id="high-level-data-flow">High-level data flow <a class="anchor" href="#high-level-data-flow" aria-label="Anchor link">#</a></h2>
+
+<pre><code>                                  ┌─────────────────────────────────────────────┐
+                                  │             Gemini Live API                 │
+                                  │  ┌─────────────┐    ┌─────────────────────┐  │
+                                  │  │  multimodal │    │  function-calling   │  │
+                                  │  │  reasoning  │◄──►│  (synchronous)      │  │
+                                  │  └──────┬──────┘    └──────────┬──────────┘  │
+                                  └─────────┼──────────────────────┼─────────────┘
+                                            │ WSS                 │ toolResponse
+                                  ▲ audio   │                     │
+                                  │         │                     ▼
+              24 kHz mono         │         │            ┌─────────────────┐
+        ┌────────────────────────┐│         │            │ FunctionCalls   │
+        │  GeminiLiveBridge      ││         │            │ dispatcher      │
+        │  (async)               ├┘         │            │ (in-process)    │
+        └────────────────────────┘          │            └─────────────────┘
+                                            │
+                                  ▲ 16 kHz  │  base64
+                                  │ mono    │  PCM chunks
+        ┌────────────────────────┐│         │
+        │  VoiceListener         ├┘         │
+        │  (rx thread)           │          │
+        └────────────────────────┘          │
+                                            │
+              Opus 48 kHz                   │
+        ┌────────────────────────┐         │
+        │  Discord VoiceClient   │         │
+        │  (UDP + NaCl decrypt)  ├─────────┘
+        └────────────────────────┘
+              ▲
+              │  user microphone
+              │
+        ┌────────────────────────┐
+        │  Discord voice channel │
+        └────────────────────────┘</code></pre>
+
+    <h2 id="audio-pipeline">Audio pipeline (detailed) <a class="anchor" href="#audio-pipeline" aria-label="Anchor link">#</a></h2>
+
+    <h3 id="receive-path">Receive path (Discord → Gemini) <a class="anchor" href="#receive-path" aria-label="Anchor link">#</a></h3>
+    <ol>
+      <li><strong>Discord VoiceClient</strong> receives Opus packets from the voice UDP socket and decrypts them with the <strong>NaCl secret-box</strong> session key negotiated at handshake.</li>
+      <li><strong>VoiceListener</strong> runs in its own thread, reading decoded PCM frames at 48 kHz stereo.</li>
+      <li>Frames are converted with <strong>numpy</strong> to 16 kHz mono (Discord uses 48 kHz; Gemini realtime input expects 16 kHz PCM-16LE).</li>
+      <li>Each chunk is base64-encoded and pushed to Gemini via <code>realtimeInput.mediaChunks</code>.</li>
+      <li>When the user stops speaking, the listener idles. No audio chunks are sent.</li>
+    </ol>
+
+    <h3 id="send-path">Send path (Gemini → Discord) <a class="anchor" href="#send-path" aria-label="Anchor link">#</a></h3>
+    <ol>
+      <li>Gemini's <code>serverContent.modelTurn.parts[].inlineData</code> arrives over WSS as base64 PCM at 24 kHz mono.</li>
+      <li><strong>GeminiLiveBridge</strong> decodes, then <strong>upsamples</strong> to 48 kHz stereo using linear interpolation (numpy).</li>
+      <li>Frames are pushed to a <strong>thread-safe queue</strong> inside <code>LiveAudioSource</code> (a <code>discord.AudioSource</code> subclass).</li>
+      <li><strong>VoiceClient.play()</strong> pulls from the queue and sends Opus-encoded packets back to Discord.</li>
+    </ol>
+
+    <h3 id="why-queue">Why a thread-safe queue? <a class="anchor" href="#why-queue" aria-label="Anchor link">#</a></h3>
+    <p><code>AudioSource.read()</code> is called from discord.py's voice send thread. The Gemini WSS receive loop is on the gateway's asyncio loop. They can never share a Python object directly. The queue is the synchronisation point.</p>
+
+    <h2 id="threading">Threading model <a class="anchor" href="#threading" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Thread / task</th><th>Owner</th><th>Role</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Gateway asyncio loop</td><td>Hermes</td><td>spawns bridge, handles slash commands, owns Gemini WSS</td></tr>
+        <tr><td>discord.py voice rx</td><td>internal</td><td>decrypts + decodes inbound Opus</td></tr>
+        <tr><td>discord.py voice tx</td><td>internal</td><td>encodes + sends outbound Opus</td></tr>
+        <tr><td><code>_shutdown_watcher</code> (poll task)</td><td>bridge</td><td>polls <code>BRIDGE._running</code> and closes the sidecar HTTP server</td></tr>
+      </tbody>
+    </table>
+
+    <p>The bridge is <strong>cooperatively async</strong>. The only blocking work is Opus encoding/decoding, which discord.py does off-thread for us.</p>
+
+    <h2 id="lifecycle">Lifecycle <a class="anchor" href="#lifecycle" aria-label="Anchor link">#</a></h2>
+
+<pre><code>slash command                voice_live()
+    │                              │
+    ▼                              ▼
+disconnect any existing    infer channel
+voice client in guild          │
+    │                          ▼
+    ▼                  spawn bridge.py:run_sidecar(channel, ...)
+disconnect                 │ in sidecar:
+    │                      │   channel.connect()       ← may take 27s
+    ▼                      │   VoiceClient.play(LiveAudioSource())
+wait ~30s                  │   open Gemini WSS
+    │                      │   start VoiceListener thread
+    ▼                      ▼
+ready future fires     register in _active_bridges[guild_id]
+    │                      │
+    ▼                      ▼
+return success         bridge runs until:
+                           - /voice-live-leave
+                           - idle hangup
+                           - gateway stop</code></pre>
+
+    <h2 id="idempotency">Idempotency <a class="anchor" href="#idempotency" aria-label="Anchor link">#</a></h2>
+    <p>The plugin guards against:</p>
+    <ul>
+      <li><strong>Stale entries</strong> — if a guild's <code>voice_client</code> is disconnected but <code>_active_bridges</code> still has an entry, the new call cancels the old task, pops the entry, and starts fresh.</li>
+      <li><strong>Same-channel no-op</strong> — calling <code>/voice-live</code> while already connected to that channel returns <code>"success": "Voice bridge is ready"</code> instead of reconnecting.</li>
+      <li><strong>Cross-channel move</strong> — calling <code>/voice-live</code> for a different channel in the same guild calls <code>vc.move_to()</code> instead of disconnect+reconnect.</li>
+    </ul>
+
+    <h2 id="control-api">Control API (HTTP) <a class="anchor" href="#control-api" aria-label="Anchor link">#</a></h2>
+    <p>The sidecar HTTP server runs on <code>127.0.0.1:18943</code> (configurable via <code>DISCORD_VOICE_LIVE_PORT</code>).</p>
+
+    <table>
+      <thead>
+        <tr><th>Endpoint</th><th>Method</th><th>Effect</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>/health</code></td><td>GET</td><td>Returns the full <code>BRIDGE.health()</code> JSON</td></tr>
+        <tr><td><code>/say?text=...</code></td><td>GET</td><td>Injects text into the Gemini session; the model speaks it</td></tr>
+        <tr><td><code>/leave</code></td><td>GET</td><td>Stops the bridge, disconnects</td></tr>
+        <tr><td><code>/note</code></td><td>GET</td><td>Returns the most recent transcript entry</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <span class="title">Bound to loopback only</span>
+      <p>The server is bound to <code>127.0.0.1</code> — it is not exposed to the network. Use a Tailscale / SSH tunnel to access it remotely.</p>
+    </div>
+
+    <h2 id="function-calling">Function calling <a class="anchor" href="#function-calling" aria-label="Anchor link">#</a></h2>
+    <p>Gemini Live (3.1 Flash) supports <strong>synchronous</strong> function calling. The client must dispatch <code>functionCalls</code> manually and send <code>toolResponse</code> back. The WSS stays open during execution; the receive loop runs in an executor so it never blocks on the tool call.</p>
+
+    <p>Example of the message round-trip (in <code>bridge.py</code>):</p>
+
+<pre><code>async def _on_function_call(self, function_calls):
+    # dispatch to in-process tools (run Hermes-side skills, etc.)
+    responses = await self._dispatch(function_calls)
+    await self._send_tool_response(responses)</code></pre>
+
+    <p>The receive loop never awaits long-running work — anything slow goes through <code>loop.run_in_executor()</code>.</p>
+
+    <h2 id="cost-control">Cost control <a class="anchor" href="#cost-control" aria-label="Anchor link">#</a></h2>
+    <p>The default session config:</p>
+
+<pre><code>SESSION_PARAMS = {
+    "turnCoverage": "TURN_INCLUDES_ONLY_ACTIVITY",  # don't bill silent video
+}</code></pre>
+
+    <p>Combined with the bridge-level 1 fps frame gating and audio-gating (no video frames are sent when the user is silent for &gt; 1s), a typical hour of full-duplex audio costs <strong>$0.03–$0.06 on the Flex tier</strong>.</p>
+
+    <div class="callout warn">
+      <span class="title">Heads up</span>
+      <p>The earlier <code>"mediaResolution": "LOW"</code> optimization was removed in v0.2.6 — the current Gemini Live model lineup rejects the field at session setup. Cost is still controlled at the bridge level (1 fps cap + 512 KB max, audio-gated, 350ms SFX cap).</p>
+    </div>
+
+    <h2 id="failure-modes">Failure modes <a class="anchor" href="#failure-modes" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Symptom</th><th>Where it happens</th><th>Recovery</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>channel.connect()</code> hangs ~27s</td>
+          <td>Discord CDN handshake rejection (code 4006)</td>
+          <td>Wait it out. Don't restart the gateway.</td>
+        </tr>
+        <tr>
+          <td>WSS drops mid-call</td>
+          <td>Network blip / Gemini server restart</td>
+          <td><code>run_sidecar</code> reconnects automatically with backoff</td>
+        </tr>
+        <tr>
+          <td>Playback stops silently</td>
+          <td>Natural silence + 2s timeout in <code>LiveAudioSource</code></td>
+          <td>Speak again — <code>_wake_playback</code> restarts on new audio</td>
+        </tr>
+        <tr>
+          <td>Notes file missing</td>
+          <td><code>~/.hermes/voice-live-notes/</code> not writable</td>
+          <td>Create the dir, set <code>NOTES_DIR</code> env var</td>
+        </tr>
+        <tr>
+          <td>"Bridge still starting" hangs</td>
+          <td>Stale entry in <code>_active_bridges</code></td>
+          <td>Plugin auto-cleans; if not, <code>pkill -9</code> the gateway and restart</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <nav class="docnav" aria-label="Doc navigation">
+      <a class="prev" href="index.html">
+        <span class="label">← Home</span>
+        <span class="title">Project overview</span>
+      </a>
+      <a class="next" href="configuration.html">
+        <span class="label">Next →</span>
+        <span class="title">Configuration</span>
+      </a>
+    </nav>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Highlight current section in the TOC as the user scrolls
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+
+</body>
+</html>

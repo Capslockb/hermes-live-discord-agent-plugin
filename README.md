@@ -314,9 +314,16 @@ hermes-live-discord-agent-plugin/
 │   ├── video-frame-feeder.py      # cross‑platform screen feeder
 │   └── regression_test_*.py       # 6 test suites
 └── docs/
-    ├── ARCHITECTURE.md
+    ├── ARCHITECTURE.md        # markdown source
     ├── CONFIGURATION.md
-    └── KNOWN_BUGS.md
+    ├── KNOWN_BUGS.md
+    ├── index.html             # promo site + GitHub Pages root
+    ├── architecture.html      # rendered doc pages
+    ├── configuration.html
+    ├── known-bugs.html
+    ├── changelog.html
+    ├── assets/style.css       # shared stylesheet
+    └── diagrams/              # ASCII dataflow diagrams
 ```
 
 ---

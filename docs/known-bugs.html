@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Known bugs &amp; quirks · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="The canonical bug list — Discord CDN 4006, stale rejoin hang, playback restart semantics, function calling executor pitfalls, and how to report new bugs.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>
+      <li><a href="#critical">Critical</a>
+        <ul>
+          <li><a href="#bug-1">#1 Discord CDN 4006</a></li>
+          <li><a href="#bug-2">#2 Stale rejoin hang</a></li>
+          <li><a href="#bug-3">#3 Sidecar server hang</a></li>
+        </ul>
+      </li>
+      <li><a href="#workarounds">Workarounds</a>
+        <ul>
+          <li><a href="#bug-4">#4 Playback restart</a></li>
+          <li><a href="#bug-5">#5 Dash import</a></li>
+          <li><a href="#bug-6">#6 Discord rate limits</a></li>
+        </ul>
+      </li>
+      <li><a href="#performance">Performance</a>
+        <ul>
+          <li><a href="#bug-7">#7 Opus decoder</a></li>
+        </ul>
+      </li>
+      <li><a href="#compatibility">Compatibility</a>
+        <ul>
+          <li><a href="#bug-8">#8 Older models</a></li>
+          <li><a href="#bug-9">#9 Function-calling executor</a></li>
+        </ul>
+      </li>
+      <li><a href="#reporting">Reporting new bugs</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <div class="page-header">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Known bugs &amp; quirks</div>
+      <span class="eyebrow">Documentation</span>
+      <h1>Known bugs &amp; quirks</h1>
+      <p class="dek">This is the canonical bug list. If you hit something not on here, please open an issue with the reproduction steps.</p>
+    </div>
+
+    <h2 id="critical">Critical <a class="anchor" href="#critical" aria-label="Anchor link">#</a></h2>
+
+    <article class="bug" id="bug-1">
+      <h3>#1 Discord CDN handshake rejection <code>code 4006</code> <span class="severity critical">Critical</span> <a class="anchor" href="#bug-1" aria-label="Anchor link">#</a></h3>
+      <dl class="dl-grid">
+        <dt>Symptom</dt><dd><code>channel.connect()</code> takes ~27 seconds to complete. The first ~5 handshakes are rejected with code 4006; the 6th succeeds.</dd>
+        <dt>Root cause</dt><dd>This machine's Discord voice WebSocket endpoint (<code>c-ams08.discord.media</code> / <code>c-ams07</code>) has been observed to always reject initial handshakes. It's a Discord infrastructure quirk, not a bridge bug — a standalone test proves it.</dd>
+        <dt>Workaround</dt><dd>The bridge waits up to 60 s for the secret key to be ready. Just be patient.</dd>
+      </dl>
+      <div class="callout danger">
+        <span class="title">DO NOT keep restarting the gateway</span>
+        <p>Every restart resets the retry clock and you'll hit the rate limit harder.</p>
+      </div>
+    </article>
+
+    <article class="bug" id="bug-2">
+      <h3>#2 Stale rejoin — "Bridge still starting" hang <span class="severity high">High</span> <a class="anchor" href="#bug-2" aria-label="Anchor link">#</a></h3>
+      <dl class="dl-grid">
+        <dt>Symptom</dt><dd>Calling <code>/voice-live</code> after a previous disconnect sometimes returns <code>pending: "Bridge is being started"</code> forever.</dd>
+        <dt>Root cause</dt><dd><code>_active_bridges[guild_id]</code> still has an entry, but <code>voice_client.is_connected()</code> returns False. The plugin used to return "pending" in this case.</dd>
+        <dt>Status</dt><dd>Fixed (shipped in <code>__init__.py:voice_live()</code>).</dd>
+      </dl>
+
+<pre><code>if guild_id_int in _active_bridges:
+    bridge_info = _active_bridges[guild_id_int]
+    current_vc = bridge_info.get("vc")
+    if current_vc and current_vc.is_connected() and current_vc.channel:
+        # ... (happy path)
+    else:
+        # Stale entry — clean up and start fresh
+        old_task = bridge_info.get("task")
+        if old_task and not old_task.done():
+            old_task.cancel()
+            try: await asyncio.wait_for(old_task, timeout=1.0)
+            except (TimeoutError, CancelledError): pass
+        _active_bridges.pop(guild_id_int, None)
+        _starting.pop(guild_id_int, None)</code></pre>
+    </article>
+
+    <article class="bug" id="bug-3">
+      <h3>#3 Sidecar HTTP server hangs <code>serve_forever()</code> <span class="severity high">High</span> <a class="anchor" href="#bug-3" aria-label="Anchor link">#</a></h3>
+      <dl class="dl-grid">
+        <dt>Symptom</dt><dd><code>bridge.py:run_sidecar()</code> uses <code>http.server.HTTPServer.serve_forever()</code> which never returns on its own. Without a shutdown signal, you can't cleanly stop the bridge.</dd>
+        <dt>Status</dt><dd>Fixed (shipped in <code>bridge.py:run_sidecar()</code>).</dd>
+      </dl>
+
+<pre><code>async def _shutdown_watcher():
+    while BRIDGE._running:
+        await asyncio.sleep(0.5)
+    server.shutdown()  # breaks serve_forever()
+
+asyncio.create_task(_shutdown_watcher())
+server.serve_forever()</code></pre>
+    </article>
+
+    <h2 id="workarounds">Workarounds (not yet "fixed") <a class="anchor" href="#workarounds" aria-label="Anchor link">#</a></h2>
+
+    <article class="bug" id="bug-4">
+      <h3>#4 Playback restarts only on new audio <span class="severity medium">Medium</span> <a class="anchor" href="#bug-4" aria-label="Anchor link">#</a></h3>
+      <p><strong>Symptom:</strong> If playback stops during a 2-second natural silence, the green ring turns off. New audio from the user restarts it via <code>_wake_playback</code>.</p>
+      <p><strong>Why not just loop?</strong> The old <code>_ensure_playback</code> callback created a tight restart loop (empty source → silence → play() → empty → ...). The new code intentionally only restarts when there's new Gemini audio to play.</p>
+    </article>
+
+    <article class="bug" id="bug-5">
+      <h3>#5 Module import path is dash-normalized <span class="severity low">Low</span> <a class="anchor" href="#bug-5" aria-label="Anchor link">#</a></h3>
+      <p>The plugin directory is <code>discord-voice</code>, but the Python import is <code>discord_voice</code>. If you're importing it manually, use the underscore form.</p>
+    </article>
+
+    <article class="bug" id="bug-6">
+      <h3>#6 Discord voice rate limits <span class="severity medium">Medium</span> <a class="anchor" href="#bug-6" aria-label="Anchor link">#</a></h3>
+      <p>If you call <code>/voice-live</code> repeatedly without waiting, Discord will throttle. The bridge has a <code>_starting</code> guard that returns <code>pending</code> for 30 s, but be patient.</p>
+    </article>
+
+    <h2 id="performance">Performance <a class="anchor" href="#performance" aria-label="Anchor link">#</a></h2>
+
+    <article class="bug" id="bug-7">
+      <h3>#7 Opus decoder state corruption under packet loss <span class="severity medium">Medium</span> <a class="anchor" href="#bug-7" aria-label="Anchor link">#</a></h3>
+      <dl class="dl-grid">
+        <dt>Symptom</dt><dd><code>undecodable Opus frame</code> errors in the logs.</dd>
+        <dt>Root cause</dt><dd>Decoder state corruption. Self-heals on the next valid frame. <strong>&gt;100 errors in 5 seconds = real network issue</strong>, not normal background noise.</dd>
+      </dl>
+    </article>
+
+    <h2 id="compatibility">Compatibility <a class="anchor" href="#compatibility" aria-label="Anchor link">#</a></h2>
+
+    <article class="bug" id="bug-8">
+      <h3>#8 Older Gemini Live models don't support <code>mediaResolution: LOW</code> <span class="severity low">Low</span> <a class="anchor" href="#bug-8" aria-label="Anchor link">#</a></h3>
+      <p>If <code>GEMINI_MODEL</code> is set to a non-2.5 model, the session config will be rejected. Either upgrade the model or remove the override.</p>
+    </article>
+
+    <article class="bug" id="bug-9">
+      <h3>#9 Function calling requires the executor to be non-blocking <span class="severity high">High</span> <a class="anchor" href="#bug-9" aria-label="Anchor link">#</a></h3>
+      <p>If a custom <code>functionCalls</code> handler blocks for &gt;10 seconds, the WSS times out. Keep tool handlers quick or push long work to a background task.</p>
+    </article>
+
+    <h2 id="reporting">Reporting new bugs <a class="anchor" href="#reporting" aria-label="Anchor link">#</a></h2>
+
+    <p>When opening an issue, include:</p>
+    <ol>
+      <li><strong>Hermes gateway version</strong> — <code>hermes --version</code></li>
+      <li><strong>Plugin version</strong> — <code>cat plugin/plugin.yaml | head -3</code></li>
+      <li><strong>Gemini model</strong> in use</li>
+      <li><strong>Last 100 lines of <code>journalctl --user -u hermes-gateway --since '5 min ago' --no-pager -o cat</code></strong></li>
+      <li><strong>Health JSON</strong> — <code>curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></li>
+      <li><strong>Repro steps</strong> — <code>/voice-live</code> then <code>...</code> then expected vs actual</li>
+    </ol>
+
+    <nav class="docnav" aria-label="Doc navigation">
+      <a class="prev" href="configuration.html">
+        <span class="label">← Previous</span>
+        <span class="title">Configuration</span>
+      </a>
+      <a class="next" href="changelog.html">
+        <span class="label">Next →</span>
+        <span class="title">Changelog</span>
+      </a>
+    </nav>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configuration · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="Every env var the Hermes Live Discord Agent Plugin understands: required, model selection, networking, auto-leave, idle prompt, notes, autostart.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>
+      <li><a href="#required">Required</a></li>
+      <li><a href="#model-selection">Model selection</a></li>
+      <li><a href="#networking">Networking</a></li>
+      <li><a href="#auto-leave">Auto-leave</a></li>
+      <li><a href="#idle-prompt">Idle prompt</a></li>
+      <li><a href="#notes">Notes / transcripts</a></li>
+      <li><a href="#autostart">Autostart</a></li>
+      <li><a href="#tuning-tips">Tuning tips</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <div class="page-header">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Configuration</div>
+      <span class="eyebrow">Documentation</span>
+      <h1>Configuration</h1>
+      <p class="dek">Every env var the plugin understands, what it does, what its default is, and how to tune it.</p>
+    </div>
+
+    <div class="callout info">
+      <span class="title">Where settings live</span>
+      <p>All settings go in <code>~/.hermes/.env</code> (chmod 600). The installer writes/merges them automatically. After changing anything, restart the gateway:</p>
+    </div>
+
+<pre><code>systemctl --user restart hermes-gateway</code></pre>
+
+    <h2 id="required">Required <a class="anchor" href="#required" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Type</th><th>Example</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>DISCORD_BOT_TOKEN</code></td>
+          <td>secret</td>
+          <td><code>MTI0...X.Vw.A...</code></td>
+          <td>Bot token from Discord Developer Portal. Must have <strong>Voice States</strong> intent enabled.</td>
+        </tr>
+        <tr>
+          <td><code>GEMINI_API_KEY</code></td>
+          <td>secret</td>
+          <td><code>AIzaSy...</code></td>
+          <td>From <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="model-selection">Model selection <a class="anchor" href="#model-selection" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>GEMINI_MODEL</code></td>
+          <td><code>models/gemini-2.5-flash-native-audio-preview-09-2025</code></td>
+          <td>The Live multimodal model. Must support <code>realtimeInput</code>.</td>
+        </tr>
+        <tr>
+          <td><code>GEMINI_LIVE_MODEL_FALLBACKS</code></td>
+          <td><code>models/gemini-2.0-flash-live-001,models/gemini-2.5-flash-live-preview</code></td>
+          <td>Comma-separated. Tried in order if the primary fails the WSS handshake.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="networking">Networking <a class="anchor" href="#networking" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_PORT</code></td>
+          <td><code>18943</code></td>
+          <td>Localhost HTTP control port. Bind stays on <code>127.0.0.1</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="auto-leave">Auto-leave <a class="anchor" href="#auto-leave" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS</code></td>
+          <td><code>900</code></td>
+          <td>Hang up after this many seconds of silence. <code>0</code> disables auto-leave entirely.</td>
+        </tr>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS</code></td>
+          <td><code>120</code></td>
+          <td>Don't auto-leave during the first N seconds of a call. Prevents accidentally hanging up if join takes long.</td>
+        </tr>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_LEAVE_PHRASES</code></td>
+          <td><code>leave voice,disconnect from voice,end voice,stop voice,leave the call,disconnect,goodbye hermes,bye,hang up,exit voice</code></td>
+          <td>Comma-separated. If the model outputs any of these, the bridge leaves immediately.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="idle-prompt">Idle prompt ("Are you still there?") <a class="anchor" href="#idle-prompt" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS</code></td>
+          <td><code>300</code></td>
+          <td>After this many seconds of silence, send the prompt. <code>0</code> disables the prompt and falls back to plain auto-leave.</td>
+        </tr>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS</code></td>
+          <td><code>60</code></td>
+          <td>Wait this long for the user to respond. If they do, both timers reset.</td>
+        </tr>
+        <tr>
+          <td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT</code></td>
+          <td><code>Are you still there?</code></td>
+          <td>What the assistant says. Inject into Gemini as a user turn.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="notes">Notes / transcripts <a class="anchor" href="#notes" aria-label="Anchor link">#</a></h2>
+
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Default</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>NOTES_DIR</code></td>
+          <td><code>~/.hermes/voice-live-notes/</code></td>
+          <td>Where the JSONL transcript is written. Created on first call if missing.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="autostart">Autostart <a class="anchor" href="#autostart" aria-label="Anchor link">#</a></h2>
+
+    <p>Trigger the bridge to auto-join on gateway boot by writing a small JSON file:</p>
+
+<pre><code>mkdir -p ~/.hermes
+cat &gt; ~/.hermes/voice-live-autostart.json &lt;&lt;EOF
+{
+  "guild_id": "123456789012345678",
+  "channel_id": "123456789012345678",
+  "user_id": "123456789012345678"
+}
+EOF
+chmod 600 ~/.hermes/voice-live-autostart.json</code></pre>
+
+    <div class="callout tip">
+      <span class="title">The file is self-destructing</span>
+      <p>The file is <strong>deleted on successful start</strong> — recreate it to re-trigger. The vapi plugin uses a different file (<code>voice-vapi-autostart.json</code>) and won't conflict.</p>
+    </div>
+
+    <h2 id="tuning-tips">Tuning tips <a class="anchor" href="#tuning-tips" aria-label="Anchor link">#</a></h2>
+
+    <ul>
+      <li><strong>Lower latency</strong> — keep <code>IDLE_PROMPT_SECONDS=0</code> if you don't want the prompt; auto-leave is faster.</li>
+      <li><strong>Lower cost</strong> — set <code>GEMINI_LIVE_MODEL_FALLBACKS</code> to cheaper fallbacks like <code>models/gemini-2.0-flash-live-001</code>.</li>
+      <li><strong>More reliable hangup</strong> — extend <code>LEAVE_PHRASES</code> to include natural disconnects: <code>goodbye,done,that's all,thanks bye</code>.</li>
+      <li><strong>Multiple bots</strong> — bind each gateway instance to a different <code>DISCORD_VOICE_LIVE_PORT</code> (e.g. 18943, 18953, 18963) and run them under separate Hermes profiles (<code>~/.hermes-bob/</code>, etc.).</li>
+    </ul>
+
+    <nav class="docnav" aria-label="Doc navigation">
+      <a class="prev" href="architecture.html">
+        <span class="label">← Previous</span>
+        <span class="title">Architecture</span>
+      </a>
+      <a class="next" href="known-bugs.html">
+        <span class="label">Next →</span>
+        <span class="title">Known bugs &amp; quirks</span>
+      </a>
+    </nav>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+
+</body>
+</html>

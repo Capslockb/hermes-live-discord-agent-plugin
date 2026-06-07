@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="Version-by-version history of the Hermes Live Discord Agent Plugin — features, fixes, tests, configuration changes, and known regressions.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> <a href="index.html">Hermes Live</a></div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>Versions</h2>
+    <ul>
+      <li><a href="#v0-3-0">0.3.0 — 2026-06-07</a></li>
+      <li><a href="#v0-2-7">0.2.7 — 2026-06-05</a></li>
+      <li><a href="#v0-2-6">0.2.6 — 2026-06-05</a></li>
+      <li><a href="#v0-2-5">0.2.5 — 2026-06-05</a></li>
+      <li><a href="#v0-2-4">0.2.4 — 2026-06-05</a></li>
+      <li><a href="#v0-2-3">0.2.3 — 2026-06-05</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <div class="page-header">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="architecture.html">Docs</a><span class="sep">/</span> Changelog</div>
+      <span class="eyebrow">Documentation</span>
+      <h1>Changelog</h1>
+      <p class="dek">Release history of <code>hermes-live-discord-agent-plugin</code>. Newest first.</p>
+    </div>
+
+    <article class="release" id="v0-3-0" data-version="0.3.0">
+      <span class="date">2026-06-07</span>
+      <h3>Brand + public release <a class="anchor" href="#v0-3-0" aria-label="Anchor link">#</a></h3>
+      <ul>
+        <li><strong>Renamed</strong> to <strong>Hermes Live Discord Agent Plugin</strong> (<code>hermes-live-discord-agent-plugin</code>). Internal plugin directory <code>discord-voice</code> kept untouched to avoid refactoring ~1.5k lines of cross-references.</li>
+        <li><strong>Public release</strong> — repo is now public.</li>
+        <li><strong>Promo site</strong> at <code>docs/index.html</code>, auto-deployed to GitHub Pages via <code>.github/workflows/pages.yml</code>. Live at <a href="https://capslockb.github.io/hermes-live-discord-agent-plugin/" target="_blank" rel="noopener">capslockb.github.io/hermes-live-discord-agent-plugin/</a>.</li>
+        <li>Installer banner + status strings updated to the new public name; <code>REPO_NAME</code> constant and <code>.env</code> keys unchanged so existing installs keep working.</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-2-7" data-version="0.2.7">
+      <span class="date">2026-06-05</span>
+      <h3>Video awareness + new-user onboarding <a class="anchor" href="#v0-2-7" aria-label="Anchor link">#</a></h3>
+      <h4>Features</h4>
+      <ul>
+        <li><strong>Video awareness messaging (criterion #31)</strong> — when the user starts screen sharing or turns on their camera, the bridge now tells Gemini explicitly that the user can share a frame via the <code>/frame</code> command (the <code>voice_live_frame</code> tool + <code>/frame</code> HTTP endpoint) or push frames automatically via <code>video-frame-feeder.py</code>. Until they do, Gemini just knows the video activity is happening, not what's on screen — and can ask the user to describe verbally. Discord bots can't receive video streams natively; this is the practical workaround.</li>
+        <li><strong>New-user onboarding Q&amp;A (criterion #32)</strong> — when a brand-new user first runs <code>/voice-live</code>, the plugin detects <code>needs_onboarding()=True</code> and appends a one-time system reminder telling Gemini to walk the user through 6 questions (name, timezone, work, interests, communication style, pet peeves). The user answers in voice; the agent calls <code>local_user_onboarding_answer</code> for each; answers are persisted to <code>~/.hermes/voice-users/&lt;id&gt;.yaml</code> and mirrored to the top-level profile fields. New module state in <code>user_profiles.py</code> (<code>ONBOARDING_QUESTIONS</code>, <code>UserProfile.needs_onboarding()</code>, <code>mark_onboarding_complete()</code>) and two new tools in <code>bridge.py</code> (<code>local_user_onboarding_get_questions</code>, <code>local_user_onboarding_answer</code>). Honours criterion #28 (mirroring speech/style) by capturing <code>communication_style</code> and <code>pet_peeves</code> during onboarding.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>New <code>scripts/regression_test_criteria_31_32.py</code> — 43 checks across 5 sets covering <code>ONBOARDING_QUESTIONS</code> shape, <code>mark_onboarding_complete</code> round-trip, <code>needs_onboarding()</code> state transitions, <code>UserProfile</code> field coverage, and #31 video awareness message content. All 43 pass.</li>
+        <li><strong>Total regression coverage: 178/180 across 5 test files.</strong> The 2 failures in <code>regression_test_voice_loop.py</code> are pre-existing test-script mock-fidelity issues, not code regressions.</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-2-6" data-version="0.2.6">
+      <span class="date">2026-06-05</span>
+      <h3>Remove <code>mediaResolution</code> from Live API setup <a class="anchor" href="#v0-2-6" aria-label="Anchor link">#</a></h3>
+      <h4>Fixes</h4>
+      <ul>
+        <li><strong>Bridge loop / "Bridge failed to start"</strong> (regression of #14) — the Gemini Live API rejects the speculative <code>mediaResolution</code> field with <code>Unknown name "mediaResolution" at 'setup': Cannot find field.</code> (WebSocket 1007) on the current model lineup (3.1-flash-live-preview and 2.5-flash-native-audio-preview-*). The field exists in the docs for "native audio" models but is NOT accepted on these specific model names. Removing it entirely restores the v0.1.0 setup shape and the bridge connects. Frame-size cost is still controlled at the bridge level (1 fps cap + 512 KB max, audio-gated, 350ms SFX cap) — the <code>mediaResolution</code> optimization was speculative and not load-bearing.</li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-2-5" data-version="0.2.5">
+      <span class="date">2026-06-05</span>
+      <h3>GitHub repo tracker tools <a class="anchor" href="#v0-2-5" aria-label="Anchor link">#</a></h3>
+      <h4>Features</h4>
+      <ul>
+        <li><strong>GitHub repo tracker tools (criterion #22)</strong> — 6 new voice tools for the live agent to manage GitHub on the user's behalf. Wraps the existing <code>gh</code> CLI which is already authenticated as Capslockb.
+          <ul>
+            <li><code>local_github_repo_list</code> — list the user's GitHub repos (read-only)</li>
+            <li><code>local_github_issues</code> — list issues for a specific repo</li>
+            <li><code>local_github_prs</code> — list pull requests for a specific repo</li>
+            <li><code>local_github_issue_create</code> — create a new issue (write — use sparingly)</li>
+            <li><code>local_github_note</code> — append a free-form note to <code>~/.hermes/voice-users/voice-session-notes.jsonl</code> so the next Hermes turn or future voice session can pick it up</li>
+            <li><code>local_github_notes_read</code> — read back persisted notes (most recent first)</li>
+          </ul>
+        </li>
+      </ul>
+    </article>
+
+    <article class="release" id="v0-2-4" data-version="0.2.4">
+      <span class="date">2026-06-05</span>
+      <h3>Webhooks, email fixes, voice to Aoede <a class="anchor" href="#v0-2-4" aria-label="Anchor link">#</a></h3>
+      <h4>Features</h4>
+      <ul>
+        <li><strong>Webhook dispatcher (criterion #17)</strong> — per-event-class Discord webhook delivery. New module <code>webhook_dispatcher.py</code> with a background thread, per-class throttling, Discord embed formatting, and <code>allowed_mentions: {parse: []}</code> to disable <code>@everyone</code> pings. Event classes: <code>voice.transcript</code>, <code>opencode.status</code>, <code>opencode.transcript</code>, <code>email.sent</code>, <code>bridge.status</code>, <code>tool.called</code>. Each class has its own env var (<code>DISCORD_VOICE_LIVE_WEBHOOK_&lt;CLASS&gt;=url[,url2,...]</code>). Wire-up points emit on bridge start/stop, every transcript line, every tool call, opencode lifecycle events (start/progress/milestone/finished/stopped), and email sends.</li>
+        <li><strong>Email address auto-correction + send fix (criterion #18)</strong> — new <code>_autocorrect_email_address()</code> helper handles common STT errors when users speak addresses in voice (<code>"at"</code> → <code>@</code>, <code>"dot"</code> → <code>.</code>, case-insensitive, whitespace/double-space cleanup, lowercase). <code>local_email_send</code> now applies the correction and surfaces the change notes in the tool result so the agent can confirm with the user. Bails and returns the original if the result still doesn't look like an email, so the agent can ask for character-by-character spelling.</li>
+        <li><strong>Email reminder poller (criterion #19)</strong> — new background <code>asyncio</code> task that runs while the bridge is up. Polls the Gmail inbox via <code>google_api.py</code> every <code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS</code> (default 300s = 5 min) and voice-reminds the user about important non-spam emails. Filter <code>_should_remind_email()</code> rejects automated senders (noreply, no-reply, GitHub/GitLab/Stripe/PayPal/etc. domains), newsletter/receipt/invoice/Pull-Request keywords, and GitHub-style <code>[repo] PR #123:</code> patterns. Throttled to <code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR</code> (3 by default) to avoid nagging. Seen-IDs persisted to <code>~/.hermes/voice-users/email-reminder-seen.json</code> so restarts don't re-nag on already-seen emails.</li>
+        <li><strong>Voice to Aoede (criterion #20)</strong> — already the default (<code>GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Aoede")</code>). No code change needed.</li>
+      </ul>
+      <h4>Fixes</h4>
+      <ul>
+        <li><strong>Email compose/send broken</strong> (#18) — was a missing auto-correction path; the spoken email address was passed verbatim to <code>google_api.py</code> which would fail on STT artifacts. The new <code>_autocorrect_email_address()</code> runs before send.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>New <code>scripts/regression_test_criteria_17_18_19.py</code> — 50 checks across 3 sets covering webhook dispatcher routing/throttling/embed format, <code>_autocorrect_email_address</code> common cases, <code>_should_remind_email</code> spam filtering. All 50 pass.</li>
+      </ul>
+      <h4>Configuration additions</h4>
+<pre><code>DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_EMAIL=...
+DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED=...
+DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS=2
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_ENABLED=true
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS=300
+DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3</code></pre>
+    </article>
+
+    <article class="release" id="v0-2-3" data-version="0.2.3">
+      <span class="date">2026-06-05</span>
+      <h3>Real keyboard SFX + OpenCode progress watcher <a class="anchor" href="#v0-2-3" aria-label="Anchor link">#</a></h3>
+      <h4>Fixes</h4>
+      <ul>
+        <li><strong>Keyboard typing SFX</strong> — replaced the thin 60ms Mixkit single-click SFX with a real 180ms mechanical keyboard click (sourced from YouTube, "Keyboard Single Strokes SOUND Effect" by SennaFoxy / VirtualZero). Downmixed to mono, resampled to 24 kHz, band-passed 100 Hz - 8 kHz, EBU-normalized to -18 LUFS. Now reads as a natural staccato of real mechanical clicks when looped, not a click track.</li>
+      </ul>
+      <h4>Features</h4>
+      <ul>
+        <li><strong>OpenCode progress watcher (criterion #16)</strong> — long-running opencode tasks now keep the user informed via voice updates. A background asyncio task on the gateway event loop polls the opencode log every 5s, throttles voice updates to at most one per 30s, and emits an immediate update on milestone events (error, exception, test pass/fail, compile success/fail, build success/fail, done, complete, commit, push, ✓/✗). Sends a final summary when the tmux window dies. Respects "user is currently speaking" gate — drops updates rather than barging in. Per-session weak-ref registry lets the watcher call back into the bridge's send_text() from a different code path. New env vars: <code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER</code> (master toggle), <code>..._POLL_SECONDS</code>, <code>..._MIN_VOICE_GAP_SECONDS</code>, <code>..._INITIAL_DELAY_SECONDS</code>.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>New <code>scripts/regression_test_opencode_watcher.py</code> — 13 checks across 6 sets covering the watcher end-to-end. All 13 pass.</li>
+      </ul>
+    </article>
+
+    <nav class="docnav" aria-label="Doc navigation">
+      <a class="prev" href="known-bugs.html">
+        <span class="label">← Previous</span>
+        <span class="title">Known bugs &amp; quirks</span>
+      </a>
+      <a class="next" href="index.html">
+        <span class="label">Next →</span>
+        <span class="title">Project home</span>
+      </a>
+    </nav>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+
+</body>
+</html>
