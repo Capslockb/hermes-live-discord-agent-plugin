@@ -1,5 +1,64 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.3.0 — 2026-06-07
+
+### Features
+
+- **Multi-CLI delegation with fallback chain (criterion #5)** — `delegation_agent.py` ships a `FALLBACK_CHAIN` dict mapping every platform to a list of healthy neighbors. `execute_with_fallback(prompt, platform, ...)` wraps every `local_delegate_execute` call: pre-checks the platform health registry, spawns, polls the tmux log for break-signals (HTTP 401/403/429/5xx, rate-limit, command not found, auth fail, connection refused, ollama, quota, Python Traceback), and on detection marks the platform broken + auto-respawns on the first healthy neighbor. The wrapper preserves `requested_platform`, `active_platform`, `fallback_from`, and `fallback_reason` in the merged result so the agent can narrate exactly what happened. New `local_delegate_health` tool with `action=list|clear|mark`. Health state persists to `~/.hermes/voice-platform-health.json` with a 600s default TTL.
+
+- **Proactive notification breakout (criterion #6)** — new `notification.py` module (~17KB) with a `deliver()` dispatcher supporting five modes: `voice` (push to Gemini for next-turn speak), `dm` (Discord DM via bot adapter), `channel` (text-channel post), `webhook` (Discord webhook event), `all` (fire all four), and `auto` (try voice → dm → channel → webhook, return first success). New `local_notify` tool (immediate) and `local_notify_schedule` tool (deferred, JSONL-persisted scheduler with list/cancel). New `POST /notify` sidecar endpoint on 18943 for non-Gemini callers (cron jobs, subagents). Opencode watcher extended: when a long-running session finishes while B is AFK, fires `deliver(mode="auto")` automatically. New `agent.notify` and `delegation.fallback` event classes added to the webhook dispatcher with their own env-var names. `emit_agent_notify()` and `emit_fallback_event()` helpers.
+
+- **Proactive email brief (criterion #7)** — new `email_brief.py` (~16KB) with two backends (google_api.py preferred, himalaya CLI fallback). Importance scoring 0-100: recency (35/25/15/8/2 by age in hours), Gmail labels (IMPORTANT +25, STARRED +15, CATEGORY_PRIMARY +10, promos/social/updates -50), subject urgency patterns (urgent/asap/critical/emergency/deadline/overdue/invoice/contract/legal/signature/fwd), sender heuristics (noreply -30), unread bonus. Three buckets: Important (≥55) / FYI (20-54) / Auto (<20 or auto-category). New `local_email_brief` tool with `limit`, `force`, `notify` (default true), `backend` params. Background `voice-email-brief` scheduler thread, default 30-min interval, only briefs when there's new mail. De-dup state at `~/.hermes/voice-users/email-brief-state.json` (capped at 500 IDs) — separate from the per-email reminder loop's seen set.
+
+- **Slot-based UI sfx library (criterion #8)** — new `sfx.py` module (~9KB) with four slots: `tool_init` (chime, fires once on first tool call of a session), `error` (4x chain of a sharp beep, 2.8s total, fires on uncaught tool exceptions), `notification` (soft chime, fires on local_notify success), `transition` (pop/whoosh, fires on session start). Source clips cut from a YouTube "UI Sound Effects for App & Game Development" playlist using `ffmpeg silencedetect=noise=-30dB:d=0.2` to anchor cuts at chime attacks. All clips normalized to 24kHz mono PCM16 at `~/.hermes/voice-users/sfx/`. Per-slot env-var override (`DISCORD_VOICE_LIVE_SFX_<SLOT>` for path, `…_<SLOT>_VOLUME` for gain, `…_SFX_ENABLED` to disable). Lazy PCM cache with volume scaling. Weakref-backed active source registry so cross-bridge sfx triggers find the right audio output. New `local_sfx_test` tool with `action=play|list`.
+
+- **Onboarding de-interviewed (criterion #12)** — `user_profiles.py:ONBOARDING_QUESTIONS` rewritten to feel less like a form, more like a conversation. `delegation_agent.py` flow docstring softened.
+
+- **Video self-trigger on enable/disable (criterion #4)** — `__init__.py:_send_video_awareness` made async, accepts `event_type` param, no longer nudges the user to type `/frame`. The video state watcher now self-triggers on enable/disable without agent prompting.
+
+- **TTS voice upgrade (criterion #3)** — `DISCORD_VOICE_LIVE_VOICE` switched from `en-US-AriaNeural` to `en-US-JennyNeural` (younger, higher-pitched female). Set via `hermes config set tts.edge.voice en-US-JennyNeural`.
+
+- **Boredom switch / NAG MODE (criterion #2)** — `bridge.py` BOREDOM SWITCH section in BASE_SYSTEM_PROMPT expanded with a 3-level escalation ladder: passive-aggressive → mock ultimatums → joke-threaten to hang up. Plus pranks, dares, and nagging mode. Drops instantly if B says "quiet" or "stop".
+
+- **Ping-pong rhythm (criterion #1)** — new PINGPONG RHYTHM section in BASE_SYSTEM_PROMPT: split into question rounds (probing, short) and development rounds (building, decisive). Catches and breaks the monologue habit.
+
+- **FORMAT & ANSWER SHAPE rule (criterion #10)** — new section in BASE_SYSTEM_PROMPT: answer first, then bullets or steps if useful. Emotion is seasoning, never the meal. Fixes "just laughing and not formatting answers" regression.
+
+- **Vocal expression cap (criterion #11)** — VOCAL EXPRESSION section in BASE_SYSTEM_PROMPT rewritten: at most one inline speech tag per reply unless explicitly asked. Prevents `<laugh> <laugh> <laugh>` spam.
+
+- **Typing sfx regeneration (criterion #13)** — `~/.hermes/voice-live-typing.wav` rebuilt to a tighter 0.14s 24kHz mono PCM16 (6,764 bytes). Original was a 0.35s click that read more like a clack than a keystroke.
+
+- **Installer (`install.sh`)** — new bash installer with `--from-local` / `--uninstall` / `--no-prompt` modes. Idempotent, compile-checks every `.py`, creates SFX directory, prompts for required env vars (`DISCORD_BOT_TOKEN`, `GEMINI_API_KEY`, `DISCORD_VOICE_LIVE_USER_ID`) and writes to `~/.hermes/.env` with 0600 perms.
+
+- **Per-feature docs (`docs/`)** — 10 markdown files covering architecture, personality, fallback chain, notification, email brief, sfx library, webhooks, env vars, troubleshooting, and the docs index. Linked from the README.
+
+### Tests
+
+- 5/5 smoke tests on fallback chain (pre-condition, mark-broken, suggest_platform filters, execute_with_fallback routes, clear empties registry)
+- 8/8 smoke tests on notification module (all 5 deliver modes return clean structured responses; schedule → list → cancel round-trip; sidecar returns `unavailable` cleanly; scheduler starts/stops)
+- 5/5 smoke tests on email_brief module (scoring buckets work, brief renders 3-bucket structure, state de-dup True→False round-trip, graceful empty result, scheduler thread lifecycle)
+- 5/5 smoke tests on sfx module (list_slots shows all 4, load_slot_pcm returns real bytes, play_sfx feeds into fake source, pick_active_source returns registered ref, explicit source param works)
+- 1 critical metadata bug caught and fixed in pre-emptive fallback branch (preserve `fallback_from=platform` and `requested_platform=platform` in inner call result, then merge)
+
+### Configuration additions
+
+```
+DISCORD_VOICE_LIVE_VOICE=en-US-JennyNeural
+DISCORD_VOICE_LIVE_SFX_ENABLED=true
+DISCORD_VOICE_LIVE_SFX_DIR=~/.hermes/voice-users/sfx/
+DISCORD_VOICE_LIVE_SFX_TOOL_INIT=...
+DISCORD_VOICE_LIVE_SFX_ERROR=...
+DISCORD_VOICE_LIVE_SFX_NOTIFICATION=...
+DISCORD_VOICE_LIVE_SFX_TRANSITION=...
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_ENABLED=true
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS=1800
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_LIMIT=8
+DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=...
+DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK=...
+```
+
+---
+
 ## 0.2.8 — 2026-06-07
 
 ### Features

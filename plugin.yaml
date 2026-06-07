@@ -1,5 +1,5 @@
 name: discord-voice
-version: 0.2.8
+version: 0.3.0
 kind: standalone
 platforms: [linux]
 description: High-performance Discord Voice bridge via Gemini Multimodal Live API
@@ -24,4 +24,7 @@ optional_env:
     password: false
   - name: DISCORD_VOICE_LIVE_PORT
     prompt: "Local HTTP control port (default: 18943)"
+    password: false
+  - name: DISCORD_VOICE_LIVE_VOICE
+    prompt: "TTS voice (default: en-US-JennyNeural — high-pitched female)"
     password: false

@@ -69,32 +69,32 @@ KNOWN_TOOL_NAMES: List[str] = []  # populated by register_known_tool()
 ONBOARDING_QUESTIONS: List[Dict[str, str]] = [
     {
         "id": "name",
-        "question": "Hey! I'm the live voice agent. Before we start, what name should I call you?",
+        "question": "What should I call you?",
         "field": "display_name",
     },
     {
         "id": "timezone",
-        "question": "What timezone are you in? (so I don't suggest 3 AM meetings)",
+        "question": "Timezone? (so I don't suggest 3 AM meetings)",
         "field": "timezone",
     },
     {
         "id": "work",
-        "question": "In one sentence, what do you do? (I'm curious)",
+        "question": "What do you work on, in one sentence?",
         "field": "work",
     },
     {
         "id": "interests",
-        "question": "What topics or projects are you into right now? (comma-separated, I'll remember)",
+        "question": "What are you into right now? (comma-separated)",
         "field": "interests",
     },
     {
         "id": "style",
-        "question": "How do you want me to talk to you — short and direct, or more conversational with context?",
+        "question": "Talk to you short/direct, or more conversational?",
         "field": "communication_style",
     },
     {
         "id": "pet_peeves",
-        "question": "Anything I should NEVER do or say? (e.g. no emojis, don't call me sir, etc.)",
+        "question": "Anything you never want me to do or say?",
         "field": "pet_peeves",
     },
 ]
@@ -167,7 +167,7 @@ def _default_profile_yaml(discord_id: str) -> Dict[str, Any]:
         "discord_id": discord_id,
         "display_name": None,            # filled in later via Discord API if available
         "honcho_peer_name": f"discord-{discord_id}",   # isolated per-user
-        "voice_name": None,              # inherits global default
+        "voice_name": os.getenv("DISCORD_VOICE_LIVE_VOICE", "Kore"),  # per-user voice override; defaults to the live bridge voice
         "enabled_tools": list(DEFAULT_ENABLED_TOOL_PREFIXES),  # safe starter set
         "disabled_tools": list(NEVER_AUTO_ENABLED),             # never-on floor
         "system_prompt_overrides": "",   # appended to BASE_SYSTEM_PROMPT

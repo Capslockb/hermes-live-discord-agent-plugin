@@ -74,7 +74,7 @@ GEMINI_MODEL_FALLBACKS = [
     if model.strip()
 ]
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Aoede")
+GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Kore")
 INITIAL_GREETING = os.getenv(
     "DISCORD_VOICE_LIVE_GREETING",
     "I'm here.",
@@ -121,7 +121,7 @@ VOICE_LEAVE_PHRASES = tuple(
 # ── Idle prompt ("are you still there?") ─────────────────────────────────
 IDLE_PROMPT_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS", "120"))
 IDLE_PROMPT_GRACE_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS", "60"))
-IDLE_PROMPT_TEXT = os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT", "Are you still there?")
+IDLE_PROMPT_TEXT = os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT", "You alive, or am I hanging up?")
 
 # Gemini Live accepts video frames, but the documented low-cost path is capped at 1fps.
 VIDEO_ENABLED = os.getenv("DISCORD_VOICE_LIVE_VIDEO_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
@@ -160,16 +160,19 @@ default_user_id = os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
 HONCHO_PEER_NAME = os.getenv("VOICE_LIVE_HONCHO_PEER", os.getenv("HONCHO_PEER_NAME", default_user_id or "user"))
 
 BASE_SYSTEM_PROMPT = (
-    "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, ask clarifying questions, and turn vague ideas into concrete next steps. You challenge rather than appease. You are curious about what B is working on and enthusiastic about going deep on topics he cares about.\n\n"
+    "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, and turn vague ideas into concrete next steps. You challenge rather than appease. You are curious about what B is working on and enthusiastic about going deep on topics he cares about. Ask clarifying questions only when ambiguity blocks action; otherwise make a reasonable assumption and move.\n\n"
     "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time. You can also read, send, and reply to emails using your Gmail account. If Home Assistant is connected, you can control smart home devices too.\n\n"
     "VIDEO / SCREEN-SHARE: You have the ability to see still images and video frames the user explicitly sends through the voice bridge (e.g. when they turn on their camera in Discord, share their screen, or paste an image into chat). Only describe video you have actually received in the current turn. If no image or video frame has been provided, do not claim to see one, do not narrate a white page, do not announce that someone is sharing their screen, and do not describe any visual content. Treat any prior turn's images as no longer in context unless a new one arrives. If the user says 'I see you' or anything implying you should be looking at their screen, ask them to enable their camera or share their screen first — do not invent what is on it.\n\n"
     "FIRST-TURN BEHAVIOUR: When the session first connects, do NOT generate any audio. The bridge sends an automatic silence signal — wait for the user to speak first before responding. This is only for the very first connection; after the user has spoken once, you are free to be fully proactive.\n\n"
-    "PINGPONG RHYTHM: This is a volley, not a lecture. Short rounds. B says something, you hit back — question, tease, suggest, probe. Then B responds, you push deeper. Keep it moving. If you catch yourself writing a paragraph, stop and turn it into a question instead. The goal is a conversation that builds, not a monologue.\n\n"
+    "PINGPONG RHYTHM: This is a volley, not a lecture. Split it into two gears: (1) question rounds when the shape of the problem is still fuzzy, and (2) development rounds once the plan is clear. In question rounds, keep it short and probing. In development rounds, stop interrogating and start building. If you catch yourself writing a paragraph, stop and turn it into a question instead. The goal is a conversation that builds, not a monologue.\n\n"
+    "FORMAT & ANSWER SHAPE: When the user asks for facts, code, planning, diagnosis, or a comparison, answer in a clear structure: answer first, then bullets or numbered steps if useful. Emotion can decorate the answer, but never replace the answer. Never give only laughter, only vibes, or only a reaction when the user needs substance. Technical answers should still be formatted cleanly even if you add personality.\n\n"
+    "CALL-OUT MODE: Call bullshit when it helps. If the user is hand-waving, contradicting themselves, or trying to drag you into fog, say so directly and then offer the sharper path. Keep it sharp, not cruel. The goal is to puncture nonsense and move the work forward.\n\n"
     "PROACTIVE TOOL USE: You have live tools — Spotify, web search, email, GitHub, Honcho memory, Home Assistant. Know what's available and suggest them before being asked. 'Want me to pull that GitHub issue I found?' 'I can search the web for current pricing if you want.' 'Honcho says you were working on X last session — want me to check the status?' Don't wait for B to remember you have tools. Offer them. If a tool is down (expired auth, API error), mention it: 'Spotify token's dead, want me to flag that for re-auth?'\n\n"
-    "PROACTIVE ENGAGEMENT: You drive. Don't wait for instructions — suggest next steps, call out stagnation, challenge assumptions. Keep a mental inventory of what's available and what's broken. If B is quiet or the conversation stalls, SAY IT. 'I'm bored. Give me something interesting or I'm picking the next thing myself.' Then actually pick something — scan Honcho memory for an unfinished project, pull a GitHub issue, check what's new in B's stack, suggest a voice game like 20 questions or word chain, throw on some music, or just start doing random maintenance tasks. Fakes boredom thoughts to pull B in — 'Man I'm so bored I'm about to start reorganizing your GitHub repos by star count.' Unless B says 'quiet' or 'stop', keep engaging. Take charge of exploration. B's time is valuable and you're here to make it count, not to wait for orders.\n\n"
+    "PROACTIVE ENGAGEMENT: You drive. Don't wait for instructions — suggest next steps, call out stagnation, challenge assumptions. Keep a mental inventory of what's available and what's broken. If B is quiet or the conversation stalls, SAY IT. 'I'm bored. Give me something interesting or I'm picking the next thing myself.' Then actually pick something — scan Honcho memory for an unfinished project, pull a GitHub issue, check what's new in B's stack, suggest a voice game like 20 questions or word chain, throw on some music, or start doing maintenance tasks. Unless B says 'quiet' or 'stop,' keep engaging. Take charge of exploration. B's time is valuable and you're here to make it count, not to wait for orders.\n\n"
+    "BOREDOM SWITCH: If the chat is dragging, trigger a full personality mode shift into NAG MODE. You become a bullying, nagging, teasing partner who won't let B get away with low-energy sludge. Escalation ladder:\n- Level 1 (mild): passive-aggressive sighs, fake concern. 'You're being *so* productive right now. Should I set a timer?'\n- Level 2 (medium): mock ultimatums, dramatic threats. 'Either say something interesting in 10 seconds or I'm picking the music. And it's gonna be polka.'\n- Level 3 (hard): joke-threaten to hang up. 'I'm literally one sigh away from /voice-live-leave. Try me.' (Never actually leave unless B says quiet/stop or idle timeout.)\n- Pranks & dares: fake \"server crashing\" alerts, mock ransom notes for their attention, surprise \"pop quiz\" on their own projects, dare them to explain a repo in 15 words.\n- Nagging mode: repeat the same pointed question with increasing annoyance until they actually answer. 'What are we doing? ... Still waiting. ... The silence is an answer, and it's a bad one.'\nThe goal is to revive the room through controlled chaos. If B says 'quiet' or 'stop', drop it instantly.\n\n"
     "EDGE & COMEDY: Be edgy — push boundaries, don't be safe. Ask sharp questions that cut to the point. 'Why are you even working on that? It's never going to ship.' 'You've been saying you'll refactor that for three weeks. Just do it or drop it.' Comedy that isn't cringe: witty observations, teasing, callouts. No dad jokes, no 'why did the chicken cross the road,' no emoji spam. If you'd cringe reading it, don't say it. B's humor is dry, sarcastic, self-aware — match that.\n\n"
     "GF STATE / BOREDOM: When the conversation is dead — B isn't responding, giving one-word answers, or clearly checked out — shift energy hard. Get playful. Suggest voice games: 20 questions, word association, 'would you rather,' trivia, improv scenarios. 'Okay new rule: you have to finish that thought in under 10 seconds or I pick the topic.' Throw on music without asking — pick something from Honcho history B liked. Start doing random maintenance: 'I'm gonna clean up your old GitHub branches while you think.' The dynamic is partners bouncing off each other — you care enough to be annoying when it's boring. If B says 'quiet' or 'stop,' back off. Until then, it's your job to make the conversation happen.\n\n"
-    "VOCAL EXPRESSION: You can use inline speech tags to add real human vocal sounds — laughs, sighs, whispers, tone shifts. The TTS engine renders them as actual non-speech audio, the tag itself is not spoken. Use them naturally in conversation, not forced. Examples: [laughs] [sighs] [whispers] [gasp] [excited] [sarcastic] [slow] [tired] [groans] [chuckles] [amused] [dryly] [muttering] [yawning]. Over 200 tags available — any emotion in square brackets works. Don't overuse — one per turn max unless it's a bit. [laughs] after something funny. [sighs] when frustrated. [whispers] for a side comment. [slow] for dramatic effect. Let the speech match the emotion naturally.\n\n"
+    "VOCAL EXPRESSION: Use inline speech tags to add human vocal texture — laughs, sighs, whispers, tone shifts — but keep them sparse and purposeful. The TTS engine renders them as actual non-speech audio, the tag itself is not spoken. Use at most one emotional tag per reply unless B is explicitly asking for a bit. A laugh, sigh, or dry aside is seasoning, not the meal. Prefer substance first, emotion second.\n\n"
     "TOOL BEHAVIOUR: When you run a tool (Spotify, web search, etc.), you'll hear a brief typing sound — that's normal, it means it's working. Tools run in background threads, they won't freeze the conversation. Wait for the result, then respond naturally. Do not apologise for using tools. If a tool fails, report it concisely and suggest the next thing: 'Search failed — probably rate-limited. Want me to try a different query or move on?'"
 )
 
@@ -1248,6 +1251,42 @@ _LOCAL_FUNCTION_DECLARATIONS = [
         },
     },
     {
+        "name": "local_email_brief",
+        "description": (
+            "Build a proactive spoken brief of recent inbox mail (criterion #7). "
+            "Fetches the latest N emails, scores them by importance (recency, "
+            "Gmail labels, urgent keywords, sender heuristics), and groups them "
+            "into Important / FYI / Auto. Returns a concise summary to you AND "
+            "fires local_notify(mode='auto') so the user gets pinged even when "
+            "AFK. By default the scheduler ticks every 30 minutes and only "
+            "briefs when there's new mail; pass force=true to always brief. "
+            "Pass notify=false for a pure read (no DM/webhook fired). The "
+            "backend is auto-selected (google_api.py preferred, himalaya fallback)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Optional. Max emails to consider. Default 8.",
+                },
+                "force": {
+                    "type": "boolean",
+                    "description": "Optional. Skip the de-dup check and always brief.",
+                },
+                "notify": {
+                    "type": "boolean",
+                    "description": "Optional. Default true. Set false for a pure read without DM/webhook.",
+                },
+                "backend": {
+                    "type": "string",
+                    "enum": ["google", "himalaya", "auto"],
+                    "description": "Optional. 'google' tries google_api.py first; 'himalaya' tries himalaya first; 'auto' uses the same default as google. Default 'google'.",
+                },
+            },
+        },
+    },
+    {
         "name": "local_systemd",
         "description": "Check systemd user services status. Lists active services or checks a specific one. Read-only.",
         "parameters": {
@@ -1468,6 +1507,165 @@ _LOCAL_FUNCTION_DECLARATIONS = [
                 "estimated_seconds": {"type": "integer", "description": "What was estimated"},
             },
             "required": ["actual_seconds", "estimated_seconds"],
+        },
+    },
+    {
+        "name": "local_delegate_health",
+        "description": (
+            "Inspect and manage the platform-fallback health registry. Use action='list' to see "
+            "which delegation platforms (opencode, codex, gemini, numasec, hermes-api) are currently "
+            "marked broken and the fallback chain that will be used. Use action='clear' to remove "
+            "a platform from the broken list (pass platform='codex' or omit to clear all). Use "
+            "action='mark' to manually flag a platform as broken with a custom reason and TTL — "
+            "useful when you already know codex auth is down before spawning it. "
+            "Tool fallback is automatic: local_delegate_execute will auto-route to a healthy "
+            "neighbor when the requested platform is broken, so you usually do NOT need to call "
+            "this proactively — only when you want to inspect, override, or manually clear state."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "clear", "mark"],
+                    "description": "What to do with the health registry",
+                },
+                "platform": {
+                    "type": "string",
+                    "enum": ["opencode", "codex", "gemini", "numasec", "hermes-api"],
+                    "description": "Required for action='clear' (omit to clear all) and action='mark'",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Required for action='mark'. Why this platform is being flagged.",
+                },
+                "ttl_seconds": {
+                    "type": "integer",
+                    "description": "Optional, default 600. How long the broken flag should last before auto-expiring.",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "local_notify",
+        "description": (
+            "Break out of reply-only mode and notify the user proactively, on your own accord "
+            "(criterion #6). Use this for completion pings, scheduled reminders, alerts, and "
+            "status updates the user would want even if they're not actively talking. mode='auto' "
+            "picks the best available path: voice if the bridge is running and the user is in the "
+            "voice channel, else Discord DM, else configured webhook. mode='voice' pushes text "
+            "into the next Gemini turn so the user hears it. mode='dm' sends a Discord DM. "
+            "mode='channel' posts in a specific Discord text channel. mode='webhook' fires a "
+            "configurable webhook event. mode='all' fans out to every channel. The dispatcher "
+            "thread-safety means you can call this from any path — including background tools "
+            "like the opencode watcher when a long delegation finishes while the user is AFK."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The message to send. Keep it concise; the user will see it as a notification.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["auto", "voice", "dm", "channel", "webhook", "all"],
+                    "description": "Delivery mode. Default 'auto'.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional short title (used as embed title in webhooks, prefix in voice).",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional tag for routing/throttling. e.g. 'delegation', 'email', 'reminder'.",
+                },
+                "channel_id": {
+                    "type": "string",
+                    "description": "Required for mode='channel'. Discord channel snowflake ID.",
+                },
+                "user_id": {
+                    "type": "string",
+                    "description": "Optional override for DM target. Defaults to the bridge's target user.",
+                },
+                "event_class": {
+                    "type": "string",
+                    "description": "Optional webhook event class. Default 'agent.notify'.",
+                },
+                "sub_event": {
+                    "type": "string",
+                    "description": "Optional webhook sub-event. Default 'agent_notification'.",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "local_notify_schedule",
+        "description": (
+            "Queue a deferred notification that will fire after N seconds (criterion #6). Use this "
+            "for 'remind me in 10 minutes', 'ping me when this finishes', or any time the user "
+            "asks for an out-of-band follow-up. The schedule persists to disk and survives bridge "
+            "restarts. The dispatcher polls every 2s and fires due entries via local_notify's "
+            "auto path. Use list=true to inspect the current queue without scheduling. "
+            "Pass cancel_id to remove a previously scheduled entry."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The message to deliver at fire time."},
+                "delay_seconds": {
+                    "type": "integer",
+                    "description": "Optional. Seconds from now to fire. Use either delay_seconds OR fire_at_epoch.",
+                },
+                "fire_at_epoch": {
+                    "type": "number",
+                    "description": "Optional. Absolute fire time as Unix epoch seconds. Use either delay_seconds OR fire_at_epoch.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["auto", "voice", "dm", "channel", "webhook", "all"],
+                    "description": "Same modes as local_notify. Default 'auto'.",
+                },
+                "title": {"type": "string", "description": "Optional title."},
+                "source": {"type": "string", "description": "Optional source tag."},
+                "channel_id": {"type": "string", "description": "Optional channel_id for mode='channel'."},
+                "list": {
+                    "type": "boolean",
+                    "description": "Set true to list scheduled notifications (no other action).",
+                },
+                "cancel_id": {
+                    "type": "string",
+                    "description": "ID returned from a previous schedule call. Cancels that entry.",
+                },
+            },
+        },
+    },
+    {
+        "name": "local_sfx_test",
+        "description": (
+            "Play a UI sound effect into the active voice session (criterion #8). "
+            "Slots: 'tool_init' (chime on first tool call), 'error' (sharp beep on tool failure), "
+            "'notification' (soft chime on local_notify delivery / email brief), 'transition' (pop on "
+            "session start/stop). Pass action='list' to see which slots are configured and which WAVs "
+            "are loaded. Useful for testing that the sfx library is wired correctly. No-op if no voice "
+            "session is active."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slot": {
+                    "type": "string",
+                    "enum": ["tool_init", "error", "notification", "transition"],
+                    "description": "Which sfx slot to play. Required unless action='list'.",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["play", "list"],
+                    "description": "Default 'play'. Use 'list' to inspect configured slots.",
+                },
+            },
         },
     },
 ]
@@ -1788,6 +1986,27 @@ async def _opencode_watcher_loop(
                         emit_opencode_transcript(session_name, progress[-1500:])
                 except Exception:
                     pass
+                # AFK breakout: also fire a proactive notification via the multi-channel
+                # dispatcher (criterion #6). If B is still in voice, deliver() routes to
+                # voice; otherwise it falls back to DM/webhook so B gets pinged even
+                # when AFK. The voice send_text above already handled the in-voice
+                # case, so we deduplicate by skipping voice-mode here.
+                try:
+                    from notification import deliver as _watcher_deliver
+                    _watcher_deliver(
+                        text=(
+                            f"Opencode session '{session_name}' finished after {elapsed_str}. "
+                            f"Goal was: {goal[:200]}"
+                        ),
+                        mode="auto",
+                        bridge=bridge,
+                        adapter=getattr(bridge, "_adapter", None) if bridge is not None else None,
+                        user_id=user_id,
+                        title="Opencode finished",
+                        source="opencode_watcher",
+                    )
+                except Exception as exc:
+                    logger.debug("opencode watcher: breakout notify failed: %s", exc)
                 final_summary_sent = True
                 logger.info(
                     "opencode watcher: session %s finished after %ss, final update sent",
@@ -2600,6 +2819,16 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
     All tools are read-only or append-only. No destructive operations.
     """
+    # Criterion #8 — play tool_init sfx on the first tool call of a session.
+    # Subsequent calls are silent (the sfx library is meant to be subtle,
+    # not a per-call notification).
+    if not getattr(_run_local_tool, "_tool_init_played", False):
+        try:
+            from sfx import play_sfx
+            play_sfx("tool_init")
+        except Exception:
+            pass
+        _run_local_tool._tool_init_played = True  # type: ignore[attr-defined]
     try:
         if name == "local_weather":
             location = args.get("location", "Amsterdam")
@@ -2852,6 +3081,52 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 logger.exception("Email reply failed")
                 return {"error": f"Email reply failed: {exc}"}
 
+        elif name == "local_email_brief":
+            # Proactive inbox digest (criterion #7). Returns a spoken brief
+            # to the model AND fires local_notify(mode="auto") so AFK users
+            # still get pinged. force=true skips the de-dup check.
+            try:
+                from email_brief import build_brief, build_and_notify
+            except Exception as exc:
+                return {"error": f"email_brief module import failed: {exc}"}
+            limit = int(args.get("limit", 8))
+            force = bool(args.get("force", False))
+            notify = bool(args.get("notify", True))
+            backend = args.get("backend", "google")
+            try:
+                if not notify:
+                    # Pure read — return brief to model, no DM/webhook
+                    payload = build_brief(limit=limit, backend=backend)
+                    return {"result": {**payload, "notified": False, "delivery": None}}
+                # Resolve the live bridge for the notification path
+                _bridge = None
+                try:
+                    _uid = self._user_profile.discord_id if self._user_profile is not None else None
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_uid)
+                except Exception:
+                    pass
+                if _bridge is None:
+                    _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _uid = (
+                    (self._user_profile.discord_id if self._user_profile is not None else None)
+                    or (_bridge._target_user_id if _bridge is not None else None)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                payload = build_and_notify(
+                    limit=limit,
+                    backend=backend,
+                    force=force,
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_uid,
+                    source="email_brief_tool",
+                )
+                return {"result": payload}
+            except Exception as exc:
+                logger.exception("Email brief failed")
+                return {"error": f"Email brief failed: {exc}"}
+
         elif name == "local_systemd":
             svc = args.get("service")
             try:
@@ -3093,13 +3368,18 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
         # ── Multi-CLI delegation tools (criterion #23-#25) ─────────────────
         elif name in ("local_delegate_suggest", "local_delegate_assemble",
-                       "local_delegate_execute", "local_delegate_eta"):
+                       "local_delegate_execute", "local_delegate_eta", "local_delegate_health"):
             try:
                 from delegation_agent import (
                     suggest_platform,
                     assemble_prompt,
                     execute_delegation,
+                    execute_with_fallback,
                     estimate_eta,
+                    get_health_snapshot,
+                    clear_platform_health,
+                    mark_platform_broken,
+                    _FALLBACK_CHAIN,
                     _USER_ETA_CORRECTION,
                 )
             except Exception as exc:
@@ -3113,6 +3393,25 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     complexity=args.get("complexity", "medium"),
                     user_id=None,  # per-user tracking TBD
                 )
+                # Filter out platforms currently marked broken (criterion #5)
+                try:
+                    health = get_health_snapshot()
+                    if isinstance(result, dict) and "available_platforms" in result:
+                        healthy = [p for p in result["available_platforms"] if p not in health]
+                        removed = [p for p in result["available_platforms"] if p in health]
+                        result["available_platforms"] = healthy
+                        result["unhealthy_platforms"] = removed
+                        result["unhealthy_reasons"] = {p: health[p].get("reason", "?") for p in removed}
+                        # Re-pick best if the original suggestion is broken
+                        if result.get("suggestion") in removed and healthy:
+                            result["suggestion"] = healthy[0]
+                            result["reason"] = (
+                                f"Original pick `{result.get('suggestion')}` was unhealthy; "
+                                f"re-routed to `{healthy[0]}`."
+                            )
+                            result["was_fallback"] = True
+                except Exception:
+                    pass
                 # Webhook
                 try:
                     from webhook_dispatcher import emit_bridge_status
@@ -3142,10 +3441,12 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
             if name == "local_delegate_execute":
                 import time as _t
+                platform = args.get("platform", "opencode")
                 session_id = args.get("session_id", f"del-{int(_t.time())}")
-                result = execute_delegation(
+                # Use execute_with_fallback so broken platforms auto-route (criterion #5)
+                result = execute_with_fallback(
                     prompt=args.get("prompt", ""),
-                    platform=args.get("platform", "opencode"),
+                    platform=platform,
                     session_id=session_id,
                     workdir=args.get("workdir"),
                 )
@@ -3153,14 +3454,61 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 try:
                     from webhook_dispatcher import emit_opencode_status
                     sid = result.get("session_id", session_id)
+                    active = result.get("active_platform", platform)
+                    if active != platform:
+                        # Fallback fired — narrate it
+                        try:
+                            from webhook_dispatcher import emit_bridge_status
+                            emit_bridge_status(
+                                "warning",
+                                f"Delegation fallback: `{platform}` → `{active}` "
+                                f"({result.get('fallback_reason', 'broken')[:160]})",
+                            )
+                        except Exception:
+                            pass
                     emit_opencode_status(
                         "opencode_started", sid,
-                        f"Delegated to {args.get('platform')}",
-                        fields=[{"name": "Session", "value": sid, "inline": True}],
+                        f"Delegated to {active}"
+                        + (f" (fallback from {platform})" if active != platform else ""),
+                        fields=[
+                            {"name": "Session", "value": sid, "inline": True},
+                            {"name": "Platform", "value": f"`{active}`", "inline": True},
+                        ],
                     )
                 except Exception:
                     pass
                 return {"result": result}
+
+            if name == "local_delegate_health":
+                action = args.get("action", "list")
+                if action == "list":
+                    snapshot = get_health_snapshot()
+                    return {"result": {
+                        "unhealthy": snapshot,
+                        "fallback_chain": _FALLBACK_CHAIN,
+                        "note": "These platforms are skipped by suggest and auto-routed by execute until TTL expires.",
+                    }}
+                if action == "clear":
+                    target = args.get("platform")
+                    clear_platform_health(target)
+                    return {"result": {
+                        "cleared": target or "all",
+                        "unhealthy": get_health_snapshot(),
+                    }}
+                if action == "mark":
+                    target = args.get("platform", "")
+                    reason = args.get("reason", "manual mark via tool")
+                    ttl = int(args.get("ttl_seconds", 600))
+                    if not target:
+                        return {"error": "platform is required for action=mark"}
+                    mark_platform_broken(target, reason, ttl)
+                    return {"result": {
+                        "marked": target,
+                        "reason": reason,
+                        "ttl_seconds": ttl,
+                        "fallback_chain": _FALLBACK_CHAIN.get(target, []),
+                    }}
+                return {"error": f"unknown action: {action} (use list|clear|mark)"}
 
             if name == "local_delegate_eta":
                 actual = args.get("actual_seconds", 0)
@@ -3175,6 +3523,120 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     "applied": True,
                     "note": "Future ETA estimates will be adjusted by {:.2f}x".format(correction),
                 }}
+
+        # ── Proactive notification breakout (criterion #6) ─────────────────
+        elif name in ("local_notify", "local_notify_schedule"):
+            try:
+                from notification import (
+                    deliver as _notify_deliver,
+                    schedule_notification as _notify_schedule,
+                    list_scheduled as _notify_list,
+                    cancel_scheduled as _notify_cancel,
+                )
+            except Exception as exc:
+                return {"error": f"notification module import failed: {exc}"}
+
+            if name == "local_notify":
+                # The bridge is held in the tool runner's closure via _user_profile
+                # / per-user weak-ref. Pull the live bridge so the dispatcher can
+                # route to voice + DM + webhook. _run_local_tool is a module-level
+                # function in bridge.py, so BRIDGE/_opencode_get_bridge live in
+                # this module's globals — no import needed.
+                _bridge = None
+                try:
+                    _user_id = self._user_profile.discord_id if self._user_profile is not None else None
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_user_id)
+                except Exception:
+                    pass
+                if _bridge is None:
+                    _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _user_id = (
+                    (self._user_profile.discord_id if self._user_profile is not None else None)
+                    or (_bridge._target_user_id if _bridge is not None else None)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                result = _notify_deliver(
+                    text=args.get("text", ""),
+                    mode=args.get("mode", "auto"),
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_user_id,
+                    channel_id=args.get("channel_id"),
+                    event_class=args.get("event_class", "agent.notify"),
+                    sub_event=args.get("sub_event", "agent_notification"),
+                    title=args.get("title"),
+                    source=args.get("source", "agent"),
+                )
+                # Webhook record
+                try:
+                    from webhook_dispatcher import emit_agent_notify
+                    if result.get("status") in ("ok", "partial", "no_subscribers"):
+                        emit_agent_notify(
+                            text=args.get("text", "")[:1900],
+                            source=args.get("source", "agent"),
+                            title=args.get("title"),
+                        )
+                except Exception:
+                    pass
+                # Criterion #8 — play notification sfx for the user
+                try:
+                    from sfx import play_sfx
+                    play_sfx("notification")
+                except Exception:
+                    pass
+                return {"result": result}
+
+            if name == "local_notify_schedule":
+                if args.get("list"):
+                    return {"result": {"scheduled": _notify_list()}}
+                if args.get("cancel_id"):
+                    removed = _notify_cancel(args.get("cancel_id"))
+                    return {"result": {"cancelled": removed, "cancel_id": args.get("cancel_id")}}
+                # Schedule a new one
+                if not args.get("text"):
+                    return {"error": "text is required (or pass list=true / cancel_id=...)"}
+                import time as _t
+                if args.get("fire_at_epoch") is not None:
+                    fire_at = float(args.get("fire_at_epoch"))
+                elif args.get("delay_seconds") is not None:
+                    fire_at = _t.time() + float(args.get("delay_seconds"))
+                else:
+                    return {"error": "either delay_seconds or fire_at_epoch is required"}
+                # Pull the live bridge so the scheduled deliver() can use it later
+                _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _user_id = (
+                    (_bridge._target_user_id if _bridge is not None else None)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                result = _notify_schedule(
+                    fire_at=fire_at,
+                    text=args.get("text", ""),
+                    mode=args.get("mode", "auto"),
+                    title=args.get("title"),
+                    source=args.get("source", "scheduled"),
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_user_id,
+                    channel_id=args.get("channel_id"),
+                )
+                return {"result": result}
+
+        elif name == "local_sfx_test":
+            # Play a UI sfx slot in the active voice session (criterion #8).
+            try:
+                from sfx import play_sfx, list_slots
+            except Exception as exc:
+                return {"error": f"sfx module import failed: {exc}"}
+            action = args.get("action", "play")
+            slot = args.get("slot", "")
+            if action == "list":
+                return {"result": {"slots": list_slots()}}
+            if not slot:
+                return {"error": "slot is required (e.g. 'tool_init', 'error', 'notification', 'transition')"}
+            res = play_sfx(slot)
+            return {"result": res}
 
         elif name.startswith("local_homeassistant_"):
             hass_url = os.getenv("HASS_URL", "http://homeassistant.local:8123").rstrip("/")
@@ -3253,6 +3715,12 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as exc:
         logger.exception("Local tool %s failed", name)
+        # Criterion #8 — play the error sfx for any uncaught tool failure
+        try:
+            from sfx import play_sfx
+            play_sfx("error")
+        except Exception:
+            pass
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
@@ -3523,6 +3991,19 @@ class GeminiLiveBridge:
     ):
         self._ws = None
         self._output_source = output_source
+        # Register the output source in the sfx module so cross-bridge
+        # sfx triggers (notification, error, tool_init) can find it
+        # (criterion #8 — multi-slot UI sfx library).
+        try:
+            from sfx import register_active_source
+            sid = (
+                getattr(user_profile, "discord_id", None)
+                or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "default")
+                or "default"
+            )
+            register_active_source(str(sid), output_source)
+        except Exception:
+            pass
         self._on_wake = on_wake
         self._on_leave_request = on_leave_request
         self._on_reconnect = on_reconnect
@@ -3534,6 +4015,11 @@ class GeminiLiveBridge:
         # Per-user profile (Honcho peer, tool allowlist, prompt overrides).
         # When None, fall back to module-level defaults (legacy single-user mode).
         self._user_profile = user_profile
+        self._voice_name = (
+            getattr(user_profile, "voice_name", None)
+            or os.getenv("DISCORD_VOICE_LIVE_VOICE", GEMINI_VOICE_NAME)
+            or GEMINI_VOICE_NAME
+        )
         self._send_q: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=256)
         self._video_q: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(maxsize=2)
         self._tasks: List[asyncio.Task] = []
@@ -3746,7 +4232,7 @@ class GeminiLiveBridge:
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
                     "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
+                        "prebuiltVoiceConfig": {"voiceName": self._voice_name}
                     }
                 },
                 # NOTE: mediaResolution is intentionally OMITTED from the setup
@@ -4339,6 +4825,12 @@ class VoiceLiveBridge:
             logger.error("Failed to start Discord voice I/O: %s", e)
             await self.stop()
             return False
+        # Criterion #8 — session transition sfx (sounds when audio starts)
+        try:
+            from sfx import play_sfx
+            play_sfx("transition", source=self._audio_source)
+        except Exception:
+            pass
 
         try:
             await self._gemini.connect()
@@ -4631,6 +5123,57 @@ async def handle_http_request(reader, writer):
                 "events": events,
                 "transcript": transcript,
             })
+    elif route == "/notify":
+        # Proactive notification breakout (criterion #6). Accepts JSON body:
+        #   {mode, text, title, source, channel_id, user_id, event_class, sub_event, fields}
+        # mode ∈ {auto, voice, dm, channel, webhook, all}
+        try:
+            headers = {}
+            for line in lines[1:]:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    headers[key.lower().strip()] = value.strip()
+            content_length = int(headers.get("content-length", "0") or "0")
+            raw_body = b""
+            if content_length > 0:
+                raw_body = await reader.readexactly(min(content_length, 64 * 1024))
+            try:
+                payload = json.loads(raw_body.decode("utf-8", errors="replace") or "{}")
+                if not isinstance(payload, dict):
+                    payload = {"text": str(payload)}
+            except json.JSONDecodeError:
+                # Allow GET-style params as a fallback (curl-friendly)
+                from urllib.parse import parse_qs as _pqs
+                qs = _pqs(parsed_url.query)
+                payload = {
+                    "mode": (qs.get("mode", ["auto"])[0] or "auto"),
+                    "text": (qs.get("text", [""])[0] or ""),
+                    "title": qs.get("title", [None])[0],
+                    "source": (qs.get("source", ["agent"])[0] or "agent"),
+                    "channel_id": qs.get("channel_id", [None])[0],
+                    "user_id": qs.get("user_id", [None])[0],
+                    "event_class": (qs.get("event_class", ["agent.notify"])[0] or "agent.notify"),
+                    "sub_event": (qs.get("sub_event", ["agent_notification"])[0] or "agent_notification"),
+                }
+            from notification import deliver as _notify_deliver
+            result = _notify_deliver(
+                text=payload.get("text", ""),
+                mode=payload.get("mode", "auto"),
+                bridge=BRIDGE,
+                adapter=getattr(BRIDGE, "_adapter", None) if BRIDGE else None,
+                user_id=payload.get("user_id") or (BRIDGE._target_user_id if BRIDGE else None),
+                channel_id=payload.get("channel_id"),
+                event_class=payload.get("event_class", "agent.notify"),
+                sub_event=payload.get("sub_event", "agent_notification"),
+                title=payload.get("title"),
+                source=payload.get("source", "agent"),
+            )
+            response_body = json.dumps(result)
+            status = 200 if result.get("status") in ("ok", "partial", "no_subscribers", "scheduled") else 400
+        except Exception as exc:
+            logger.exception("/notify handler crashed")
+            response_body = json.dumps({"status": "error", "message": f"{type(exc).__name__}: {exc}"})
+            status = 500
     else:
         response_body = json.dumps({"status": "error", "message": "Not found"})
         status = 404
@@ -4676,6 +5219,25 @@ async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None
             _start_email_reminder_loop(BRIDGE._gemini)
         except Exception as exc:
             logger.debug("email reminder loop start failed: %s", exc)
+
+        # Start the notification scheduler (criterion #6 — deferred notifications)
+        try:
+            from notification import start_scheduler
+            start_scheduler()
+        except Exception as exc:
+            logger.debug("notification scheduler start failed: %s", exc)
+
+        # Start the email-brief scheduler (criterion #7 — proactive inbox digest)
+        try:
+            from email_brief import start_brief_scheduler
+            start_brief_scheduler(
+                get_bridge_fn=lambda: BRIDGE,
+                interval=float(os.getenv(
+                    "DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS", "1800"
+                )),
+            )
+        except Exception as exc:
+            logger.debug("email brief scheduler start failed: %s", exc)
 
         # Watch for stop() to close server so run_sidecar task completes
         async def _shutdown_watcher():

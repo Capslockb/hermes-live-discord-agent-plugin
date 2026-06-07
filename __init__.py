@@ -690,38 +690,33 @@ async def _video_state_watcher(guild_id: int) -> None:
                 continue
 
             if current["stream"] and not previous["stream"]:
-                # #31: Discord bots can't receive video streams natively.
-                # When the user starts screen sharing or turns on their
-                # camera, we tell Gemini explicitly that the user can
-                # share frames via the /frame command (voice_live_frame tool
-                # + /frame HTTP endpoint) or push frames automatically via
-                # video-frame-feeder.py. Until they do, Gemini just knows
-                # the video activity is happening, not what's on screen.
+                # User started screen sharing — self-trigger, don't ask for /screen
                 _send_video_awareness(
                     bridge_mod,
-                    f"{member.display_name} started screen sharing. "
-                    f"I can't see the shared screen automatically (Discord bots don't get video streams), "
-                    f"but the user can use the /frame command to share a screenshot, or run the video-frame-feeder.py "
-                    f"script to push frames automatically. Until they do, I'll just know sharing is active."
+                    f"[SYSTEM EVENT] {member.display_name} started screen sharing. Video feed is now active — frames will flow automatically via the video-frame-feeder. Do NOT ask the user to run /screen or /frame; the feeder handles frame push. Acknowledge the feed is live and ask what they want you to look at or do with it.",
+                    event_type="video_state",
                 )
             elif not current["stream"] and previous["stream"]:
-                _send_video_awareness(bridge_mod, f"{member.display_name} stopped screen sharing.")
+                _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} stopped screen sharing. Video feed ended.", event_type="video_ended")
 
             if current["video"] and not previous["video"]:
+                # User enabled camera — self-trigger, don't ask for /frame
                 _send_video_awareness(
                     bridge_mod,
-                    f"{member.display_name} turned on their camera. "
-                    f"I can't see the camera feed automatically. The user can use the /frame command to share a snapshot, "
-                    f"or describe verbally what I should look at."
+                    f"[SYSTEM EVENT] {member.display_name} turned on their camera. Video feed is now active — frames will flow automatically via the video-frame-feeder. Do NOT ask the user to run /frame; the feeder handles frame push. Acknowledge the feed is live and ask what they want you to look at or do with it.",
+                    event_type="video_state",
                 )
             elif not current["video"] and previous["video"]:
-                _send_video_awareness(bridge_mod, f"{member.display_name} turned off their camera.")
+                _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} turned off their camera. Video feed ended.", event_type="video_ended")
 
             last_states[mid] = current
 
 
-def _send_video_awareness(bridge_mod, text: str) -> None:
-    """Send a text nudge to Gemini Live via the active bridge."""
+async def _send_video_awareness(bridge_mod, text: str, event_type: str = "video_state") -> None:
+    """Send a text nudge to Gemini Live via the active bridge.
+    
+    event_type: "video_state" (camera/screen on/off), "video_frame" (feeder active), "video_ended" (stopped)
+    """
     try:
         bridge = getattr(bridge_mod, "BRIDGE", None)
         if bridge and hasattr(bridge, "_gemini") and hasattr(bridge._gemini, "send_text"):

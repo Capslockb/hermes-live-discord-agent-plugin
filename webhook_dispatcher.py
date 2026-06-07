@@ -55,6 +55,8 @@ _WEBHOOK_ENV_VARS = {
     "bridge.status": "DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS",
     "bridge.video": "DISCORD_VOICE_LIVE_WEBHOOK_VIDEO",
     "tool.called": "DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED",
+    "agent.notify": "DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY",
+    "platform.fallback": "DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK",
 }
 
 # Friendly event-class label shown in the embed
@@ -66,6 +68,8 @@ _EVENT_CLASS_LABEL = {
     "bridge.status": "Bridge Status",
     "bridge.video": "Bridge Video",
     "tool.called": "Tool Called",
+    "agent.notify": "Agent Notification",
+    "platform.fallback": "Platform Fallback",
 }
 
 # Sub-event colors (mapped from sub-event names)
@@ -83,6 +87,9 @@ _SUB_COLORS = {
     "tool_called": 0x99AAB5,           # grey
     "video_initialized": 0x9B59B6,     # purple
     "video_still_noisy": 0xFEE75C,    # yellow (warn — feeder sending low-info frames)
+    "agent_notification": 0xE67E22,   # orange — agent-initiated proactive notify
+    "agent_notify_scheduled": 0xF39C12, # amber — deferred notification fired
+    "platform_broken": 0xED4245,      # red — platform marked unhealthy
     "info": 0x99AAB5,
     "warning": 0xFEE75C,
     "error": 0xED4245,
@@ -413,5 +420,46 @@ def emit_tool_called(tool_name: str, args_summary: str) -> int:
         "tool.called", "tool_called",
         f"**{tool_name}**\n{args_summary[:1500]}",
         throttle=True,
+    )
+
+
+def emit_fallback_event(platform: str, reason: str, neighbors: list) -> int:
+    """Announce that a delegation platform was marked broken and the
+    fallback chain is now active. Helps the agent narrate in voice.
+    """
+    neighbor_list = ", ".join(f"`{n}`" for n in (neighbors or [])[:5]) or "(none)"
+    desc = (
+        f"**{platform}** marked unhealthy: {reason[:200]}\n"
+        f"Next delegate will auto-route to: {neighbor_list}"
+    )
+    return get_dispatcher().emit(
+        "platform.fallback", "platform_broken",
+        desc,
+        throttle=True,
+        throttle_key=("platform.fallback", platform),
+        fields=[
+            {"name": "Platform", "value": f"`{platform}`", "inline": True},
+            {"name": "Reason", "value": reason[:200] or "?", "inline": False},
+            {"name": "Fallback chain", "value": neighbor_list, "inline": False},
+        ],
+    )
+
+
+def emit_agent_notify(text: str, source: str = "agent", title: Optional[str] = None) -> int:
+    """Announce a proactive agent-initiated notification (criterion #6).
+
+    Triggered when the agent breaks out of reply-only mode to push a
+    status update, completion ping, or scheduled reminder to the user.
+    """
+    sub = "agent_notify_scheduled" if source == "scheduled" else "agent_notification"
+    desc = text[:1900] if text else ""
+    return get_dispatcher().emit(
+        "agent.notify", sub, desc,
+        throttle=True,
+        throttle_key=("agent.notify", source),
+        fields=[
+            {"name": "Source", "value": source, "inline": True},
+            {"name": "Title", "value": (title or "Agent notification")[:256], "inline": True},
+        ],
     )
 
