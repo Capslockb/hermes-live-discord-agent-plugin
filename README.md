@@ -1,10 +1,39 @@
 # Hermes Live Discord Agent Plugin
 
-> Full‑duplex Discord voice channel ↔ Google Gemini Multimodal Live API, packaged as a [Hermes Agent](https://hermes‑agent.nousresearch.com) plugin. Speak to a real-time multimodal AI in any Discord voice channel — with Spotify control, email, Home Assistant, OpenCode/Codex/Gemini‑CLI delegation, per‑user profiles, webhooks, post‑call transcripts, idle hangup, and a 3‑minute oneshot installer.
+![Hermes Live Banner](docs/banner.png)
+
+> **Drop a real-time multimodal AI into any Discord voice channel.**
+> Speak to it. It answers in a human voice. Mid-conversation it can run tools, check email, queue Spotify, dim the lights, or hand off a coding task to **Codex / OpenCode / Gemini‑CLI / NumaSec / Hermes (API)**.
+> Full-duplex audio · vision · 40+ function tools · per-user memory · post-call transcripts.
+> Built on [Google Gemini Multimodal Live](https://ai.google.dev/api/live), packaged as a [Hermes Agent](https://hermes‑agent.nousresearch.com) plugin. **Open source. MIT. Yours.**
+
+[![Discord](https://img.shields.io/badge/voice-discord-5865F2?logo=discord&logoColor=white)](https://github.com/Capslockb/hermes-live-discord-agent-plugin)
+[![License](https://img.shields.io/badge/license-MIT-22d3ee)](LICENSE)
+[![Hermes](https://img.shields.io/badge/hermes-agent-7c3aed?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzAiIGZvbnQtc2l6ZT0iODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfjrU8L3RleHQ+PC9zdmc+)](https://hermes-agent.nousresearch.com)
+[![Gemini](https://img.shields.io/badge/gemini-3.1--flash--live-4285F4?logo=google)](https://aistudio.google.com)
 
 ---
 
-> **🆕 New name, new site.** This plugin is now branded **Hermes Live Discord Agent Plugin** and has a public promo site at <https://capslockb.github.io/hermes-live-discord-agent-plugin/> with the feature showcase, roadmap, and collaboration info. The internal plugin directory is still `discord-voice` — renaming it would force refactors across the Hermes plugin registry, the autostart filename, and the import paths.
+> 🆕 **New name, new site.** This plugin is now branded **Hermes Live Discord Agent Plugin** and has a public promo site at <https://capslockb.github.io/hermes-live-discord-agent-plugin/> with the feature showcase, roadmap, and collaboration info. The internal plugin directory is still `discord-voice` — renaming it would force refactors across the Hermes plugin registry, the autostart filename, and the import paths.
+
+---
+
+## ✦ Why this release matters
+
+Hermes can now **hold a real conversation with you in voice**. Not a 30-second demo — sub-second latency, hour-long sessions, remembers what you talked about last time via [Honcho](https://github.com/plastic-labs/honcho) memory.
+
+Mid-conversation, it can:
+
+- 🔍 **Search the web** and read the answer aloud
+- 📁 **Open your files**, review code, suggest fixes
+- 📬 **Check your email** and summarize what matters
+- 🎵 **Queue Spotify**, dim the lights (Home Assistant)
+- 🧠 **Delegate and track** Codex / OpenCode / NumaSec / Hermes (API) sessions in the background
+- 👁️ **See your screenshare** and walk you through a bug
+
+**Cost: ~$0.03–0.06 / hour of voice** on Gemini's Flex tier. Less than a cup of coffee for a work day.
+
+**Built in one session. One developer. Shipped.**
 
 ---
 
