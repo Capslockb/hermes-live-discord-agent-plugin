@@ -3286,8 +3286,7 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             query = args.get("query", "")
             limit = args.get("limit", 5)
             try:
-                import json, requests
-                from pathlib import Path
+                import requests
                 honcho_json = Path.home() / ".hermes" / "honcho.json"
                 if not honcho_json.exists():
                     return {"error": "~/.hermes/honcho.json not found"}
