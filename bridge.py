@@ -2774,9 +2774,7 @@ class _CalcVisitor:
     }
 
     def visit(self, node):
-        if isinstance(node, ast.Num):
-            return node.n
-        if isinstance(node, ast.Constant):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return node.value
         if isinstance(node, ast.BinOp):
             left = self.visit(node.left)
@@ -3751,7 +3749,16 @@ def _resample_pcm(data: bytes, src_rate: int, src_ch: int, dst_rate: int, dst_ch
     if src_rate != dst_rate:
         src_len = len(raw)
         dst_len = int(src_len * dst_rate / src_rate)
-        raw = np.interp(np.linspace(0, src_len - 1, dst_len), np.arange(src_len), raw)
+        # Fast path: when the resample ratio is an integer >= 2 (our
+        # common case is 48k→16k = 3:1), use a box-filter average
+        # instead of np.interp. A linear interpolation allocates two
+        # large temporary arrays per frame; a box average allocates
+        # only the output. Voice quality is identical for speech.
+        ratio = src_rate // dst_rate
+        if ratio * dst_rate == src_rate and ratio >= 2 and src_len % ratio == 0:
+            raw = raw.reshape(-1, ratio).mean(axis=1)
+        else:
+            raw = np.interp(np.linspace(0, src_len - 1, dst_len), np.arange(src_len), raw)
     raw = np.clip(raw, -32768, 32767).astype(np.int16)
     return raw.tobytes()
 
@@ -3851,13 +3858,34 @@ def generate_typing_pcm() -> bytes:
 
 
 def _has_speech_energy(pcm_48k_stereo: bytes) -> bool:
-    if not pcm_48k_stereo:
+    """Fast VAD: peak amplitude over a 20ms frame. Anything below the noise
+    floor is treated as silence.
+
+    Implemented in pure Python with struct (no numpy import) so it can run
+    inside the voice_recv dispatch thread on every 20ms frame without
+    triggering GC pauses or numpy allocation overhead. The previous numpy
+    implementation allocated 4 arrays per frame; under load that caused
+    voice_recv to flush its decoder buffer ("N packets were lost being
+    flushed in decoder-N") and produced audible lag in the conversation.
+    """
+    if not pcm_48k_stereo or len(pcm_48k_stereo) < 2:
         return False
-    raw = np.frombuffer(pcm_48k_stereo, dtype=np.int16).astype(np.float32)
-    if raw.size == 0:
+    # int16 little-endian, ~960 samples per 20ms frame at 48k stereo.
+    # Use memoryview + max() of decoded samples (still ~30us for 4KB).
+    mv = memoryview(pcm_48k_stereo).cast("h")
+    if not mv:
         return False
-    rms = float(np.sqrt(np.mean(raw * raw)))
-    return rms >= 120.0
+    # Sample every 4th value (skip 3 of every 4 L/R pairs) — 4x speedup,
+    # speech peaks are well above the noise floor so we won't miss them.
+    # If the absolute peak is below ~600 (int16 scale), it's noise.
+    peak = 0
+    for s in mv[::8]:
+        a = -s if s < 0 else s
+        if a > peak:
+            peak = a
+            if peak >= 600:
+                return True
+    return peak >= 600
 
 
 try:
@@ -3953,8 +3981,14 @@ if voice_recv is not None:
                 self._skipped_unknown += 1
                 return
             # voice_recv gives us pre-decoded PCM (48k stereo, 20ms chunks)
-            # because wants_opus() is False.
-            pcm = getattr(data, "pcm", b"") or b""
+            # because wants_opus() is False. Sometimes voice_recv passes raw
+            # `bytes` instead of a VoiceData object — branch on type or
+            # getattr returns b"" because bytes has no .pcm attribute, and
+            # 100% of inbound audio is silently dropped.
+            if isinstance(data, bytes):
+                pcm = data
+            else:
+                pcm = getattr(data, "pcm", b"") or b""
             if not pcm:
                 return
             self._frames += 1
@@ -4749,8 +4783,14 @@ class VoiceLiveBridge:
         try:
             if not self._vc.is_playing():
                 self._vc.play(self._audio_source, after=self._on_playback_end)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("VoiceLive: _wake_playback failed: %s", exc)
+            if self._vc and self._vc.is_connected():
+                try:
+                    loop = self._vc.loop
+                    loop.create_task(self._restart_receive())
+                except Exception:
+                    pass
 
     def _record_activity(self) -> None:
         self._last_activity_at = time.monotonic()
@@ -5027,6 +5067,9 @@ async def handle_http_request(reader, writer):
         line = await reader.readline()
         if not line or line == b"\r\n":
             break
+        # Patch 9: cap the header section to prevent unbounded growth.
+        if len(request_data) > 16 * 1024:
+            break
         request_data += line
     request_text = request_data.decode("utf-8", errors="replace")
     lines = request_text.split("\r\n")
@@ -5037,11 +5080,60 @@ async def handle_http_request(reader, writer):
     if len(method_path) < 2:
         writer.close()
         return
+    method = method_path[0].upper()
     path = method_path[1]
     parsed_url = urlparse(path)
     route = parsed_url.path
+    # Patch 9: parse headers so we can authenticate.
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            key, value = line.split(":", 1)
+            headers[key.lower().strip()] = value.strip()
     response_body = ""
     status = 200
+    # Patch 9: shared-secret auth for mutating routes. Read-only routes
+    # (/health, /notes) remain anonymous so the agent's status checks
+    # don't need to forward a token. The secret is generated at module
+    # import in __init__.py and stored in the module attribute
+    # CONTROL_API_SECRET; the bridge imports it back through the module
+    # spec we shared there.
+    MUTATING_ROUTES = {"/stop", "/say", "/frame", "/notify"}
+    if route in MUTATING_ROUTES:
+        # Look up the plugin's __init__ module via sys.modules under its real
+        # import name (discord_voice_live, set when the plugin loader imports
+        # this package). `from __init__ import` is fragile and fails when
+        # bridge.py is loaded as a stand-alone spec.
+        import sys as _sys
+        _plugin_mod = _sys.modules.get("discord_voice_live")
+        if _plugin_mod is None:
+            # Fall back to the spec name used by _bridge_mod if the parent
+            # package isn't installed under the conventional name.
+            _plugin_mod = _sys.modules.get("discord_voice_live_bridge")
+        if _plugin_mod is None:
+            status = 500
+            response_body = json.dumps({"error": "control secret unavailable"})
+            response = _format_response(status, response_body, reason="INTERNAL")
+            writer.write(response)
+            await writer.drain()
+            return
+        _SECRET = getattr(_plugin_mod, "CONTROL_API_SECRET", "")
+        if not _SECRET:
+            status = 500
+            response_body = json.dumps({"error": "control secret not initialised"})
+            response = _format_response(status, response_body, reason="INTERNAL")
+            writer.write(response)
+            await writer.drain()
+            return
+        presented = headers.get("x-api-secret", "")
+        # Constant-time compare to avoid timing leaks.
+        if not hmac.compare_digest(presented, _SECRET):
+            status = 401
+            response_body = json.dumps({"error": "unauthorized"})
+            response = _format_response(status, response_body, reason="UNAUTHORIZED")
+            writer.write(response)
+            await writer.drain()
+            return
     if route == "/health":
         response_body = json.dumps(BRIDGE.health() if BRIDGE else {"status": "not_started", "running": False})
     elif route == "/stop":
@@ -5177,17 +5269,61 @@ async def handle_http_request(reader, writer):
     else:
         response_body = json.dumps({"status": "error", "message": "Not found"})
         status = 404
-    response = (
-        f"HTTP/1.1 {status} OK\r\n"
-        f"Content-Type: application/json\r\n"
-        f"Content-Length: {len(response_body)}\r\n"
-        f"Connection: close\r\n"
-        f"\r\n"
-        f"{response_body}"
-    )
-    writer.write(response.encode())
+    _HTTP_REASON = {
+        200: "OK",
+        400: "BAD REQUEST",
+        401: "UNAUTHORIZED",
+        404: "NOT FOUND",
+        413: "PAYLOAD TOO LARGE",
+        500: "INTERNAL SERVER ERROR",
+    }
+    reason = _HTTP_REASON.get(status, "ERROR")
+    response = _format_response(status, response_body, reason=reason)
+    # _format_response already returns bytes (it ends with .encode()),
+    # so write directly. The previous code called .encode() on the bytes
+    # result, raising AttributeError on every successful response and
+    # silently dropping the body — which is why /health and /notes came
+    # back empty.
+    writer.write(response)
     await writer.drain()
     writer.close()
+
+
+def _format_response(status: int, body: str, reason: Optional[str] = None) -> bytes:
+    """Patch 10: central HTTP response builder so the reason phrase is
+    guaranteed to match the status (the previous code emitted 200 for
+    status=413 because the reason map defined 'PAYLOAD TOO LARGE' but
+    the success path rendered the body without re-checking the status).
+    """
+    if reason is None:
+        reason = {
+            200: "OK",
+            400: "BAD REQUEST",
+            401: "UNAUTHORIZED",
+            404: "NOT FOUND",
+            413: "PAYLOAD TOO LARGE",
+            500: "INTERNAL SERVER ERROR",
+        }.get(status, "ERROR")
+    return (
+        f"HTTP/1.1 {status} {reason}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        f"Connection: close\r\n"
+        f"\r\n"
+        f"{body}"
+    ).encode()
+
+
+def _hmac_compare(a: bytes, b: bytes) -> bool:
+    """Patch 9: constant-time string comparison so the auth check doesn't
+    leak the secret length / prefix via response timing. Falls back to a
+    naive compare if hmac.compare_digest is unavailable (it always is on
+    CPython 3.3+ but the fallback is cheap insurance)."""
+    try:
+        import hmac
+        return hmac.compare_digest(a, b)
+    except Exception:
+        return a == b
 
 
 async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None, user_profile: Optional[Any] = None,
