@@ -341,4 +341,3 @@ MIT. Bundled `voice‑live‑typing.wav` is from Mixkit (CC0‑equivalent, no at
 - Gemini Live — [Google AI Studio](https://aistudio.google.com)
 - Honcho memory — [Honcho](https://github.com/plastic-labs/honcho), self‑hosted
 - Hermes Agent — [Nous Research](https://nousresearch.com)
-- Built and battle‑tested at [capslock.nl](https://capslock.nl)
