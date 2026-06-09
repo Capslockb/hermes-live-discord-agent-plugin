@@ -526,7 +526,7 @@ def _run_github_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if name == "local_github_issues":
         repo = args.get("repo", "").strip()
         if not repo:
-            return {"error": "repo is required (e.g. 'Capslockb/gemini-live-discord-bridge')"}
+            return {"error": "repo is required (e.g. 'Capslockb/hermes-live-discord-agent-plugin')"}
         state = args.get("state", "open").strip() or "open"
         try:
             limit = min(max(int(args.get("limit", 15)), 1), 50)
@@ -742,7 +742,7 @@ _GITHUB_FUNCTION_DECLARATIONS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "repo": {"type": "string", "description": "Repo in 'owner/name' format, e.g. 'Capslockb/gemini-live-discord-bridge'"},
+                "repo": {"type": "string", "description": "Repo in 'owner/name' format, e.g. 'Capslockb/hermes-live-discord-agent-plugin'"},
                 "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Issue state filter (default: open)"},
                 "limit": {"type": "integer", "description": "Max issues (default 15, max 50)"},
             },

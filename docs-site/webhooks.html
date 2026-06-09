@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,7 +55,7 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
@@ -77,7 +77,7 @@
 
 <p>Each webhook fires a Discord embed with a consistent shape:</p>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;username&quot;: &quot;S0RA Bridge&quot;,
   &quot;embeds&quot;: [{
     &quot;title&quot;: &quot;Bridge stopped&quot;,
@@ -90,7 +90,7 @@
     &quot;footer&quot;: {&quot;text&quot;: &quot;sub_event: bridge_stopped | event_class: bridge.status&quot;},
     &quot;timestamp&quot;: &quot;2026-06-07T12:34:56Z&quot;
   }]
-}</code></pre>
+}</code></pre></div>
 
 <p>Sub-events get specific embed colors (<code>_SUB_COLORS</code> in <code>webhook_dispatcher.py</code>).</p>
 
@@ -104,7 +104,7 @@
 
 <p><code>webhook_dispatcher.py</code> provides typed emit helpers for each event class:</p>
 
-<pre><code class="lang-python">from webhook_dispatcher import (
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-python">from webhook_dispatcher import (
     emit_bridge_started, emit_bridge_stopped,
     emit_video_initialized,
     emit_opencode_status,
@@ -112,7 +112,7 @@
     emit_tool_called,
     emit_fallback_event,
     emit_agent_notify,
-)</code></pre>
+)</code></pre></div>
 
 <p>All return the number of webhooks the event was delivered to (0 if no subscribers).</p>
 
@@ -129,7 +129,7 @@
         </a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

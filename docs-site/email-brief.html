@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,7 +55,7 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
@@ -67,18 +67,18 @@
 
 <h2><code>local_email_brief</code> tool</h2>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;limit&quot;: 8,
   &quot;force&quot;: false,
   &quot;notify&quot;: true,
   &quot;backend&quot;: &quot;google&quot;
-}</code></pre>
+}</code></pre></div>
 
 <ul><li><code>limit</code> — max emails to consider. Default 8.</li><li><code>force</code> — skip the de-dup check and always brief. Default false.</li><li><code>notify</code> — when true (default), the brief is fired through <code>notification.deliver(mode=&quot;auto&quot;)</code> in addition to being returned to the model. Set false for a pure read.</li><li><code>backend</code> — <code>&quot;google&quot;</code> (default, uses <code>google_api.py</code>) or <code>&quot;himalaya&quot;</code>. Auto-falls back to himalaya if google_api.py fails.</li></ul>
 
 <p>Returns a payload with three buckets + the per-email list:</p>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;result&quot;: {
     &quot;status&quot;: &quot;ok&quot;,
     &quot;backend&quot;: &quot;google&quot;,
@@ -92,7 +92,7 @@
     &quot;notified&quot;: true,
     &quot;delivery&quot;: {&quot;status&quot;: &quot;ok&quot;, &quot;channel&quot;: &quot;dm&quot;, ...}
   }
-}</code></pre>
+}</code></pre></div>
 
 <h2>Importance scoring (0-100)</h2>
 
@@ -113,10 +113,10 @@
 
 <p>State persists at <code>~/.hermes/voice-users/email-brief-state.json</code>:</p>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;last_briefed_ids&quot;: [&quot;1&quot;, &quot;2&quot;, &quot;3&quot;],
   &quot;last_brief_at&quot;: 1749312456.7
-}</code></pre>
+}</code></pre></div>
 
 <p>The scheduler (and on-demand calls with <code>force=false</code>) only fires a brief when at least one email ID is not in <code>last_briefed_ids</code>. After a successful brief, the IDs are appended (capped at 500).</p>
 
@@ -145,7 +145,7 @@
         </a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

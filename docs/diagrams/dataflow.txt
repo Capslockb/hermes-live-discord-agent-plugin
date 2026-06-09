@@ -1,5 +1,5 @@
                        ╔════════════════════════════════════════════╗
-                       ║        gemini-live-discord-bridge          ║
+                       ║        hermes-live-discord-agent-plugin          ║
                        ║            Dataflow overview              ║
                        ╚════════════════════════════════════════════╝
 

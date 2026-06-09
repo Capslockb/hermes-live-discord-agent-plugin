@@ -330,6 +330,7 @@ pre .lang {
   font-family: var(--mono); font-size: 10px; color: var(--fg-dim);
   letter-spacing: 0.08em; text-transform: uppercase;
 }
+.pre-wrap { position: relative; }
 .copy-btn {
   position: absolute; top: 6px; right: 6px;
   background: var(--bg-card);

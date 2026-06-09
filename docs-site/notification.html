@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,7 +55,7 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
@@ -75,29 +75,29 @@
 
 <h3><code>local_notify</code></h3>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;text&quot;: &quot;Hey, codex is back online&quot;,
   &quot;mode&quot;: &quot;auto&quot;,
   &quot;title&quot;: &quot;Tool online&quot;,
   &quot;source&quot;: &quot;health_watcher&quot;
-}</code></pre>
+}</code></pre></div>
 
 <p>Returns:</p>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;status&quot;: &quot;ok&quot;,
   &quot;channel&quot;: &quot;voice&quot;,
   &quot;results&quot;: {&quot;voice&quot;: {&quot;status&quot;: &quot;ok&quot;, &quot;queued&quot;: true}, ...},
   &quot;notified_at&quot;: 1749312456.7
-}</code></pre>
+}</code></pre></div>
 
 <h3><code>local_notify_schedule</code></h3>
 
-<pre><code class="lang-json">{
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">{
   &quot;text&quot;: &quot;Reminder: standup in 10&quot;,
   &quot;delay_seconds&quot;: 600,
   &quot;mode&quot;: &quot;auto&quot;
-}</code></pre>
+}</code></pre></div>
 
 <p>Returns <code>{scheduled: &lt;id&gt;, fire_at_epoch: &lt;ts&gt;}</code>. The schedule persists to <code>~/.hermes/voice-users/notifications-schedule.jsonl</code> and survives bridge restarts. Polled every 2s by a background thread.</p>
 
@@ -108,9 +108,9 @@
 
 <p>For callers that aren't in a Gemini session (e.g. cron jobs, subagents):</p>
 
-<pre><code class="lang-bash">curl -X POST -H &quot;Content-Type: application/json&quot; \
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">curl -X POST -H &quot;Content-Type: application/json&quot; \
      -d &#x27;{&quot;text&quot;:&quot;inbox is huge&quot;,&quot;mode&quot;:&quot;dm&quot;,&quot;title&quot;:&quot;Brief&quot;}&#x27; \
-     &quot;http://127.0.0.1:18943/notify&quot;</code></pre>
+     &quot;http://127.0.0.1:18943/notify&quot;</code></pre></div>
 
 <p>Also accepts GET with <code>?text=...&amp;mode=...&amp;title=...</code> for trivial cases. The handler reads <code>BRIDGE</code> from the global to find the live <code>GeminiLiveBridge</code> for the <code>voice</code> mode; falls through to other modes if voice is unavailable.</p>
 
@@ -122,7 +122,7 @@
 
 <p>The notification dispatcher also fires the <code>agent.notify</code> event class via <code>WebhookDispatcher</code>, which is configurable through env vars:</p>
 
-<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=https://discord.com/api/webhooks/...</code></pre>
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=https://discord.com/api/webhooks/...</code></pre></div>
 
 <p>If unset, the dispatcher still tries DM and channel paths. Setting the webhook URL just gives you a third destination.</p>
 
@@ -143,7 +143,7 @@
         </a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

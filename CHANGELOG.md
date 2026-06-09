@@ -1,4 +1,4 @@
-# CHANGELOG — gemini-live-discord-bridge
+# CHANGELOG — hermes-live-discord-agent-plugin
 
 ## 0.3.5 — 2026-06-09 (VOPI functional release)
 
@@ -23,7 +23,7 @@ That is a usable v0.3.5. The next releases will harden the audit findings and fi
 ### How to upgrade
 
 ```bash
-cd /path/to/gemini-live-discord-bridge
+cd /path/to/hermes-live-discord-agent-plugin
 git pull
 systemctl --user restart hermes-gateway
 # (env vars are unchanged; nothing to migrate)

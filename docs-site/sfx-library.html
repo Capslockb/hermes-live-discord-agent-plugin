@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,7 +55,7 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
@@ -75,11 +75,11 @@
 
 <p>Default directory: <code>~/.hermes/voice-users/sfx/</code></p>
 
-<pre><code class="lang-">~/.hermes/voice-users/sfx/
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">~/.hermes/voice-users/sfx/
 ├── tool_init.wav       # chime (e.g. UI Notification Chimes Pack, first chime)
 ├── error.wav           # 4x chain of a sharp beep (~2.8s total)
 ├── notification.wav    # mobile-OS style ping
-└── transition.wav      # pop / whoosh</code></pre>
+└── transition.wav      # pop / whoosh</code></pre></div>
 
 <p>All four files are <strong>24 kHz mono PCM16</strong>. The loader auto-resamples if you give it a different format, but cutting directly to the target format keeps the loader's resample path simple.</p>
 
@@ -93,38 +93,38 @@
 
 <p>Per-slot override (path):</p>
 
-<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT=/path/to/custom_chime.wav
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT=/path/to/custom_chime.wav
 DISCORD_VOICE_LIVE_SFX_ERROR=/path/to/custom_beep.wav
 DISCORD_VOICE_LIVE_SFX_NOTIFICATION=/path/to/custom_ping.wav
-DISCORD_VOICE_LIVE_SFX_TRANSITION=/path/to/custom_pop.wav</code></pre>
+DISCORD_VOICE_LIVE_SFX_TRANSITION=/path/to/custom_pop.wav</code></pre></div>
 
 <p>Per-slot volume (0.0 to 1.5, where 1.0 = no scaling):</p>
 
-<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT_VOLUME=0.55
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT_VOLUME=0.55
 DISCORD_VOICE_LIVE_SFX_ERROR_VOLUME=0.45
 DISCORD_VOICE_LIVE_SFX_NOTIFICATION_VOLUME=0.50
-DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60</code></pre>
+DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60</code></pre></div>
 
 <p>Global enable:</p>
 
-<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_ENABLED=true    # default</code></pre>
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_ENABLED=true    # default</code></pre></div>
 
 <p>Global SFX directory (overrides the default <code>~/.hermes/voice-users/sfx/</code>):</p>
 
-<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_DIR=/custom/sfx/dir</code></pre>
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_DIR=/custom/sfx/dir</code></pre></div>
 
 <h2><code>local_sfx_test</code> tool</h2>
 
 <p>The agent can play any slot in the current voice session:</p>
 
-<pre><code class="lang-json">// play a slot
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">// play a slot
 {&quot;slot&quot;: &quot;notification&quot;}
 
 // inspect all configured slots
-{&quot;action&quot;: &quot;list&quot;}</code></pre>
+{&quot;action&quot;: &quot;list&quot;}</code></pre></div>
 
 <p>Returns:</p>
-<pre><code class="lang-json">// play result
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-json">// play result
 {&quot;result&quot;: {&quot;status&quot;: &quot;played&quot;, &quot;slot&quot;: &quot;notification&quot;, &quot;bytes&quot;: 33600, &quot;duration_s&quot;: 0.7}}
 
 // list result
@@ -133,7 +133,7 @@ DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60</code></pre>
   &quot;error&quot;:        {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.45, &quot;cached_bytes&quot;: 134400},
   &quot;notification&quot;: {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.50, &quot;cached_bytes&quot;: 33600},
   &quot;transition&quot;:   {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.60, &quot;cached_bytes&quot;: 33600}
-}}}</code></pre>
+}}}</code></pre></div>
 
 <p>If no voice session is active, returns <code>{&quot;status&quot;: &quot;no_active_source&quot;}</code> — the sfx library is voice-only.</p>
 
@@ -158,7 +158,7 @@ DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60</code></pre>
         </a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

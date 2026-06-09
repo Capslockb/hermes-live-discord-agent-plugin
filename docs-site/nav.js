@@ -6,6 +6,22 @@
     if (a.getAttribute("href") === path) a.classList.add("active");
   });
 
+  // ───── copy buttons: inline data-copy-btn + pre-injected
+  document.querySelectorAll("[data-copy-btn]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const pre = btn.nextElementSibling;
+      const code = pre?.querySelector("code")?.innerText ?? pre?.innerText;
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.textContent = "copied";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("copied"); }, 1400);
+      } catch (_) {}
+    });
+  });
+
   // ───── copy buttons on every <pre>
   document.querySelectorAll("pre").forEach((pre) => {
     if (pre.querySelector(".copy-btn")) return;

@@ -109,7 +109,7 @@ def md_to_html(md: str) -> str:
         nonlocal code_buf, code_lang
         if code_buf:
             body = html.escape("\n".join(code_buf))
-            out.append(f'<pre><code class="lang-{html.escape(code_lang)}">{body}</code></pre>')
+            out.append(f'<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-{html.escape(code_lang)}">{body}</code></pre></div>')
         code_buf = []
         code_lang = ""
 
@@ -272,7 +272,7 @@ def render_page(slug: str, source_md_path: Path) -> str:
 {pager}
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>
@@ -318,7 +318,7 @@ def _render_sidebar(current: str) -> str:
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -335,7 +335,7 @@ def _render_sidebar(current: str) -> str:
     out.append('''    </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>''')
     return "\n".join(out)
@@ -349,7 +349,7 @@ def _render_topbar(current: str) -> str:
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>'''
@@ -406,8 +406,8 @@ Five commands, two minutes.
 
 ```bash
 # 1. Clone
-git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
-cd gemini-live-discord-bridge
+git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+cd hermes-live-discord-agent-plugin
 
 # 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
 ./install.sh

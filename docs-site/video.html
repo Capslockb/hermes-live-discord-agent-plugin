@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,7 +55,7 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
@@ -79,15 +79,15 @@
 
 <h3>Manual</h3>
 <p>If you need to install it manually:</p>
-<pre><code class="lang-bash">mkdir -p ~/.hermes/scripts/
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">mkdir -p ~/.hermes/scripts/
 cp scripts/video-frame-feeder.py ~/.hermes/scripts/video-frame-feeder.py
-chmod +x ~/.hermes/scripts/video-frame-feeder.py</code></pre>
+chmod +x ~/.hermes/scripts/video-frame-feeder.py</code></pre></div>
 
 <h2>Usage & CLI Flags</h2>
 
 <h3>Quick Start</h3>
 <p>Run the feeder by pointing it to your bridge's Tailscale or local URL:</p>
-<pre><code class="lang-bash">python3 ~/.hermes/scripts/video-frame-feeder.py --endpoint http://&lt;your-bridge-tailscale-url&gt;:18943/frame --source-label my-laptop</code></pre>
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">python3 ~/.hermes/scripts/video-frame-feeder.py --endpoint http://&lt;your-bridge-tailscale-url&gt;:18943/frame --source-label my-laptop</code></pre></div>
 
 <h3>CLI Flags</h3>
 <table><thead><tr><th>Flag</th><th>Description</th></tr></thead><tbody><tr><td><code>--endpoint</code></td><td>The URL of the bridge's <code>/frame</code> endpoint (required).</td></tr><tr><td><code>--source</code></td><td>Screen source (e.g., <code>0</code> for primary, <code>DISPLAY</code> env var).</td></tr><tr><td><code>--min-change</code></td><td>Minimum Hamming distance (0-64) to trigger a send. Default: <code>4</code>.</td></tr><tr><td><code>--stddev-min</code></td><td>Minimum standard deviation of pixels to consider "content". Default: <code>0</code>.</td></tr><tr><td><code>--no-content-filter</code></td><td>Disable perceptual hashing and stddev checks.</td></tr><tr><td><code>--source-label</code></td><td>Label for this feed (e.g., <code>my-laptop</code>), sent in the <code>X-Source-Label</code> header.</td></tr><tr><td><code>--once</code></td><td>Capture a single frame and exit.</td></tr></tbody></table>
@@ -111,7 +111,7 @@ chmod +x ~/.hermes/scripts/video-frame-feeder.py</code></pre>
         </a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

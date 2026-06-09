@@ -15,7 +15,7 @@
       <div class="brand-mark">H</div>
       <div>
         <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.4 · VOPI build</div>
+        <div class="brand-sub">v0.3.5 · VOPI build</div>
       </div>
     </div>
 
@@ -44,7 +44,7 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
       MIT licensed · Hermes Agent plugin
     </div>
   </aside>
@@ -55,13 +55,13 @@
       <span class="sep">/</span>
       <span>docs-site/</span>
       <div class="right">
-        <span class="pill good">v0.3.4.2</span>
+        <span class="pill good">v0.3.5</span>
         <span class="pill warn">VOPI build</span>
       </div>
     </div>
 
     <article class="content">
-<h1>CHANGELOG — gemini-live-discord-bridge</h1>
+<h1>CHANGELOG — hermes-live-discord-agent-plugin</h1>
 
 <h2>0.3.5 — 2026-06-09 (VOPI functional release)</h2>
 
@@ -80,10 +80,10 @@
 
 <h3>How to upgrade</h3>
 
-<pre><code class="lang-bash">cd /path/to/gemini-live-discord-bridge
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">cd /path/to/hermes-live-discord-agent-plugin
 git pull
 systemctl --user restart hermes-gateway
-# (env vars are unchanged; nothing to migrate)</code></pre>
+# (env vars are unchanged; nothing to migrate)</code></pre></div>
 
 <h3>Files of interest</h3>
 
@@ -155,7 +155,7 @@ systemctl --user restart hermes-gateway
 
 <h3>Configuration additions</h3>
 
-<pre><code class="lang-">DISCORD_VOICE_LIVE_VOICE=en-US-JennyNeural
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">DISCORD_VOICE_LIVE_VOICE=en-US-JennyNeural
 DISCORD_VOICE_LIVE_SFX_ENABLED=true
 DISCORD_VOICE_LIVE_SFX_DIR=~/.hermes/voice-users/sfx/
 DISCORD_VOICE_LIVE_SFX_TOOL_INIT=...
@@ -166,7 +166,7 @@ DISCORD_VOICE_LIVE_EMAIL_BRIEF_ENABLED=true
 DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS=1800
 DISCORD_VOICE_LIVE_EMAIL_BRIEF_LIMIT=8
 DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=...
-DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK=...</code></pre>
+DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK=...</code></pre></div>
 
 <hr>
 
@@ -179,8 +179,8 @@ DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK=...</code></pre>
 <ul><li><strong>"I see you're sharing your screen" token burn</strong> — two root causes: (1) the system prompt told the model "If someone shares their screen... you have LIVE VIDEO SIGHT", which Gemini hallucinated as an implied task on every connect. (2) The old video-frame-feeder.py sent every frame at 1fps regardless of content — solid overlays cost ~258 tokens/frame. Both fixed: prompt rewritten as strictly conditional; feeder now filters by perceptual hash.</li><li><strong>Feeder silent blackout on thumbnail failure</strong> — when the 8×8 thumbnail pipe failed (ffmpeg version/filter incompatibility), the feeder silently looped without ever sending frames. Now falls through to full-frame capture + POST with a clear log warning.</li><li><strong>stddev filter default too aggressive</strong> — <code>--stddev-min</code> default lowered from 6.0 to 0 (disabled). The Hamming-distance filter already catches truly identical static screens; a low stddev value on an 8×8 thumbnail of real content (editor whitespace, dark theme) incorrectly blocked legitimate frames.</li></ul>
 
 <h3>Configuration additions</h3>
-<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_VIDEO=&lt;discord_webhook_url&gt;
-DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S=30</code></pre>
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_VIDEO=&lt;discord_webhook_url&gt;
+DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S=30</code></pre></div>
 
 <hr>
 
@@ -220,7 +220,7 @@ DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S=30</code></pre>
 <ul><li>New <code>scripts/regression_test_criteria_17_18_19.py</code> — 50 checks across 3 sets covering webhook dispatcher routing/throttling/embed format, <code>_autocorrect_email_address</code> common cases, <code>_should_remind_email</code> spam filtering. All 50 pass.</li></ul>
 
 <h3>Configuration additions</h3>
-<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
+<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
 DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS=...
 DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT=...
 DISCORD_VOICE_LIVE_WEBHOOK_EMAIL=...
@@ -229,7 +229,7 @@ DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED=...
 DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS=2
 DISCORD_VOICE_LIVE_EMAIL REMINDER_ENABLED=true
 DISCORD_VOICE_LIVE_EMAIL REMINDER_POLL_SECONDS=300
-DISCORD_VOICE_LIVE_EMAIL REMINDER_MAX_PER_HOUR=3</code></pre>
+DISCORD_VOICE_LIVE_EMAIL REMINDER_MAX_PER_HOUR=3</code></pre></div>
 
 <hr>
 
@@ -274,7 +274,7 @@ DISCORD_VOICE_LIVE_EMAIL REMINDER_MAX_PER_HOUR=3</code></pre>
         </a><a class="next" style="visibility:hidden"></a></div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>

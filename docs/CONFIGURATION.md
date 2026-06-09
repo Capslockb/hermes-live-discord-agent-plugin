@@ -1,6 +1,6 @@
 # Configuration
 
-> Every env var the gemini-live-discord-bridge understands.
+> Every env var the hermes-live-discord-agent-plugin understands.
 
 All settings live in `~/.hermes/.env` (chmod 600). The installer writes/merges them automatically. After changing anything, restart the gateway:
 
