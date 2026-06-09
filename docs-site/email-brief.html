@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email brief — Hermes Live</title>
+<meta name="description" content="Scheduled Gmail digest with 3-bucket importance scoring. AFK delivery via the notification dispatcher.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html" class="active">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Email Brief</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Email brief — proactive inbox digest</h1>
+
+<p>The voice agent can build a spoken summary of recent inbox mail and fire it through the notification dispatcher. AFK users get a DM; voice users hear it spoken.</p>
+
+<h2><code>local_email_brief</code> tool</h2>
+
+<pre><code class="lang-json">{
+  &quot;limit&quot;: 8,
+  &quot;force&quot;: false,
+  &quot;notify&quot;: true,
+  &quot;backend&quot;: &quot;google&quot;
+}</code></pre>
+
+<ul><li><code>limit</code> — max emails to consider. Default 8.</li><li><code>force</code> — skip the de-dup check and always brief. Default false.</li><li><code>notify</code> — when true (default), the brief is fired through <code>notification.deliver(mode=&quot;auto&quot;)</code> in addition to being returned to the model. Set false for a pure read.</li><li><code>backend</code> — <code>&quot;google&quot;</code> (default, uses <code>google_api.py</code>) or <code>&quot;himalaya&quot;</code>. Auto-falls back to himalaya if google_api.py fails.</li></ul>
+
+<p>Returns a payload with three buckets + the per-email list:</p>
+
+<pre><code class="lang-json">{
+  &quot;result&quot;: {
+    &quot;status&quot;: &quot;ok&quot;,
+    &quot;backend&quot;: &quot;google&quot;,
+    &quot;count&quot;: 5,
+    &quot;brief&quot;: &quot;**1 important.**\n• Sarah Chen — URGENT: invoice overdue\n\n**1 FYI.**\n• Alex Kim — Quick question about the deploy\n\n**3 auto** (Promotions, Social, Updates).&quot;,
+    &quot;buckets&quot;: {
+      &quot;important&quot;: [{&quot;id&quot;: &quot;1&quot;, &quot;from&quot;: &quot;Sarah Chen ...&quot;, &quot;subject&quot;: &quot;URGENT: ...&quot;, &quot;score&quot;: 82, ...}],
+      &quot;fyi&quot;:       [...],
+      &quot;auto&quot;:      [...]
+    },
+    &quot;notified&quot;: true,
+    &quot;delivery&quot;: {&quot;status&quot;: &quot;ok&quot;, &quot;channel&quot;: &quot;dm&quot;, ...}
+  }
+}</code></pre>
+
+<h2>Importance scoring (0-100)</h2>
+
+<p>The scoring formula (see <code>email_brief.py:_score_email</code>):</p>
+
+<table><thead><tr><th>Signal</th><th>Score</th></tr></thead><tbody><tr><td>Recency < 1h</td><td>+35</td></tr><tr><td>Recency < 6h</td><td>+25</td></tr><tr><td>Recency < 24h</td><td>+15</td></tr><tr><td>Recency < 72h</td><td>+8</td></tr><tr><td>Recency > 72h</td><td>+2</td></tr><tr><td>Gmail label <code>IMPORTANT</code></td><td>+25</td></tr><tr><td>Gmail label <code>STARRED</code></td><td>+15</td></tr><tr><td>Gmail label <code>CATEGORY_PRIMARY</code> or <code>INBOX</code></td><td>+10</td></tr><tr><td>Subject matches urgent/asap/critical/emergency/deadline/overdue/invoice/contract/legal/signature/fwd</td><td>+12</td></tr><tr><td>Sender contains <code>noreply</code> / <code>no-reply</code> / <code>notifications@</code></td><td>-30</td></tr><tr><td>Gmail label <code>CATEGORY_PROMOTIONS</code> / <code>_SOCIAL</code> / <code>_UPDATES</code> / <code>_FORUMS</code> / <code>SPAM</code> / <code>TRASH</code></td><td>-50</td></tr><tr><td>Already read</td><td>-10</td></tr></tbody></table>
+
+<p>Final score is clamped to 0-100. Buckets:</p>
+<ul><li><strong>Important</strong> (≥55)</li><li><strong>FYI</strong> (20-54)</li><li><strong>Auto</strong> (<20 or auto-category)</li></ul>
+
+<h2>Backend fallback</h2>
+
+<p><code>fetch(limit, prefer)</code> tries the preferred backend first, then falls back. The google backend uses <code>google_api.py</code> (the official Gmail client). The himalaya backend uses the <code>himalaya</code> CLI for envelope-only listing (no snippet, no labels).</p>
+
+<p>If both fail, the function returns <code>{status: &quot;ok&quot;, backend: &quot;none&quot;, count: 0}</code> — never crashes. This is the right shape for the agent to handle ("Inbox is empty right now").</p>
+
+<h2>De-dup</h2>
+
+<p>State persists at <code>~/.hermes/voice-users/email-brief-state.json</code>:</p>
+
+<pre><code class="lang-json">{
+  &quot;last_briefed_ids&quot;: [&quot;1&quot;, &quot;2&quot;, &quot;3&quot;],
+  &quot;last_brief_at&quot;: 1749312456.7
+}</code></pre>
+
+<p>The scheduler (and on-demand calls with <code>force=false</code>) only fires a brief when at least one email ID is not in <code>last_briefed_ids</code>. After a successful brief, the IDs are appended (capped at 500).</p>
+
+<p>The de-dup set is <strong>separate from</strong> the per-email reminder loop's seen set (which lives in the bridge's email reminder module). The two can both fire in the same interval — the brief summarises, the per-email pings the highest-importance item — without conflict.</p>
+
+<h2>Background scheduler</h2>
+
+<p><code>email_brief.py:start_brief_scheduler(get_bridge_fn, interval)</code> starts a daemon thread. Default interval is 30 min (env: <code>DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS</code>). It is started in <code>bridge.py:run_sidecar()</code> next to the notification scheduler.</p>
+
+<p>The scheduler picks up the live bridge via the <code>get_bridge_fn</code> callable (which returns <code>BRIDGE</code>), so the brief uses the same voice path the user is currently in.</p>
+
+<h2>When to use</h2>
+
+<table><thead><tr><th>Use case</th><th>Tool</th></tr></thead><tbody><tr><td>"What just came in?" on demand</td><td><code>local_email_brief</code> with <code>force=true</code></td></tr><tr><td>Scheduled morning brief</td><td>scheduler (default 30 min) — no agent call needed</td></tr><tr><td>Read a specific email</td><td><code>local_email_read</code> (existing tool, not part of brief)</td></tr><tr><td>Reply to an email</td><td><code>local_email_reply</code> (existing tool)</td></tr></tbody></table>
+
+<h2>Disable</h2>
+
+<p><code>DISCORD_VOICE_LIVE_EMAIL_BRIEF_ENABLED=false</code> to disable the scheduler. The on-demand tool still works.</p>
+
+<div class="pager"><a class="prev" href="notification.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Notification system — Hermes Live</span>
+        </a><a class="next" href="sfx-library.html">
+          <span class="label">Next →</span>
+          <span class="title">SFX library — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

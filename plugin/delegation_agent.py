@@ -10,8 +10,8 @@ Supports:
 
 Flow:
   1. Gemini calls local_delegate_start(goal)
-  2. Framework returns clarifying questions
-  3. Gemini asks user in voice
+  2. Framework returns at most one clarifying question when ambiguity blocks action
+  3. Gemini asks user in voice only if needed
   4. Gemini calls local_delegate_suggest(goal, size, scope, complexity, platform_hint)
   5. Framework checks rate limits, suggests platform, estimates time
   6. User confirms
@@ -102,6 +102,221 @@ _RATE_LIMIT_CAPS = {
     "numasec_requests": 60,    # per hour
     "hermes_dispatch": 200,    # per hour
 }
+
+
+# ── Fallback chain (criterion #5: "fix broken tools via neighbors") ──────
+# When a platform is marked broken (binary missing, rate-limited, auth
+# failed, persistent error in tmux log), the next delegation on that
+# platform auto-routes to the first healthy neighbor in this list.
+_FALLBACK_CHAIN: Dict[str, List[str]] = {
+    "codex":       ["opencode", "hermes-api", "gemini"],
+    "opencode":    ["codex", "hermes-api", "gemini"],
+    "numasec":     ["opencode", "codex", "hermes-api"],
+    "gemini":      ["opencode", "codex", "hermes-api"],
+    "hermes-api":  ["opencode", "codex", "gemini"],
+}
+
+# Marked-broken platforms persist to disk so the flag survives bridge
+# restarts. Format: {pid: {reason, marked_at_monotonic, ttl_seconds}}
+_HEALTH_PATH = Path.home() / ".hermes" / "voice-platform-health.json"
+_HEALTH_DEFAULT_TTL = 600  # 10 min — re-try after this
+
+
+def _load_health() -> Dict[str, Dict[str, Any]]:
+    try:
+        if _HEALTH_PATH.exists():
+            return json.loads(_HEALTH_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("voice-platform-health: load failed: %s", exc)
+    return {}
+
+
+def _save_health(health: Dict[str, Dict[str, Any]]) -> None:
+    try:
+        _HEALTH_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _HEALTH_PATH.write_text(json.dumps(health, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("voice-platform-health: save failed: %s", exc)
+
+
+def mark_platform_broken(platform: str, reason: str, ttl_seconds: int = _HEALTH_DEFAULT_TTL) -> None:
+    """Flag a platform as unhealthy. Persists to disk with a TTL.
+
+    Suggestion / execute flows will skip this platform until the TTL
+    expires, and `local_delegate_execute` will auto-route the first
+    subsequent call on this platform to the next healthy neighbor.
+    """
+    health = _load_health()
+    health[platform] = {
+        "reason": reason[:280],
+        "marked_at": time.time(),
+        "expires_at": time.time() + ttl_seconds,
+        "ttl_seconds": ttl_seconds,
+    }
+    _save_health(health)
+    logger.warning("voice-platform-health: marked %s broken — %s (ttl=%ds)", platform, reason, ttl_seconds)
+    # Best-effort webhook so the agent can narrate it
+    try:
+        from webhook_dispatcher import emit_fallback_event  # type: ignore
+        emit_fallback_event(platform, reason[:200], list(_FALLBACK_CHAIN.get(platform, [])))
+    except Exception:
+        pass
+
+
+def clear_platform_health(platform: Optional[str] = None) -> None:
+    """Clear health flags — pass a platform to clear one, or None to clear all."""
+    if platform is None:
+        _save_health({})
+        return
+    health = _load_health()
+    health.pop(platform, None)
+    _save_health(health)
+
+
+def get_health_snapshot() -> Dict[str, Any]:
+    """Read current health state, pruning expired entries. Returns {pid: {reason, expires_in}}."""
+    now = time.time()
+    health = _load_health()
+    pruned = {}
+    expired = []
+    for pid, entry in health.items():
+        if entry.get("expires_at", 0) <= now:
+            expired.append(pid)
+            continue
+        pruned[pid] = {
+            "reason": entry.get("reason", "?"),
+            "expires_in_seconds": int(entry.get("expires_at", 0) - now),
+        }
+    if expired:
+        for pid in expired:
+            health.pop(pid, None)
+        _save_health(health)
+    return pruned
+
+
+def is_platform_healthy(platform: str) -> bool:
+    snapshot = get_health_snapshot()
+    return platform not in snapshot
+
+
+def choose_fallback(platform: str) -> Optional[str]:
+    """Return the first healthy neighbor in FALLBACK_CHAIN, or None."""
+    for neighbor in _FALLBACK_CHAIN.get(platform, []):
+        if is_platform_healthy(neighbor):
+            return neighbor
+    return None
+
+
+# Patterns in a CLI's tmux log that mean "this platform is broken right now"
+# (not just a one-off task failure). Auto-fallback fires when any of these
+# appear within the first ~5s of log output.
+_BROKEN_LOG_PATTERNS = [
+    re.compile(r"\b(?:HTTP\s*|status[: ]?)\s*401\b", re.I),
+    re.compile(r"\b(?:HTTP\s*|status[: ]?)\s*403\b", re.I),
+    re.compile(r"\b(?:HTTP\s*|status[: ]?)\s*429\b", re.I),
+    re.compile(r"\b(?:HTTP\s*|status[: ]?)\s*5\d\d\b", re.I),
+    re.compile(r"\brate[- ]limit", re.I),
+    re.compile(r"\b(?:command|program)\s+not\s+found\b", re.I),
+    re.compile(r"\bno\s+such\s+file\b", re.I),
+    re.compile(r"\bpermission\s+denied\b", re.I),
+    re.compile(r"\bauth(?:entication|orization)?\s+(?:failed|error)\b", re.I),
+    re.compile(r"\b(?:api[_-]?key|token)\s+(?:invalid|expired|missing)\b", re.I),
+    re.compile(r"\bconnection\s+refused\b", re.I),
+    re.compile(r"\b(?:ollama|openrouter)\s+(?:error|unavailable)\b", re.I),
+    re.compile(r"\b(?:free\s*tier|quota)\s+exceeded\b", re.I),
+    re.compile(r"^\s*Traceback\s+\(most recent call last\)", re.M),
+]
+
+
+def detect_broken_log(log_path: str, head_bytes: int = 4096) -> Optional[str]:
+    """Return a short reason string if the log shows the platform is broken, else None."""
+    try:
+        p = Path(log_path)
+        if not p.exists():
+            return None
+        head = p.read_text(errors="replace")[:head_bytes]
+        for pat in _BROKEN_LOG_PATTERNS:
+            m = pat.search(head)
+            if m:
+                snippet = head[max(0, m.start() - 20):m.end() + 60].strip().replace("\n", " ")
+                return f"log matched {pat.pattern!r}: {snippet[:120]}"
+    except Exception as exc:
+        logger.debug("detect_broken_log: %s", exc)
+    return None
+
+
+def execute_with_fallback(
+    prompt: str,
+    platform: str,
+    session_id: str,
+    workdir: Optional[str] = None,
+    health_check_delay: float = 5.0,
+) -> Dict[str, Any]:
+    """Spawn `platform`; if it appears broken within `health_check_delay`
+    seconds, auto-respawn on the first healthy neighbor from FALLBACK_CHAIN.
+
+    Returns a composite dict that always includes the original platform,
+    the platform that actually ran, and (if a fallback fired) the reason.
+    """
+    if not is_platform_healthy(platform):
+        neighbor = choose_fallback(platform)
+        if neighbor:
+            inner = execute_with_fallback(prompt, neighbor, session_id, workdir, health_check_delay)
+            inner["requested_platform"] = platform
+            inner["active_platform"] = inner.get("active_platform", neighbor)
+            # If a deeper layer already set fallback_from, keep that chain
+            if "fallback_from" not in inner:
+                inner["fallback_from"] = platform
+            if "fallback_reason" not in inner:
+                inner["fallback_reason"] = f"platform '{platform}' was marked broken (pre-check)"
+            return inner
+        return {
+            "error": f"platform '{platform}' is marked broken and no healthy neighbor found",
+            "requested_platform": platform,
+            "active_platform": platform,
+            "health": get_health_snapshot(),
+        }
+
+    result = execute_delegation(prompt, platform, session_id, workdir)
+    if "error" in result:
+        # Hard error before tmux spawn — treat as broken, try neighbor
+        mark_platform_broken(platform, f"execute_delegation error: {str(result['error'])[:160]}")
+        neighbor = choose_fallback(platform)
+        if neighbor:
+            inner = execute_with_fallback(prompt, neighbor, session_id, workdir, health_check_delay)
+            inner["requested_platform"] = platform
+            inner["active_platform"] = inner.get("active_platform", neighbor)
+            if "fallback_from" not in inner:
+                inner["fallback_from"] = platform
+            inner["fallback_reason"] = str(result["error"])[:200]
+            return inner
+        result["requested_platform"] = platform
+        result["active_platform"] = platform
+        return result
+
+    result.setdefault("requested_platform", platform)
+    result.setdefault("active_platform", platform)
+
+    log_path = result.get("log_path")
+    if log_path and health_check_delay > 0:
+        # Wait for early signs of trouble
+        time.sleep(health_check_delay)
+        reason = detect_broken_log(log_path)
+        if reason:
+            mark_platform_broken(platform, reason)
+            neighbor = choose_fallback(platform)
+            if neighbor:
+                inner = execute_with_fallback(prompt, neighbor, session_id + "-fb", workdir, health_check_delay)
+                inner["fallback_from"] = platform
+                inner["fallback_reason"] = reason
+                inner["original_log_path"] = log_path
+                return inner
+            # No healthy neighbor — keep the original (still useful) result
+            result["health_warning"] = reason
+
+    result.setdefault("requested_platform", platform)
+    result.setdefault("active_platform", platform)
+    return result
 
 
 def _check_rate_limit(rate_limit_key: str) -> Tuple[bool, int, int]:
@@ -353,11 +568,23 @@ def suggest_platform(
     complexity: str,
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Analyze the task and suggest the best platform + ETA."""
+    """Analyze the task and suggest the best platform + ETA.
+
+    Platforms currently marked broken in the health registry are filtered
+    out before scoring. (criterion #5)
+    """
     rates = get_all_rate_limits()
-    available = [pid for pid, r in rates.items() if r.get("available", False)]
+    broken = set(get_health_snapshot().keys())
+    available = [
+        pid for pid, r in rates.items()
+        if r.get("available", False) and pid not in broken
+    ]
     if not available:
-        return {"error": "All platforms are rate-limited right now. Please wait.", "rates": rates}
+        return {
+            "error": "All healthy platforms are either rate-limited or marked broken. Please wait or run local_delegate_health action='clear'.",
+            "rates": rates,
+            "unhealthy": list(broken),
+        }
 
     # Score each platform
     scores = {}

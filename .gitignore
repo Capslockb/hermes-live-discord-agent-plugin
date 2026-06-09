@@ -1,51 +1,6 @@
-# Python
+# Discord Voice Bridge plugin
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Virtualenvs
-.venv/
-venv/
-env/
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# Local secrets — never commit
-.env
-.env.local
-*.env.local
-secrets.yaml
-secrets.json
-
-# Test / smoke artefacts
-/tmp/
+*.pyc
+*.pyo
 *.bak
-*.bak-*
-
-# Installer smoke tests
-installer/_smoke.py
-installer/_test_validators.py
-
-# Build / dist
-build/
-dist/
-*.whl
-
-# OS
-.Trash-*
-
-# Coverage
-.coverage
-htmlcov/
+.env

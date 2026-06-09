@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fallback chain — Hermes Live</title>
+<meta name="description" content="Multi-CLI delegation with a health registry. opencode / codex / numasec / gemini / hermes-api, with automatic fallback.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html" class="active">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Fallback Chain</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Fallback chain — multi-CLI delegation with health registry</h1>
+
+<p>The voice agent delegates coding tasks to a pool of CLIs (opencode, codex, gemini, numasec, hermes-api). When one is broken, the agent shouldn't be stuck — <code>execute_with_fallback</code> automatically reroutes to a healthy neighbor.</p>
+
+<h2>The pool</h2>
+
+<p>Defined in <code>delegation_agent.py:PLATFORMS</code>:</p>
+
+<table><thead><tr><th>Platform</th><th>Binary</th><th>Best for</th><th>Tokens</th><th>Rate limit</th></tr></thead><tbody><tr><td>opencode</td><td><code>~/.local/bin/opencode</code></td><td>code/refactor/test/debug</td><td>126k</td><td>100/h</td></tr><tr><td>codex</td><td><code>~/.npm-global/bin/codex</code></td><td>reasoning/multi-file refactors</td><td>195k</td><td>50/h</td></tr><tr><td>gemini</td><td><code>~/.npm-global/bin/gemini</code></td><td>huge context/vision/audio</td><td>900k</td><td>1M tok</td></tr><tr><td>numasec</td><td><code>~/.npm-global/bin/numasec</code></td><td>security/review</td><td>120k</td><td>60/h</td></tr><tr><td>hermes-api</td><td>HTTP 127.0.0.1:8088</td><td>general</td><td>—</td><td>200/h</td></tr></tbody></table>
+
+<h2>The chain</h2>
+
+<p>Defined in <code>delegation_agent.py:FALLBACK_CHAIN</code>:</p>
+
+<pre><code class="lang-python">FALLBACK_CHAIN = {
+    &quot;codex&quot;:    [&quot;opencode&quot;, &quot;hermes-api&quot;, &quot;gemini&quot;],
+    &quot;opencode&quot;: [&quot;codex&quot;, &quot;hermes-api&quot;, &quot;gemini&quot;],
+    &quot;numasec&quot;:  [&quot;opencode&quot;, &quot;codex&quot;, &quot;hermes-api&quot;],
+    &quot;gemini&quot;:   [&quot;opencode&quot;, &quot;codex&quot;, &quot;hermes-api&quot;],
+    &quot;hermes-api&quot;: [&quot;opencode&quot;, &quot;codex&quot;, &quot;gemini&quot;],
+}</code></pre>
+
+<p>The chain is <strong>bidirectional</strong> between opencode/codex (they substitute for each other most often) and falls through to gemini last (because it has the most tokens but is also the most likely to be rate-limited).</p>
+
+<h2>Health registry</h2>
+
+<p>Broken platforms are persisted to <code>~/.hermes/voice-platform-health.json</code> with a TTL (default 600s = 10 min). After TTL expires, the platform is automatically considered healthy again — the assumption being that transient failures (rate limits, OAuth expiry) clear themselves.</p>
+
+<pre><code class="lang-json">{
+  &quot;codex&quot;: {
+    &quot;marked_broken_at&quot;: 1749312456.7,
+    &quot;reason&quot;: &quot;rate_limit: 429 from openai.com&quot;,
+    &quot;ttl_seconds&quot;: 600
+  }
+}</code></pre>
+
+<p><code>is_platform_healthy(platform)</code> reads this file. <code>mark_platform_broken(platform, reason, ttl)</code> writes it. <code>clear_platform_health(platform=None)</code> wipes one or all entries.</p>
+
+<h2><code>execute_with_fallback(prompt, platform, ...)</code></h2>
+
+<p>The wrapper that every <code>local_delegate_execute</code> call goes through:</p>
+
+<ol><li><strong>Pre-check</strong> — if the platform is already in the broken registry, recurse to the first healthy neighbor with <code>fallback_from=&lt;original&gt;</code> and <code>requested_platform=&lt;original&gt;</code>.</li><li><strong>Spawn</strong> — call the platform's <code><em>run</em>&lt;name&gt;</code> executor (each is fire-and-forget, returns the tmux window name + log file).</li><li><strong>Poll the log</strong> for ~5 seconds for break-signals:</li></ol>
+<ul><li>HTTP 401 / 403 / 429 / 5xx</li><li>"rate limit", "rate-limit", "quota"</li><li>"command not found"</li><li>"auth", "auth fail", "unauthorized"</li><li>"connection refused", "timeout", "ollama", "Ollama"</li><li>Python "Traceback"</li></ul>
+<ol><li><strong>If a break-signal is detected</strong>: mark the platform broken, recurse to the first healthy neighbor, return a merged result with <code>fallback_from</code> and <code>fallback_reason</code> populated.</li><li><strong>Otherwise</strong>: return the original result with <code>fallback_from=null</code> and <code>active_platform == requested_platform</code>.</li></ol>
+
+<h2><code>local_delegate_health</code> tool</h2>
+
+<p>Lets the agent (or <code>_<em>init</em>_.py</code> handlers) inspect and reset the registry without touching the file directly.</p>
+
+<pre><code class="lang-json">// local_delegate_health(action=&quot;list&quot;)
+{
+  &quot;result&quot;: {
+    &quot;health&quot;: {
+      &quot;codex&quot;: {&quot;marked_broken_at&quot;: &quot;...&quot;, &quot;reason&quot;: &quot;...&quot;, &quot;ttl_seconds&quot;: 600, &quot;seconds_remaining&quot;: 432}
+    }
+  }
+}
+
+// local_delegate_health(action=&quot;clear&quot;, platform=&quot;codex&quot;)
+{&quot;result&quot;: {&quot;cleared&quot;: [&quot;codex&quot;]}}</code></pre>
+
+<h2>Why defense in depth</h2>
+
+<p><code>execute_with_fallback</code> is the safe wrapper, but <code>suggest_platform</code> is also called from elsewhere (e.g. for ETA estimation, voice narration). It also filters broken platforms out of <code>available_platforms</code> before scoring. Two layers, no single point of failure.</p>
+
+<h2>Smoke test</h2>
+
+<p>The fallback chain has a real-execution smoke test (see <code>delegation_agent.py</code> docstring):</p>
+
+<pre><code class="lang-bash">~/.hermes/hermes-agent/venv/bin/python -c &quot;
+import sys; sys.path.insert(0, &#x27;.&#x27;)
+from delegation_agent import mark_platform_broken, suggest_platform, execute_with_fallback, get_health_snapshot
+mark_platform_broken(&#x27;codex&#x27;, &#x27;rate_limit&#x27;, ttl=60)
+print(suggest_platform(&#x27;complex refactor&#x27;))  # should NOT return &#x27;codex&#x27;
+print(execute_with_fallback(&#x27;test&#x27;, &#x27;codex&#x27;))  # should route to opencode
+&quot;</code></pre>
+
+<p>The smoke test was the test that caught the <code>fallback_from</code> metadata bug in pre-emptive branching (see git log around 1bd8906).</p>
+
+<div class="pager"><a class="prev" href="personality.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Personality — Hermes Live</span>
+        </a><a class="next" href="notification.html">
+          <span class="label">Next →</span>
+          <span class="title">Notification system — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

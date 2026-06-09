@@ -1,372 +1,182 @@
-# Hermes Live Discord Agent Plugin
+# Hermes Live — Discord Voice Agent
 
 ![Hermes Live Banner](docs/banner.png)
 
 > **Drop a real-time multimodal AI into any Discord voice channel.**
-> Speak to it. It answers in a human voice. Mid-conversation it can run tools, check email, queue Spotify, dim the lights, or hand off a coding task to **Codex / OpenCode / Gemini‑CLI / NumaSec / Hermes (API)**.
-> Full-duplex audio · vision · 40+ function tools · per-user memory · post-call transcripts.
-> Built on [Google Gemini Multimodal Live](https://ai.google.dev/api/live), packaged as a [Hermes Agent](https://hermes‑agent.nousresearch.com) plugin. **Open source. MIT. Yours.**
-
-[![Discord](https://img.shields.io/badge/voice-discord-5865F2?logo=discord&logoColor=white)](https://github.com/Capslockb/hermes-live-discord-agent-plugin)
-[![License](https://img.shields.io/badge/license-MIT-22d3ee)](LICENSE)
-[![Hermes](https://img.shields.io/badge/hermes-agent-7c3aed?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNzAiIGZvbnQtc2l6ZT0iODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfjrU8L3RleHQ+PC9zdmc+)](https://hermes-agent.nousresearch.com)
-[![Gemini](https://img.shields.io/badge/gemini-3.1--flash--live-4285F4?logo=google)](https://aistudio.google.com)
+> Full-duplex audio · vision · function calling · multi-CLI delegation · proactive notifications · post-call transcripts.
+> Built on **Google Gemini Multimodal Live**, packaged as a self-hostable **Hermes Agent** plugin.
+> Open source. MIT. Yours.
 
 ---
 
-> 🆕 **New name, new site.** This plugin is now branded **Hermes Live Discord Agent Plugin** and has a public promo site at <https://capslockb.github.io/hermes-live-discord-agent-plugin/> with the feature showcase, roadmap, and collaboration info. The internal plugin directory is still `discord-voice` — renaming it would force refactors across the Hermes plugin registry, the autostart filename, and the import paths.
+## 📖 [Documentation →](docs-site/index.html)
+
+A proper website is now available in [`docs-site/`](docs-site/index.html) — built from the source markdown in `docs/`. Open `docs-site/index.html` in a browser, or serve it with any static host (`python3 -m http.server` works). 13 pages covering architecture, personality, fallback chain, notifications, email brief, SFX library, webhooks, video feeder, env vars, troubleshooting, and the changelog.
+
+If you prefer raw markdown, every page is also in [`docs/`](docs/).
 
 ---
 
-## ✦ Why this release matters
+## Quick start
 
-Hermes can now **hold a real conversation with you in voice**. Not a 30-second demo — sub-second latency, hour-long sessions, remembers what you talked about last time via [Honcho](https://github.com/plastic-labs/honcho) memory.
+```bash
+# 1. Install
+git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
+cd gemini-live-discord-bridge
+./install.sh                 # full install (prompts for env)
+./install.sh --from-local    # use the current working dir
+./install.sh --uninstall     # remove
+
+# 2. Restart the gateway
+systemctl --user restart hermes-gateway
+
+# 3. From Discord, run:
+/voice-live          # join your current voice channel
+/voice-live-leave    # leave
+```
+
+The installer handles venv, symlinks, env prompts, and SFX directory creation. See `install.sh` for details.
+
+---
+
+## What's in the box
+
+| | |
+|---|---|
+| 🎙️ **Full-duplex voice** | Sub-second latency, Discord UDP → Opus → 16 kHz mono → Gemini WSS |
+| 👁️ **Vision + frame feed** | Send images or stream 1 fps screenshare — the model sees what you see |
+| 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
+| 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
+| 📣 **Proactive notifications** | Voice, DM, channel, webhook, or auto — fires on long-task completion, AFK pings, scheduled alerts |
+| 📧 **Email brief** | Scheduled Gmail digest, 3-bucket importance scoring, AFK delivery |
+| 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
+| 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
+| 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
+| 🪶 **Self-hostable** | No SaaS, no third-party relay. Runs in your existing Hermes gateway's asyncio loop |
+| 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/frame`, `/say`, `/leave` |
+
+---
+
+## Architecture
+
+```
+Discord Voice → Opus Decode → 48kHz PCM → 16kHz Mono → Gemini WSS → Model
+     ↑                                                              │
+     │                                                              ▼
+     └──────────── 24kHz PCM ← Gemini WSS ← 48kHz Stereo ← Discord AudioSource
+```
+
+Lies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WSS). The bridge runs **in-process** inside the Hermes gateway — no separate services, no queues, no message buses. Full architecture doc: [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## Features in depth
+
+| Feature | Doc | What it does |
+|---|---|---|
+| **Voice I/O** | [`docs/architecture.md`](docs/architecture.md) | Opus in/out, Gemini Live streaming, sidecar HTTP API on 18943 |
+| **Personality system** | [`docs/personality.md`](docs/personality.md) | 14-section system prompt, ping-pong rhythm, boredom switch, vocal expression cap |
+| **Multi-CLI delegation** | [`docs/fallback-chain.md`](docs/fallback-chain.md) | opencode / codex / gemini / numasec / hermes-api with health registry + automatic fallback |
+| **Proactive notifications** | [`docs/notification.md`](docs/notification.md) | `local_notify` tool, scheduler, sidecar `/notify`, AFK DM pings |
+| **Email brief** | [`docs/email-brief.md`](docs/email-brief.md) | Scheduled inbox digest, important/fyi/auto buckets, AFK delivery |
+| **SFX library** | [`docs/sfx-library.md`](docs/sfx-library.md) | 4 slots, env-driven paths, `local_sfx_test` tool |
+| **Webhooks** | [`docs/webhooks.md`](docs/webhooks.md) | 9 event classes, throttle keys, per-class env-var config |
+| **Video awareness** | [`docs/architecture.md`](docs/architecture.md) | `/frame` HTTP endpoint, auto-react to video enable/disable |
+| **Onboarding** | — | First-run Q&A for new users, persisted to `~/.hermes/voice-users/<id>.yaml` |
+| **Honcho context** | — | Per-user peer memory injected into the system prompt |
+| **GitHub tools** | — | 6 voice tools to manage repos / issues / PRs via the `gh` CLI |
+| **Home Assistant** | — | Voice-driven HA control |
+| **Spotify** | — | Play/pause/skip/search/volume via voice |
+
+---
+
+## Why this release matters
+
+Hermes can now **hold a real conversation with you in voice**. Not a 30-second demo — sub-second latency, hour-long sessions, remembers what you talked about last time via Honcho memory.
 
 Mid-conversation, it can:
 
-- 🔍 **Search the web** and read the answer aloud
-- 📁 **Open your files**, review code, suggest fixes
-- 📬 **Check your email** and summarize what matters
-- 🎵 **Queue Spotify**, dim the lights (Home Assistant)
-- 🧠 **Delegate and track** Codex / OpenCode / NumaSec / Hermes (API) sessions in the background
-- 👁️ **See your screenshare** and walk you through a bug
-
-**Cost: ~$0.03–0.06 / hour of voice** on Gemini's Flex tier. Less than a cup of coffee for a work day.
+- 🔍 Search the web and read the answer aloud
+- 📁 Open your files, review code, suggest fixes
+- 📬 Check your email and summarize
+- 🎵 Queue Spotify, dim the lights (Home Assistant)
+- 🧠 Delegate and track **Codex / OpenCode / NumaSec / Hermes (API)** sessions
+- 👁️ See your screenshare and walk you through a bug
 
 **Built in one session. One developer. Shipped.**
 
 ---
 
-## ✦ Quick install
+## Environment variables
+
+The minimum required:
 
 ```bash
-git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-cd hermes-live-discord-agent-plugin
-python3 installer/install.py     # interactive (add --yes for defaults)
+DISCORD_BOT_TOKEN=***
+GEMINI_API_KEY=***
+DISCORD_VOICE_LIVE_USER_ID=1474100257762578597   # your Discord snowflake
 ```
 
-The installer walks through: system preflight → API keys → install mode → plugin deployment → `.env` merge → optional autostart.
-
-**Requirements:** Python 3.10+, Hermes Agent (recommended), Discord bot token + Gemini API key.
+Full list of every `DISCORD_VOICE_LIVE_*` env var: [`docs/env-vars.md`](docs/env-vars.md).
 
 ---
 
-## ✦ What you can do in voice
+## Sidecar HTTP control API
 
-| You say… | Gemini does… |
-|---|---|
-| "Find me a focus playlist" | Calls `spotify_playlists` → creates a custom playlist from your liked tracks |
-| "Check my inbox" | Calls `local_email_list` → reads unread sender/subject |
-| "Send an email to …" | Calls `local_email_send` with auto‑corrected address |
-| "Refactor the auth module" | Calls `local_delegate_suggest` → picks best CLI → assembles prompt → spawns task |
-| "What's my GitHub?" | Calls `local_github_repo_list` → lists repos |
-| "Suggest repos for …" | Calls `local_github_suggest_repos` → searches GitHub |
-| "Turn off the lights" | Calls `local_homeassistant_call_service` |
-| "What's the weather?" | Calls `local_weather` |
-| "🔊 [starts typing]" *(tool running)* | Plays a real mechanical‑keyboard click via the typing SFX |
+Runs on `127.0.0.1:18943`:
 
----
-
-## ✦ Features
-
-<details>
-<summary><strong>🎛️ 5‑CLI delegation framework</strong> — OpenCode, Codex, Gemini CLI, Numasec, Hermes API</summary>
-
-When you ask for a coding/deployment/security task, Gemini: (1) calls `local_delegate_suggest` — analyzes size/scope/complexity, checks rate limits, suggests best platform + ETA, (2) reads the assembled plan back to you for confirmation, (3) calls `local_delegate_assemble` — builds a platform‑optimized system prompt with sub‑goals and constraints, (4) calls `local_delegate_execute` — spawns the CLI in a tmux window or POSTs to the Hermes API server. Progress is webhook‑pushed and the agent can poll via `opencode_status`.
-
-**Rate‑limit tracking:** rolling 1‑hour windows per platform. If Codex is at its limit, Gemini says *"Codex is almost at rate limits — want to run this in OpenCode instead?"* **Context‑fit warnings:** if the estimated prompt + project tree exceeds a platform's context limit, Gemini warns you before execution.
-</details>
-
-<details>
-<summary><strong>🧰 40+ Gemini function tools</strong> — all callable by voice</summary>
-
-| Family | Tools | Gating |
+| Route | Method | Description |
 |---|---|---|
-| Spotify | play, pause, skip, volume, search, queue, **playlists** (create / add_items / list) | owner‑default |
-| Web | search, extract | all users |
-| Local helpers | weather, translate, time, remind, YouTube, systemd | all users |
-| Email | list, read, **send** (with STT auto‑correction), reply | all users |
-| Honcho | search past facts & decisions | all users |
-| Home Assistant | entity_list, get_state, call_service, get_services | HASS_TOKEN |
-| System inspect | read, grep (allowlisted paths) | **owner‑only** |
-| OpenCode | run, status, list, send, stop | **owner‑only (run/stop)** |
-| GitHub | repo_list, issues, prs, issue_create, note, notes_read, **suggest_repos** | all users (gh auth) |
-| Onboarding | get_questions, answer | all users (first session) |
-| Delegation | suggest, assemble, execute, calibrate_eta | all users |
-</details>
-
-<details>
-<summary><strong>👥 Per‑user profiles</strong> — isolated memory, tools, and opencode sessions</summary>
-
-Every Discord user gets their own profile at `~/.hermes/voice‑users/<id>.yaml`, auto‑created on first contact. Each profile owns:
-
-- **Honcho peer name** — memory is fully isolated per user
-- **Tool allowlist** — new users get safe defaults (Spotify, web, email, helpers). Destructive tools (opencode_run, sysinspect, etc.) are **owner‑only** by default
-- **System prompt overrides** — custom instructions per user
-- **Opencode namespace** — tmux windows, log files, and registry are all keyed per user. Cross‑user session access denied at the dispatch level
-- **Onboarding answers** — name, timezone, work, interests, communication style, pet peeves captured during the first session
-
-**Owner detection:** set `VOICE_OWNER_DISCORD_ID` env var. Default: B's snowflake `1474100257762578597`.
-</details>
-
-<details>
-<summary><strong>🔊 Real keyboard typing SFX</strong> — plays while a tool is running</summary>
-
-When Gemini invokes a tool, the bridge plays a 180ms **real mechanical keyboard click** (sourced from YouTube, single keypress) at 5‑15 Hz with random jitter. The result sounds like someone actually typing — not a click track. Set `DISCORD_VOICE_LIVE_TYPING_SFX` to a custom WAV path, or `DISCORD_VOICE_LIVE_TYPING_SOUND=false` to disable.
-</details>
-
-<details>
-<summary><strong>📡 Webhook dispatcher</strong> — 6 event classes, per‑class Discord webhook URLs</summary>
-
-| Event class | Env var | Fires on… |
-|---|---|---|
-| `voice.transcript` | `…WEBHOOK_TRANSCRIPT` | every Gemini input/output line |
-| `opencode.status` | `…WEBHOOK_OPENCODE_STATUS` | started / progress / milestone / finished / stopped |
-| `opencode.transcript` | `…WEBHOOK_OPENCODE_TRANSCRIPT` | live opencode log tail (throttled) |
-| `email.sent` | `…WEBHOOK_EMAIL` | email sent via local_email_send |
-| `bridge.status` | `…WEBHOOK_BRIDGE_STATUS` | bridge connect / disconnect |
-| `tool.called` | `…WEBHOOK_TOOL_CALLED` | any tool invocation (throttled) |
-
-Throttled at 2s/event/webhook via `…WEBHOOK_THROTTLE_SECONDS`. Embeds disable @everyone pings. 6 webhook URLs already configured in `.env` (from criterion #17).
-</details>
-
-<details>
-<summary><strong>📧 Email (read, send, reply) + important‑email reminders</strong></summary>
-
-**Local email tools** (`local_email_list`, `local_email_read`, `local_email_send`, `local_email_reply`) use the Gmail API via the Hermes `google_api.py` wrapper. STT auto‑correction fixes common voice transcription errors — `"alice at example dot com"` → `alice@example.com`, with the agent saying *"I heard that as… corrected to… confirm?"* before sending.
-
-**Background email reminder poller** checks the inbox every 5 minutes and voice‑reminds you about important non‑spam messages. Filters out newsletters, CI notifications, PR messages, receipts, and automated senders — only reminds for real human‑to‑human emails. Throttled to 3 reminders/hour. Persistently remembers seen IDs so restarts don't re‑nag.
-</details>
-
-<details>
-<summary><strong>🤖 OpenCode watcher</strong> — voice updates during long coding tasks</summary>
-
-A background async task polls the opencode log every 5s and injects progress into the Gemini session so the agent speaks it aloud. Throttles to one update per 30s, with **milestone detection** that triggers immediate updates on errors, test failures, compile successes, and completions. Sends a final summary when the tmux window dies. Respects "user currently speaking" — drops updates rather than barging in.
-</details>
-
-<details>
-<summary><strong>🎥 Discord video awareness</strong> — Gemini knows when you're sharing</summary>
-
-When you turn on your camera or start screen sharing, the bridge tells Gemini *"<Name> started screen sharing. I can't see the shared screen automatically (Discord bots don't get video streams), but they can use the /frame command to share a screenshot, or run video‑frame‑feeder.py to push frames. Until then, I just know sharing is active."* Gemini can then ask you to describe verbally or push a frame.
-</details>
-
-<details>
-<summary><strong>🧷 Per‑user onboarding Q&A</strong> — first session learns about you</summary>
-
-A brand‑new user's first `/voice‑live` triggers a system‑prompt reminder telling Gemini to walk through 6 questions (name, timezone, work, interests, communication style, pet peeves). Answers are persisted to the profile YAML and mirrored to top‑level fields. Subsequent calls use these to personalize the conversation. The agent also captures `communication_style` + `pet_peeves` and injects them as behavioral guidance (#28 speech mirroring).
-</details>
-
-<details>
-<summary><strong>💵 Wallet‑safe</strong> — cost optimization & idle hangup</summary>
-
-- `mediaResolution` omitted (not supported by current models → was causing 1007 reconnect loops)
-- `turnCoverage: TURN_INCLUDES_ONLY_ACTIVITY` — frames billed only during speech
-- 1 fps cap + 512 KB max + audio‑gated frame uploads
-- Two‑phase idle hangup (prompt → grace → leave)
-- Result: **~$0.03–$0.06/hour** of real conversation on Flex tier
-</details>
+| `/health` | GET | Bridge health JSON |
+| `/frame` | POST | Send a JPEG/PNG frame (`?force=true` bypasses audio-gate) |
+| `/stop` | GET | Stop the bridge |
+| `/say` | GET | Inject text into Gemini (`?text=...`) |
+| `/notes` | GET | Recent transcript events (`?limit=50`) |
+| `/notify` | GET/POST | Proactive notification breakout |
 
 ---
 
-## ✦ Configuration
+## Personality
 
-All env vars live in `~/.hermes/.env`. The plugin also reads `~/.hermes/config.yaml` for structured settings.
+The system prompt is a 14-section behavioral contract, not documentation. Each section addresses a specific regression. **Do not** add hedging like "be helpful and harmless" — the model interprets that as permission to revert to assistant defaults.
 
-<details>
-<summary><strong>Requirements</strong></summary>
-
-```
-DISCORD_BOT_TOKEN=...
-GEMINI_API_KEY=...
-DISCORD_ALLOWED_USERS=1474100257762578597
-```
-</details>
-
-<details>
-<summary><strong>Model selection</strong></summary>
-
-```
-GEMINI_MODEL=models/gemini-3.1-flash-live-preview
-GEMINI_LIVE_MODEL_FALLBACKS=models/gemini-3.1-flash-live-preview,...
-DISCORD_VOICE_LIVE_VOICE=Aoede          # default, TTS voice name
-```
-</details>
-
-<details>
-<summary><strong>Idle hangup</strong></summary>
-
-```
-DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS=900
-DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS=120
-DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS=60
-DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT=Are you still there?
-```
-</details>
-
-<details>
-<summary><strong>Webhooks</strong></summary>
-
-```
-DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
-DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS=...
-DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT=...
-DISCORD_VOICE_LIVE_WEBHOOK_EMAIL=...
-DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS=...
-DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED=...
-DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS=2
-```
-</details>
-
-<details>
-<summary><strong>Per‑user profiles</strong></summary>
-
-```
-VOICE_OWNER_DISCORD_ID=1474100257762578597
-VOICE_USERS_DIR=~/.hermes/voice‑users
-```
-</details>
-
-<details>
-<summary><strong>Opencode watcher</strong></summary>
-
-```
-DISCORD_VOICE_LIVE_OPENCODE_WATCHER=true
-DISCORD_VOICE_LIVE_OPENCODE_WATCHER_POLL_SECONDS=5
-DISCORD_VOICE_LIVE_OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS=30
-DISCORD_VOICE_LIVE_OPENCODE_WATCHER_INITIAL_DELAY_SECONDS=60
-```
-</details>
-
-<details>
-<summary><strong>Email reminders</strong></summary>
-
-```
-DISCORD_VOICE_LIVE_EMAIL_REMINDER_ENABLED=true
-DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS=300
-DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR=3
-```
-</details>
-
-<details>
-<summary><strong>Typing SFX</strong></summary>
-
-```
-DISCORD_VOICE_LIVE_TYPING_SOUND=true
-DISCORD_VOICE_LIVE_TYPING_SFX=/home/caps/.hermes/voice‑live‑typing.wav
-DISCORD_VOICE_LIVE_TYPING_SFX_VOLUME=0.45
-DISCORD_VOICE_LIVE_TYPING_SYNTH_FALLBACK=false
-```
-</details>
-
-<details>
-<summary><strong>Delegation agent (API server)</strong></summary>
-
-```
-API_SERVER_HOST=127.0.0.1
-API_SERVER_PORT=8088
-API_SERVER_KEY=Redleak@CLB25!
-```
-</details>
+See [`docs/personality.md`](docs/personality.md) for the section index and how to edit.
 
 ---
 
-## ✦ Commands
+## Cost
 
-| Slash command | What it does |
-|---|---|
-| `/voice‑live` | Join your current voice channel and start the bridge (native Discord Application Command) |
-| `/voice‑live‑leave` | Stop the bridge |
-
-Plugins also expose tool calls for agent‑mediated use via Hermes chat.
+~**$0.03–0.06 / hour** of voice on Gemini's Flex tier. Calls cost tokens; a 30-min voice session runs roughly the cost of a long text chat with a generous model.
 
 ---
 
-## ✦ Architecture
+## Documentation
 
-The bridge is **in‑process** — it lives inside the Hermes gateway's asyncio loop. No external services.
+**📖 [Open the docs website →](docs-site/index.html)**
 
-```
-  Discord user ──► Discord UDP ──► [NaCl/Opus decode] ──► 16kHz PCM ──► Gemini WSS
-  Discord user ◄── Discord UDP ◄── [Opus encode] ◄── 24kHz PCM ◄── Gemini WSS
-  
-  Tool dispatch:
-    Gemini calls tool → bridge executor → synchronous runner → toolResponse → Gemini speaks
-  
-  Control API:
-    GET  /health → bridge state JSON
-    POST /frame  → push video frame to Gemini
-    GET  /notes  → post‑call transcript
-    GET  /say?text=… → inject text into the session
-```
+A proper, designed docs site lives in `docs-site/`. It's a static site built from the markdown in `docs/`, so you can host it on GitHub Pages, Vercel, or just `python3 -m http.server` from the repo.
 
----
+Individual pages (also browseable as raw markdown):
 
-## ✦ Development
-
-```bash
-git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-cd hermes-live-discord-agent-plugin
-pip install -r plugin/requirements.txt
-python3 installer/install.py          # pick "symlink" mode
-python3 -m py_compile plugin/*.py      # compile check
-
-# Regression suite
-python3 scripts/regression_test_user_isolation.py   # 50 checks
-python3 scripts/regression_test_opencode_watcher.py  # 13 checks
-python3 scripts/regression_test_criteria_17_18_19.py # 50 checks
-python3 scripts/regression_test_criteria_31_32.py    # 43 checks
-python3 scripts/regression_test_criterion_22.py      # 22 checks
-```
+- [`docs/architecture.md`](docs/architecture.md) — end-to-end audio path, threading, lifecycle
+- [`docs/personality.md`](docs/personality.md) — system prompt shape and behavioral contracts
+- [`docs/fallback-chain.md`](docs/fallback-chain.md) — multi-CLI delegation with health registry
+- [`docs/notification.md`](docs/notification.md) — proactive notification breakout
+- [`docs/email-brief.md`](docs/email-brief.md) — scheduled inbox digest
+- [`docs/sfx-library.md`](docs/sfx-library.md) — slot-based UI sound effects
+- [`docs/webhooks.md`](docs/webhooks.md) — event-class webhook fanout
+- [`docs/video.md`](docs/video.md) — video frame feeder
+- [`docs/env-vars.md`](docs/env-vars.md) — every env var, defaults, descriptions
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — common bridge failures
 
 ---
 
-## ✦ Project layout
+## CHANGELOG
 
-```
-hermes-live-discord-agent-plugin/
-├── README.md
-├── CHANGELOG.md
-├── plugin/                        # the Hermes plugin
-│   ├── __init__.py                # tool registration + slash commands
-│   ├── bridge.py                  # core audio pipeline + Gemini Live
-│   ├── user_profiles.py           # per‑Discord‑user profile system
-│   ├── delegation_agent.py        # multi‑CLI delegation framework
-│   ├── webhook_dispatcher.py      # per‑event‑class Discord webhooks
-│   ├── plugin.yaml
-│   ├── requirements.txt
-│   └── assets/
-│       └── voice-live-typing.wav  # mech keyboard click (180ms)
-├── installer/
-│   └── install.py
-├── scripts/
-│   ├── post_call_summary.py       # extract tasks from .jsonl
-│   ├── video-frame-feeder.py      # cross‑platform screen feeder
-│   └── regression_test_*.py       # 6 test suites
-└── docs/
-    ├── ARCHITECTURE.md        # markdown source
-    ├── CONFIGURATION.md
-    ├── KNOWN_BUGS.md
-    ├── index.html             # promo site + GitHub Pages root
-    ├── architecture.html      # rendered doc pages
-    ├── configuration.html
-    ├── known-bugs.html
-    ├── changelog.html
-    ├── assets/style.css       # shared stylesheet
-    └── diagrams/              # ASCII dataflow diagrams
-```
+See `CHANGELOG.md` for the full release history.
 
 ---
 
-## ✦ License
+## License
 
-MIT. Bundled `voice‑live‑typing.wav` is from Mixkit (CC0‑equivalent, no attribution required, commercial use allowed).
-
----
-
-## ✦ Credits
-
-- Discord voice protocol — [discord.py](https://github.com/Rapptz/discord.py) + [discord‑ext‑voice‑recv](https://github.com/imayhaveborkedit/discord-ext-voice-recv)
-- Opus decoding — bundled with discord.py
-- Gemini Live — [Google AI Studio](https://aistudio.google.com)
-- Honcho memory — [Honcho](https://github.com/plastic-labs/honcho), self‑hosted
-- Hermes Agent — [Nous Research](https://nousresearch.com)
+MIT. See top of `bridge.py` for full text.

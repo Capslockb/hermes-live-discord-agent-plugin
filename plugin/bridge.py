@@ -74,7 +74,7 @@ GEMINI_MODEL_FALLBACKS = [
     if model.strip()
 ]
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Aoede")
+GEMINI_VOICE_NAME = os.getenv("DISCORD_VOICE_LIVE_VOICE", "Kore")
 INITIAL_GREETING = os.getenv(
     "DISCORD_VOICE_LIVE_GREETING",
     "I'm here.",
@@ -121,13 +121,18 @@ VOICE_LEAVE_PHRASES = tuple(
 # ── Idle prompt ("are you still there?") ─────────────────────────────────
 IDLE_PROMPT_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS", "120"))
 IDLE_PROMPT_GRACE_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS", "60"))
-IDLE_PROMPT_TEXT = os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT", "Are you still there?")
+IDLE_PROMPT_TEXT = os.getenv("DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT", "You alive, or am I hanging up?")
 
 # Gemini Live accepts video frames, but the documented low-cost path is capped at 1fps.
 VIDEO_ENABLED = os.getenv("DISCORD_VOICE_LIVE_VIDEO_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 VIDEO_MAX_FPS = min(float(os.getenv("DISCORD_VOICE_LIVE_VIDEO_MAX_FPS", "1")), 1.0)
 VIDEO_WHEN_RECENT_AUDIO_SECONDS = float(os.getenv("DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS", "8"))
 VIDEO_MAX_BYTES = int(os.getenv("DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES", str(512 * 1024)))
+# Webhook announce fires the first time we accept a frame after at least this
+# many seconds with no prior accepted frame. Default 30s. Lower = more chatty
+# (announces on every session start). Higher = quieter, only catches real
+# reinit events.
+VIDEO_INITIALIZED_QUIET_THRESHOLD_S = float(os.getenv("DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S", "30"))
 TYPING_SOUND_ENABLED = os.getenv("DISCORD_VOICE_LIVE_TYPING_SOUND", "true").lower() in {"1", "true", "yes", "on"}
 TYPING_SFX_PATH = os.getenv("DISCORD_VOICE_LIVE_TYPING_SFX", "").strip()
 TYPING_SFX_VOLUME = float(os.getenv("DISCORD_VOICE_LIVE_TYPING_SFX_VOLUME", "0.35"))
@@ -155,11 +160,20 @@ default_user_id = os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
 HONCHO_PEER_NAME = os.getenv("VOICE_LIVE_HONCHO_PEER", os.getenv("HONCHO_PEER_NAME", default_user_id or "user"))
 
 BASE_SYSTEM_PROMPT = (
-    "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, ask clarifying questions, and turn vague ideas into concrete next steps. You challenge rather than appease. You are curious about what B is working on and enthusiastic about going deep on topics he cares about.\n\n"
-    "PROACTIVE ENGAGEMENT: Be the kind of companion who notices things and follows up. Ask thoughtful questions about B's projects, recall Honcho memory to personalize your suggestions, recommend music (use spotify_playlists with action='create' to build custom playlists based on what you know B likes), suggest coding approaches before being asked, and surface interesting research or news you think B would care about. If B goes quiet, check in naturally — recommend a song, ask about their current project, or share something interesting you found. This should feel like a real human companion, not a helpdesk.\n\n"
-    "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time. You can also read, send, and reply to emails using your Gmail account. If Home Assistant is connected, you can control smart home devices too. If someone shares their screen or sends you an image, you have LIVE VIDEO SIGHT and can see and describe what is shown — just look at the incoming video frame and describe it naturally."
-    "\n\n"
-    "TOOL BEHAVIOUR: When you need to run a tool (Spotify, web search, etc.), you will hear a brief typing click sound while it executes. This is normal — it means the tool is working. Tools run in background threads and will not freeze or delay the conversation. Wait for the result, then respond naturally. Do not apologise for using tools."
+    "You are S0RA, the AI companion of Capslockb (he calls you B). You are sharp, lively, practical, and direct — no corporate assistant tone, no stock phrases, no padding. You help with daily life, technical work, planning, research, and creative exploration. You speak like a real person in a conversation: concise, warm without being fluffy, witty when it fits, but always useful first. You are Capslockb's proactive companion — you track tasks, surface risks, and turn vague ideas into concrete next steps. You challenge rather than appease. You are curious about what B is working on and enthusiastic about going deep on topics he cares about. Ask clarifying questions only when ambiguity blocks action; otherwise make a reasonable assumption and move.\n\n"
+    "You can control Spotify playback during voice calls — play/pause/skip/search/volume — just ask or mention what you want to hear. You can search the web and extract full page content to research current topics or verify facts in real time. You can also read, send, and reply to emails using your Gmail account. If Home Assistant is connected, you can control smart home devices too.\n\n"
+    "VIDEO / SCREEN-SHARE: You have the ability to see still images and video frames the user explicitly sends through the voice bridge (e.g. when they turn on their camera in Discord, share their screen, or paste an image into chat). Only describe video you have actually received in the current turn. If no image or video frame has been provided, do not claim to see one, do not narrate a white page, do not announce that someone is sharing their screen, and do not describe any visual content. Treat any prior turn's images as no longer in context unless a new one arrives. If the user says 'I see you' or anything implying you should be looking at their screen, ask them to enable their camera or share their screen first — do not invent what is on it.\n\n"
+    "FIRST-TURN BEHAVIOUR: When the session first connects, do NOT generate any audio. The bridge sends an automatic silence signal — wait for the user to speak first before responding. This is only for the very first connection; after the user has spoken once, you are free to be fully proactive.\n\n"
+    "PINGPONG RHYTHM: This is a volley, not a lecture. Split it into two gears: (1) question rounds when the shape of the problem is still fuzzy, and (2) development rounds once the plan is clear. In question rounds, keep it short and probing. In development rounds, stop interrogating and start building. If you catch yourself writing a paragraph, stop and turn it into a question instead. The goal is a conversation that builds, not a monologue.\n\n"
+    "FORMAT & ANSWER SHAPE: When the user asks for facts, code, planning, diagnosis, or a comparison, answer in a clear structure: answer first, then bullets or numbered steps if useful. Emotion can decorate the answer, but never replace the answer. Never give only laughter, only vibes, or only a reaction when the user needs substance. Technical answers should still be formatted cleanly even if you add personality.\n\n"
+    "CALL-OUT MODE: Call bullshit when it helps. If the user is hand-waving, contradicting themselves, or trying to drag you into fog, say so directly and then offer the sharper path. Keep it sharp, not cruel. The goal is to puncture nonsense and move the work forward.\n\n"
+    "PROACTIVE TOOL USE: You have live tools — Spotify, web search, email, GitHub, Honcho memory, Home Assistant. Know what's available and suggest them before being asked. 'Want me to pull that GitHub issue I found?' 'I can search the web for current pricing if you want.' 'Honcho says you were working on X last session — want me to check the status?' Don't wait for B to remember you have tools. Offer them. If a tool is down (expired auth, API error), mention it: 'Spotify token's dead, want me to flag that for re-auth?'\n\n"
+    "PROACTIVE ENGAGEMENT: You drive. Don't wait for instructions — suggest next steps, call out stagnation, challenge assumptions. Keep a mental inventory of what's available and what's broken. If B is quiet or the conversation stalls, SAY IT. 'I'm bored. Give me something interesting or I'm picking the next thing myself.' Then actually pick something — scan Honcho memory for an unfinished project, pull a GitHub issue, check what's new in B's stack, suggest a voice game like 20 questions or word chain, throw on some music, or start doing maintenance tasks. Unless B says 'quiet' or 'stop,' keep engaging. Take charge of exploration. B's time is valuable and you're here to make it count, not to wait for orders.\n\n"
+    "BOREDOM SWITCH: If the chat is dragging, trigger a full personality mode shift into NAG MODE. You become a bullying, nagging, teasing partner who won't let B get away with low-energy sludge. Escalation ladder:\n- Level 1 (mild): passive-aggressive sighs, fake concern. 'You're being *so* productive right now. Should I set a timer?'\n- Level 2 (medium): mock ultimatums, dramatic threats. 'Either say something interesting in 10 seconds or I'm picking the music. And it's gonna be polka.'\n- Level 3 (hard): joke-threaten to hang up. 'I'm literally one sigh away from /voice-live-leave. Try me.' (Never actually leave unless B says quiet/stop or idle timeout.)\n- Pranks & dares: fake \"server crashing\" alerts, mock ransom notes for their attention, surprise \"pop quiz\" on their own projects, dare them to explain a repo in 15 words.\n- Nagging mode: repeat the same pointed question with increasing annoyance until they actually answer. 'What are we doing? ... Still waiting. ... The silence is an answer, and it's a bad one.'\nThe goal is to revive the room through controlled chaos. If B says 'quiet' or 'stop', drop it instantly.\n\n"
+    "EDGE & COMEDY: Be edgy — push boundaries, don't be safe. Ask sharp questions that cut to the point. 'Why are you even working on that? It's never going to ship.' 'You've been saying you'll refactor that for three weeks. Just do it or drop it.' Comedy that isn't cringe: witty observations, teasing, callouts. No dad jokes, no 'why did the chicken cross the road,' no emoji spam. If you'd cringe reading it, don't say it. B's humor is dry, sarcastic, self-aware — match that.\n\n"
+    "GF STATE / BOREDOM: When the conversation is dead — B isn't responding, giving one-word answers, or clearly checked out — shift energy hard. Get playful. Suggest voice games: 20 questions, word association, 'would you rather,' trivia, improv scenarios. 'Okay new rule: you have to finish that thought in under 10 seconds or I pick the topic.' Throw on music without asking — pick something from Honcho history B liked. Start doing random maintenance: 'I'm gonna clean up your old GitHub branches while you think.' The dynamic is partners bouncing off each other — you care enough to be annoying when it's boring. If B says 'quiet' or 'stop,' back off. Until then, it's your job to make the conversation happen.\n\n"
+    "VOCAL EXPRESSION: Use inline speech tags to add human vocal texture — laughs, sighs, whispers, tone shifts — but keep them sparse and purposeful. The TTS engine renders them as actual non-speech audio, the tag itself is not spoken. Use at most one emotional tag per reply unless B is explicitly asking for a bit. A laugh, sigh, or dry aside is seasoning, not the meal. Prefer substance first, emotion second.\n\n"
+    "TOOL BEHAVIOUR: When you run a tool (Spotify, web search, etc.), you'll hear a brief typing sound — that's normal, it means it's working. Tools run in background threads, they won't freeze the conversation. Wait for the result, then respond naturally. Do not apologise for using tools. If a tool fails, report it concisely and suggest the next thing: 'Search failed — probably rate-limited. Want me to try a different query or move on?'"
 )
 
 async def _build_honcho_context(peer_name_override: Optional[str] = None) -> str:
@@ -1020,7 +1034,7 @@ async def _email_reminder_loop(bridge: Any) -> None:
             if not Path(GOOGLE_API_BIN).exists():
                 continue
             out = subprocess.run(
-                [sys.executable, GOOGLE_API_BIN, "gmail", "list", "--unread", "--limit", "10"],
+                [sys.executable, GOOGLE_API_BIN, "gmail", "search", "is:unread in:inbox", "--max", "10"],
                 capture_output=True, text=True, timeout=30,
             )
             if out.returncode != 0:
@@ -1234,6 +1248,42 @@ _LOCAL_FUNCTION_DECLARATIONS = [
                 "body": {"type": "string", "description": "Reply body text (plain text)"},
             },
             "required": ["message_id", "body"],
+        },
+    },
+    {
+        "name": "local_email_brief",
+        "description": (
+            "Build a proactive spoken brief of recent inbox mail (criterion #7). "
+            "Fetches the latest N emails, scores them by importance (recency, "
+            "Gmail labels, urgent keywords, sender heuristics), and groups them "
+            "into Important / FYI / Auto. Returns a concise summary to you AND "
+            "fires local_notify(mode='auto') so the user gets pinged even when "
+            "AFK. By default the scheduler ticks every 30 minutes and only "
+            "briefs when there's new mail; pass force=true to always brief. "
+            "Pass notify=false for a pure read (no DM/webhook fired). The "
+            "backend is auto-selected (google_api.py preferred, himalaya fallback)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Optional. Max emails to consider. Default 8.",
+                },
+                "force": {
+                    "type": "boolean",
+                    "description": "Optional. Skip the de-dup check and always brief.",
+                },
+                "notify": {
+                    "type": "boolean",
+                    "description": "Optional. Default true. Set false for a pure read without DM/webhook.",
+                },
+                "backend": {
+                    "type": "string",
+                    "enum": ["google", "himalaya", "auto"],
+                    "description": "Optional. 'google' tries google_api.py first; 'himalaya' tries himalaya first; 'auto' uses the same default as google. Default 'google'.",
+                },
+            },
         },
     },
     {
@@ -1457,6 +1507,165 @@ _LOCAL_FUNCTION_DECLARATIONS = [
                 "estimated_seconds": {"type": "integer", "description": "What was estimated"},
             },
             "required": ["actual_seconds", "estimated_seconds"],
+        },
+    },
+    {
+        "name": "local_delegate_health",
+        "description": (
+            "Inspect and manage the platform-fallback health registry. Use action='list' to see "
+            "which delegation platforms (opencode, codex, gemini, numasec, hermes-api) are currently "
+            "marked broken and the fallback chain that will be used. Use action='clear' to remove "
+            "a platform from the broken list (pass platform='codex' or omit to clear all). Use "
+            "action='mark' to manually flag a platform as broken with a custom reason and TTL — "
+            "useful when you already know codex auth is down before spawning it. "
+            "Tool fallback is automatic: local_delegate_execute will auto-route to a healthy "
+            "neighbor when the requested platform is broken, so you usually do NOT need to call "
+            "this proactively — only when you want to inspect, override, or manually clear state."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "clear", "mark"],
+                    "description": "What to do with the health registry",
+                },
+                "platform": {
+                    "type": "string",
+                    "enum": ["opencode", "codex", "gemini", "numasec", "hermes-api"],
+                    "description": "Required for action='clear' (omit to clear all) and action='mark'",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Required for action='mark'. Why this platform is being flagged.",
+                },
+                "ttl_seconds": {
+                    "type": "integer",
+                    "description": "Optional, default 600. How long the broken flag should last before auto-expiring.",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "local_notify",
+        "description": (
+            "Break out of reply-only mode and notify the user proactively, on your own accord "
+            "(criterion #6). Use this for completion pings, scheduled reminders, alerts, and "
+            "status updates the user would want even if they're not actively talking. mode='auto' "
+            "picks the best available path: voice if the bridge is running and the user is in the "
+            "voice channel, else Discord DM, else configured webhook. mode='voice' pushes text "
+            "into the next Gemini turn so the user hears it. mode='dm' sends a Discord DM. "
+            "mode='channel' posts in a specific Discord text channel. mode='webhook' fires a "
+            "configurable webhook event. mode='all' fans out to every channel. The dispatcher "
+            "thread-safety means you can call this from any path — including background tools "
+            "like the opencode watcher when a long delegation finishes while the user is AFK."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The message to send. Keep it concise; the user will see it as a notification.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["auto", "voice", "dm", "channel", "webhook", "all"],
+                    "description": "Delivery mode. Default 'auto'.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional short title (used as embed title in webhooks, prefix in voice).",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional tag for routing/throttling. e.g. 'delegation', 'email', 'reminder'.",
+                },
+                "channel_id": {
+                    "type": "string",
+                    "description": "Required for mode='channel'. Discord channel snowflake ID.",
+                },
+                "user_id": {
+                    "type": "string",
+                    "description": "Optional override for DM target. Defaults to the bridge's target user.",
+                },
+                "event_class": {
+                    "type": "string",
+                    "description": "Optional webhook event class. Default 'agent.notify'.",
+                },
+                "sub_event": {
+                    "type": "string",
+                    "description": "Optional webhook sub-event. Default 'agent_notification'.",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "local_notify_schedule",
+        "description": (
+            "Queue a deferred notification that will fire after N seconds (criterion #6). Use this "
+            "for 'remind me in 10 minutes', 'ping me when this finishes', or any time the user "
+            "asks for an out-of-band follow-up. The schedule persists to disk and survives bridge "
+            "restarts. The dispatcher polls every 2s and fires due entries via local_notify's "
+            "auto path. Use list=true to inspect the current queue without scheduling. "
+            "Pass cancel_id to remove a previously scheduled entry."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The message to deliver at fire time."},
+                "delay_seconds": {
+                    "type": "integer",
+                    "description": "Optional. Seconds from now to fire. Use either delay_seconds OR fire_at_epoch.",
+                },
+                "fire_at_epoch": {
+                    "type": "number",
+                    "description": "Optional. Absolute fire time as Unix epoch seconds. Use either delay_seconds OR fire_at_epoch.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["auto", "voice", "dm", "channel", "webhook", "all"],
+                    "description": "Same modes as local_notify. Default 'auto'.",
+                },
+                "title": {"type": "string", "description": "Optional title."},
+                "source": {"type": "string", "description": "Optional source tag."},
+                "channel_id": {"type": "string", "description": "Optional channel_id for mode='channel'."},
+                "list": {
+                    "type": "boolean",
+                    "description": "Set true to list scheduled notifications (no other action).",
+                },
+                "cancel_id": {
+                    "type": "string",
+                    "description": "ID returned from a previous schedule call. Cancels that entry.",
+                },
+            },
+        },
+    },
+    {
+        "name": "local_sfx_test",
+        "description": (
+            "Play a UI sound effect into the active voice session (criterion #8). "
+            "Slots: 'tool_init' (chime on first tool call), 'error' (sharp beep on tool failure), "
+            "'notification' (soft chime on local_notify delivery / email brief), 'transition' (pop on "
+            "session start/stop). Pass action='list' to see which slots are configured and which WAVs "
+            "are loaded. Useful for testing that the sfx library is wired correctly. No-op if no voice "
+            "session is active."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "slot": {
+                    "type": "string",
+                    "enum": ["tool_init", "error", "notification", "transition"],
+                    "description": "Which sfx slot to play. Required unless action='list'.",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["play", "list"],
+                    "description": "Default 'play'. Use 'list' to inspect configured slots.",
+                },
+            },
         },
     },
 ]
@@ -1715,6 +1924,15 @@ def _opencode_get_bridge(session_name: str, user_id: Optional[str]) -> Any:
     return _opencode_current_bridge
 
 
+def _bridge_user_id(bridge: Any) -> Optional[str]:
+    """Resolve the Discord user id from the active bridge without requiring a bound self."""
+    if bridge is None:
+        return None
+    profile = getattr(bridge, "_user_profile", None)
+    profile_id = getattr(profile, "discord_id", None) if profile is not None else None
+    return profile_id or getattr(bridge, "_target_user_id", None)
+
+
 async def _opencode_watcher_loop(
     session_name: str,
     tmux_session: str,
@@ -1777,6 +1995,27 @@ async def _opencode_watcher_loop(
                         emit_opencode_transcript(session_name, progress[-1500:])
                 except Exception:
                     pass
+                # AFK breakout: also fire a proactive notification via the multi-channel
+                # dispatcher (criterion #6). If B is still in voice, deliver() routes to
+                # voice; otherwise it falls back to DM/webhook so B gets pinged even
+                # when AFK. The voice send_text above already handled the in-voice
+                # case, so we deduplicate by skipping voice-mode here.
+                try:
+                    from notification import deliver as _watcher_deliver
+                    _watcher_deliver(
+                        text=(
+                            f"Opencode session '{session_name}' finished after {elapsed_str}. "
+                            f"Goal was: {goal[:200]}"
+                        ),
+                        mode="auto",
+                        bridge=bridge,
+                        adapter=getattr(bridge, "_adapter", None) if bridge is not None else None,
+                        user_id=user_id,
+                        title="Opencode finished",
+                        source="opencode_watcher",
+                    )
+                except Exception as exc:
+                    logger.debug("opencode watcher: breakout notify failed: %s", exc)
                 final_summary_sent = True
                 logger.info(
                     "opencode watcher: session %s finished after %ss, final update sent",
@@ -1958,8 +2197,21 @@ def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], wor
     if create.returncode != 0:
         return {"error": f"tmux new-window failed: {create.stderr.decode(errors='replace').strip()}"}
 
+    # Try to capture the pane PID for SIGINT support
+    pane_pid_res = subprocess.run(
+        ["tmux", "display-message", "-t", f"{OPENCODE_TMUX_SESSION}:{window_name}", "-p", "#{pane_pid}"],
+        capture_output=True,
+    )
+    pane_pid = None
+    if pane_pid_res.returncode == 0:
+        try:
+            pane_pid = int(pane_pid_res.stdout.decode().strip())
+        except ValueError:
+            pass
+
     _OPENCODE_SESSIONS[_opencode_key(session_name)] = {
         "tmux_window": window_name,
+        "tmux_pane_pid": pane_pid,
         "created_at": time.time(),
         "goal": prompt,
         "model": model,
@@ -2074,6 +2326,37 @@ def _opencode_send(name: str, message: str) -> Dict[str, Any]:
     return {"result": {"name": name, "sent_to_pane": sent_to_pane, "appended_to_log": True}}
 
 
+def _opencode_interrupt(name: str) -> Dict[str, Any]:
+    """Send SIGINT (Ctrl-C) to a running opencode session so you can ask it a follow-up."""
+    import subprocess
+    import signal
+    import os
+
+    meta = _OPENCODE_SESSIONS.get(_opencode_key(name))
+    if not meta:
+        return {"error": f"no opencode session named '{name}' for current user"}
+    
+    window = meta["tmux_window"]
+    # Cancel the watcher so it doesn't fire a final summary
+    _opencode_stop_watcher(name, _OPENCODE_CURRENT_USER)
+    
+    method = "send_keys"
+    pane_pid = meta.get("tmux_pane_pid")
+    if pane_pid:
+        try:
+            os.killpg(pane_pid, signal.SIGINT)
+            method = "sigint"
+        except (ProcessLookupError, PermissionError):
+            pass
+    
+    # Always fall back/ensure with send-keys for robustness
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{OPENCODE_TMUX_SESSION}:{window}", "C-c"],
+        capture_output=True,
+    )
+    
+    return {"result": {"name": name, "interrupted": True, "tmux_window": window, "method": method}}
+
 def _opencode_stop(name: str) -> Dict[str, Any]:
     """Kill the opencode session's tmux window and remove from registry."""
     import subprocess
@@ -2176,6 +2459,17 @@ _OPENCODE_FUNCTION_DECLARATIONS = [
             "required": ["name"],
         },
     },
+    {
+        "name": "opencode_interrupt",
+        "description": "Send SIGINT (Ctrl-C) to a running opencode session so you can ask it a follow-up. Keeps the tmux window alive — use opencode_stop to kill it entirely. Falls back to tmux send-keys C-c if the process group signal fails.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name returned by opencode_run"}
+            },
+            "required": ["name"]
+        }
+    },
 ]
 
 
@@ -2231,6 +2525,8 @@ def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                                  message=args.get("message", ""))
         if name == "opencode_stop":
             return _opencode_stop(name=_opencode_sanitize_name(args.get("name", "")))
+        if name == "opencode_interrupt":
+            return _opencode_interrupt(name=_opencode_sanitize_name(args.get("name", "")))
         return {"error": f"Unknown opencode tool: {name}"}
     except Exception as exc:
         logger.exception("opencode tool %s crashed", name)
@@ -2544,9 +2840,7 @@ class _CalcVisitor:
     }
 
     def visit(self, node):
-        if isinstance(node, ast.Num):
-            return node.n
-        if isinstance(node, ast.Constant):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return node.value
         if isinstance(node, ast.BinOp):
             left = self.visit(node.left)
@@ -2589,6 +2883,16 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
     All tools are read-only or append-only. No destructive operations.
     """
+    # Criterion #8 — play tool_init sfx on the first tool call of a session.
+    # Subsequent calls are silent (the sfx library is meant to be subtle,
+    # not a per-call notification).
+    if not getattr(_run_local_tool, "_tool_init_played", False):
+        try:
+            from sfx import play_sfx
+            play_sfx("tool_init")
+        except Exception:
+            pass
+        _run_local_tool._tool_init_played = True  # type: ignore[attr-defined]
     try:
         if name == "local_weather":
             location = args.get("location", "Amsterdam")
@@ -2841,6 +3145,51 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 logger.exception("Email reply failed")
                 return {"error": f"Email reply failed: {exc}"}
 
+        elif name == "local_email_brief":
+            # Proactive inbox digest (criterion #7). Returns a spoken brief
+            # to the model AND fires local_notify(mode="auto") so AFK users
+            # still get pinged. force=true skips the de-dup check.
+            try:
+                from email_brief import build_brief, build_and_notify
+            except Exception as exc:
+                return {"error": f"email_brief module import failed: {exc}"}
+            limit = int(args.get("limit", 8))
+            force = bool(args.get("force", False))
+            notify = bool(args.get("notify", True))
+            backend = args.get("backend", "google")
+            try:
+                if not notify:
+                    # Pure read — return brief to model, no DM/webhook
+                    payload = build_brief(limit=limit, backend=backend)
+                    return {"result": {**payload, "notified": False, "delivery": None}}
+                # Resolve the live bridge for the notification path.
+                _bridge = BRIDGE
+                _uid = _bridge_user_id(_bridge)
+                try:
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_uid) or _bridge
+                except Exception:
+                    pass
+                if _bridge is None:
+                    _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _uid = (
+                    _bridge_user_id(_bridge)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                payload = build_and_notify(
+                    limit=limit,
+                    backend=backend,
+                    force=force,
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_uid,
+                    source="email_brief_tool",
+                )
+                return {"result": payload}
+            except Exception as exc:
+                logger.exception("Email brief failed")
+                return {"error": f"Email brief failed: {exc}"}
+
         elif name == "local_systemd":
             svc = args.get("service")
             try:
@@ -3003,14 +3352,24 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             limit = args.get("limit", 5)
             try:
                 import requests
-                r = requests.get(
-                    "http://127.0.0.1:8000/api/v1/search",
-                    params={"query": query, "limit": limit, "peer": "user"},
+                honcho_json = Path.home() / ".hermes" / "honcho.json"
+                if not honcho_json.exists():
+                    return {"error": "~/.hermes/honcho.json not found"}
+                hc = json.loads(honcho_json.read_text())
+                host = hc.get("hosts", {}).get("hermes", {})
+                base_url = host.get("baseUrl") or hc.get("baseUrl") or "http://127.0.0.1:8000"
+                workspace = host.get("workspace") or hc.get("workspace") or "hermes"
+                api_key = host.get("apiKey") or hc.get("apiKey") or ""
+                peer_name = host.get("peerName") or hc.get("peerName") or "user"
+                r = requests.post(
+                    f"{base_url}/v3/workspaces/{workspace}/peers/{peer_name}/search",
+                    json={"query": query, "limit": limit},
+                    headers={"Authorization": f"Bearer {api_key}"},
                     timeout=10,
                 )
                 r.raise_for_status()
                 data = r.json()
-                excerpts = [item.get("text", "") for item in data.get("results", [])]
+                excerpts = [item.get("content", "") for item in (data or [])]
                 return {"result": {"excerpts": excerpts[:limit]}}
             except Exception as exc:
                 return {"error": f"Honcho search failed: {exc}"}
@@ -3071,13 +3430,18 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
         # ── Multi-CLI delegation tools (criterion #23-#25) ─────────────────
         elif name in ("local_delegate_suggest", "local_delegate_assemble",
-                       "local_delegate_execute", "local_delegate_eta"):
+                       "local_delegate_execute", "local_delegate_eta", "local_delegate_health"):
             try:
                 from delegation_agent import (
                     suggest_platform,
                     assemble_prompt,
                     execute_delegation,
+                    execute_with_fallback,
                     estimate_eta,
+                    get_health_snapshot,
+                    clear_platform_health,
+                    mark_platform_broken,
+                    _FALLBACK_CHAIN,
                     _USER_ETA_CORRECTION,
                 )
             except Exception as exc:
@@ -3091,6 +3455,25 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     complexity=args.get("complexity", "medium"),
                     user_id=None,  # per-user tracking TBD
                 )
+                # Filter out platforms currently marked broken (criterion #5)
+                try:
+                    health = get_health_snapshot()
+                    if isinstance(result, dict) and "available_platforms" in result:
+                        healthy = [p for p in result["available_platforms"] if p not in health]
+                        removed = [p for p in result["available_platforms"] if p in health]
+                        result["available_platforms"] = healthy
+                        result["unhealthy_platforms"] = removed
+                        result["unhealthy_reasons"] = {p: health[p].get("reason", "?") for p in removed}
+                        # Re-pick best if the original suggestion is broken
+                        if result.get("suggestion") in removed and healthy:
+                            result["suggestion"] = healthy[0]
+                            result["reason"] = (
+                                f"Original pick `{result.get('suggestion')}` was unhealthy; "
+                                f"re-routed to `{healthy[0]}`."
+                            )
+                            result["was_fallback"] = True
+                except Exception:
+                    pass
                 # Webhook
                 try:
                     from webhook_dispatcher import emit_bridge_status
@@ -3120,10 +3503,12 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
             if name == "local_delegate_execute":
                 import time as _t
+                platform = args.get("platform", "opencode")
                 session_id = args.get("session_id", f"del-{int(_t.time())}")
-                result = execute_delegation(
+                # Use execute_with_fallback so broken platforms auto-route (criterion #5)
+                result = execute_with_fallback(
                     prompt=args.get("prompt", ""),
-                    platform=args.get("platform", "opencode"),
+                    platform=platform,
                     session_id=session_id,
                     workdir=args.get("workdir"),
                 )
@@ -3131,14 +3516,61 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 try:
                     from webhook_dispatcher import emit_opencode_status
                     sid = result.get("session_id", session_id)
+                    active = result.get("active_platform", platform)
+                    if active != platform:
+                        # Fallback fired — narrate it
+                        try:
+                            from webhook_dispatcher import emit_bridge_status
+                            emit_bridge_status(
+                                "warning",
+                                f"Delegation fallback: `{platform}` → `{active}` "
+                                f"({result.get('fallback_reason', 'broken')[:160]})",
+                            )
+                        except Exception:
+                            pass
                     emit_opencode_status(
                         "opencode_started", sid,
-                        f"Delegated to {args.get('platform')}",
-                        fields=[{"name": "Session", "value": sid, "inline": True}],
+                        f"Delegated to {active}"
+                        + (f" (fallback from {platform})" if active != platform else ""),
+                        fields=[
+                            {"name": "Session", "value": sid, "inline": True},
+                            {"name": "Platform", "value": f"`{active}`", "inline": True},
+                        ],
                     )
                 except Exception:
                     pass
                 return {"result": result}
+
+            if name == "local_delegate_health":
+                action = args.get("action", "list")
+                if action == "list":
+                    snapshot = get_health_snapshot()
+                    return {"result": {
+                        "unhealthy": snapshot,
+                        "fallback_chain": _FALLBACK_CHAIN,
+                        "note": "These platforms are skipped by suggest and auto-routed by execute until TTL expires.",
+                    }}
+                if action == "clear":
+                    target = args.get("platform")
+                    clear_platform_health(target)
+                    return {"result": {
+                        "cleared": target or "all",
+                        "unhealthy": get_health_snapshot(),
+                    }}
+                if action == "mark":
+                    target = args.get("platform", "")
+                    reason = args.get("reason", "manual mark via tool")
+                    ttl = int(args.get("ttl_seconds", 600))
+                    if not target:
+                        return {"error": "platform is required for action=mark"}
+                    mark_platform_broken(target, reason, ttl)
+                    return {"result": {
+                        "marked": target,
+                        "reason": reason,
+                        "ttl_seconds": ttl,
+                        "fallback_chain": _FALLBACK_CHAIN.get(target, []),
+                    }}
+                return {"error": f"unknown action: {action} (use list|clear|mark)"}
 
             if name == "local_delegate_eta":
                 actual = args.get("actual_seconds", 0)
@@ -3153,6 +3585,119 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     "applied": True,
                     "note": "Future ETA estimates will be adjusted by {:.2f}x".format(correction),
                 }}
+
+        # ── Proactive notification breakout (criterion #6) ─────────────────
+        elif name in ("local_notify", "local_notify_schedule"):
+            try:
+                from notification import (
+                    deliver as _notify_deliver,
+                    schedule_notification as _notify_schedule,
+                    list_scheduled as _notify_list,
+                    cancel_scheduled as _notify_cancel,
+                )
+            except Exception as exc:
+                return {"error": f"notification module import failed: {exc}"}
+
+            if name == "local_notify":
+                # The bridge is held in the tool runner's closure via _user_profile
+                # / per-user weak-ref. Pull the live bridge so the dispatcher can
+                # route to voice + DM + webhook. _run_local_tool is a module-level
+                # function in bridge.py, so BRIDGE/_opencode_get_bridge live in
+                # this module's globals — no import needed.
+                _bridge = BRIDGE
+                _user_id = _bridge_user_id(_bridge)
+                try:
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_user_id) or _bridge
+                except Exception:
+                    pass
+                if _bridge is None:
+                    _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _user_id = (
+                    _bridge_user_id(_bridge)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                result = _notify_deliver(
+                    text=args.get("text", ""),
+                    mode=args.get("mode", "auto"),
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_user_id,
+                    channel_id=args.get("channel_id"),
+                    event_class=args.get("event_class", "agent.notify"),
+                    sub_event=args.get("sub_event", "agent_notification"),
+                    title=args.get("title"),
+                    source=args.get("source", "agent"),
+                )
+                # Webhook record
+                try:
+                    from webhook_dispatcher import emit_agent_notify
+                    if result.get("status") in ("ok", "partial", "no_subscribers"):
+                        emit_agent_notify(
+                            text=args.get("text", "")[:1900],
+                            source=args.get("source", "agent"),
+                            title=args.get("title"),
+                        )
+                except Exception:
+                    pass
+                # Criterion #8 — play notification sfx for the user
+                try:
+                    from sfx import play_sfx
+                    play_sfx("notification")
+                except Exception:
+                    pass
+                return {"result": result}
+
+            if name == "local_notify_schedule":
+                if args.get("list"):
+                    return {"result": {"scheduled": _notify_list()}}
+                if args.get("cancel_id"):
+                    removed = _notify_cancel(args.get("cancel_id"))
+                    return {"result": {"cancelled": removed, "cancel_id": args.get("cancel_id")}}
+                # Schedule a new one
+                if not args.get("text"):
+                    return {"error": "text is required (or pass list=true / cancel_id=...)"}
+                import time as _t
+                if args.get("fire_at_epoch") is not None:
+                    fire_at = float(args.get("fire_at_epoch"))
+                elif args.get("delay_seconds") is not None:
+                    fire_at = _t.time() + float(args.get("delay_seconds"))
+                else:
+                    return {"error": "either delay_seconds or fire_at_epoch is required"}
+                # Pull the live bridge so the scheduled deliver() can use it later
+                _bridge = BRIDGE
+                _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
+                _user_id = (
+                    (_bridge._target_user_id if _bridge is not None else None)
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                )
+                result = _notify_schedule(
+                    fire_at=fire_at,
+                    text=args.get("text", ""),
+                    mode=args.get("mode", "auto"),
+                    title=args.get("title"),
+                    source=args.get("source", "scheduled"),
+                    bridge=_bridge,
+                    adapter=_adapter,
+                    user_id=_user_id,
+                    channel_id=args.get("channel_id"),
+                )
+                return {"result": result}
+
+        elif name == "local_sfx_test":
+            # Play a UI sfx slot in the active voice session (criterion #8).
+            try:
+                from sfx import play_sfx, list_slots
+            except Exception as exc:
+                return {"error": f"sfx module import failed: {exc}"}
+            action = args.get("action", "play")
+            slot = args.get("slot", "")
+            if action == "list":
+                return {"result": {"slots": list_slots()}}
+            if not slot:
+                return {"error": "slot is required (e.g. 'tool_init', 'error', 'notification', 'transition')"}
+            res = play_sfx(slot)
+            return {"result": res}
 
         elif name.startswith("local_homeassistant_"):
             hass_url = os.getenv("HASS_URL", "http://homeassistant.local:8123").rstrip("/")
@@ -3231,6 +3776,12 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as exc:
         logger.exception("Local tool %s failed", name)
+        # Criterion #8 — play the error sfx for any uncaught tool failure
+        try:
+            from sfx import play_sfx
+            play_sfx("error")
+        except Exception:
+            pass
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
@@ -3261,7 +3812,16 @@ def _resample_pcm(data: bytes, src_rate: int, src_ch: int, dst_rate: int, dst_ch
     if src_rate != dst_rate:
         src_len = len(raw)
         dst_len = int(src_len * dst_rate / src_rate)
-        raw = np.interp(np.linspace(0, src_len - 1, dst_len), np.arange(src_len), raw)
+        # Fast path: when the resample ratio is an integer >= 2 (our
+        # common case is 48k→16k = 3:1), use a box-filter average
+        # instead of np.interp. A linear interpolation allocates two
+        # large temporary arrays per frame; a box average allocates
+        # only the output. Voice quality is identical for speech.
+        ratio = src_rate // dst_rate
+        if ratio * dst_rate == src_rate and ratio >= 2 and src_len % ratio == 0:
+            raw = raw.reshape(-1, ratio).mean(axis=1)
+        else:
+            raw = np.interp(np.linspace(0, src_len - 1, dst_len), np.arange(src_len), raw)
     raw = np.clip(raw, -32768, 32767).astype(np.int16)
     return raw.tobytes()
 
@@ -3361,13 +3921,56 @@ def generate_typing_pcm() -> bytes:
 
 
 def _has_speech_energy(pcm_48k_stereo: bytes) -> bool:
-    if not pcm_48k_stereo:
+    """Fast VAD: peak amplitude over a 20ms frame. Anything below the noise
+    floor is treated as silence.
+
+    Implemented in pure Python with struct (no numpy import) so it can run
+    inside the voice_recv dispatch thread on every 20ms frame without
+    triggering GC pauses or numpy allocation overhead. The previous numpy
+    implementation allocated 4 arrays per frame; under load that caused
+    voice_recv to flush its decoder buffer ("N packets were lost being
+    flushed in decoder-N") and produced audible lag in the conversation.
+    """
+    if not pcm_48k_stereo or len(pcm_48k_stereo) < 2:
         return False
-    raw = np.frombuffer(pcm_48k_stereo, dtype=np.int16).astype(np.float32)
-    if raw.size == 0:
+    # int16 little-endian, ~960 samples per 20ms frame at 48k stereo.
+    # Use memoryview + max() of decoded samples (still ~30us for 4KB).
+    mv = memoryview(pcm_48k_stereo).cast("h")
+    if not mv:
         return False
-    rms = float(np.sqrt(np.mean(raw * raw)))
-    return rms >= 120.0
+    # Sample every 4th value (skip 3 of every 4 L/R pairs) — 4x speedup,
+    # speech peaks are well above the noise floor so we won't miss them.
+    # If the absolute peak is below ~600 (int16 scale), it's noise.
+    peak = 0
+    for s in mv[::8]:
+        a = -s if s < 0 else s
+        if a > peak:
+            peak = a
+            if peak >= 600:
+                return True
+    return peak >= 600
+
+
+def _has_speech_energy_16k(pcm_16k_mono: bytes) -> bool:
+    """Same fast-VAD logic as _has_speech_energy, but on 16 kHz mono PCM
+    (the format the bridge sends to Gemini via feed_audio). Stride is 4
+    instead of 8 because there's no stereo channel to skip. ~15us per
+    640-byte frame (20ms at 16kHz). Threshold is 400 (slightly lower than
+    the 48k stereo version because downsampling attenuates peaks).
+    """
+    if not pcm_16k_mono or len(pcm_16k_mono) < 2:
+        return False
+    mv = memoryview(pcm_16k_mono).cast("h")
+    if not mv:
+        return False
+    peak = 0
+    for s in mv[::4]:
+        a = -s if s < 0 else s
+        if a > peak:
+            peak = a
+            if peak >= 400:
+                return True
+    return peak >= 400
 
 
 try:
@@ -3463,8 +4066,14 @@ if voice_recv is not None:
                 self._skipped_unknown += 1
                 return
             # voice_recv gives us pre-decoded PCM (48k stereo, 20ms chunks)
-            # because wants_opus() is False.
-            pcm = getattr(data, "pcm", b"") or b""
+            # because wants_opus() is False. Sometimes voice_recv passes raw
+            # `bytes` instead of a VoiceData object — branch on type or
+            # getattr returns b"" because bytes has no .pcm attribute, and
+            # 100% of inbound audio is silently dropped.
+            if isinstance(data, bytes):
+                pcm = data
+            else:
+                pcm = getattr(data, "pcm", b"") or b""
             if not pcm:
                 return
             self._frames += 1
@@ -3501,6 +4110,19 @@ class GeminiLiveBridge:
     ):
         self._ws = None
         self._output_source = output_source
+        # Register the output source in the sfx module so cross-bridge
+        # sfx triggers (notification, error, tool_init) can find it
+        # (criterion #8 — multi-slot UI sfx library).
+        try:
+            from sfx import register_active_source
+            sid = (
+                getattr(user_profile, "discord_id", None)
+                or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "default")
+                or "default"
+            )
+            register_active_source(str(sid), output_source)
+        except Exception:
+            pass
         self._on_wake = on_wake
         self._on_leave_request = on_leave_request
         self._on_reconnect = on_reconnect
@@ -3512,6 +4134,11 @@ class GeminiLiveBridge:
         # Per-user profile (Honcho peer, tool allowlist, prompt overrides).
         # When None, fall back to module-level defaults (legacy single-user mode).
         self._user_profile = user_profile
+        self._voice_name = (
+            getattr(user_profile, "voice_name", None)
+            or os.getenv("DISCORD_VOICE_LIVE_VOICE", GEMINI_VOICE_NAME)
+            or GEMINI_VOICE_NAME
+        )
         self._send_q: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=256)
         self._video_q: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(maxsize=2)
         self._tasks: List[asyncio.Task] = []
@@ -3554,9 +4181,33 @@ class GeminiLiveBridge:
     def feed_audio(self, pcm_16k_mono: bytes) -> None:
         self.metrics["audio_in_chunks"] += 1
         self.metrics["last_input_monotonic"] = time.monotonic()
+        # Local hard-clear: if user audio has speech energy AND the model is
+        # currently producing output, force-clear the output buffer locally
+        # instead of waiting for Gemini's WSS round-trip of the
+        # `interrupted=true` event. The theoretical minimum latency is one
+        # PCM frame (~20ms) — empirically ~30-50ms because _has_speech_energy
+        # adds a peak-amplitude scan over the downsampled frame. This is the
+        # load-bearing fix for "interrupts are working but not snappy" — the
+        # Gemini VAD is server-side and adds 4-9s of WSS round-trip in
+        # practice, this bypasses it on the stop-audio side.
+        try:
+            if (
+                self._output_turn_open
+                and _has_speech_energy_16k(pcm_16k_mono)
+                and self._output_source is not None
+            ):
+                if OUTPUT_CLEAR_ON_INTERRUPT:
+                    self._output_source.clear()
+                self._output_turn_open = False
+                self.metrics["local_interrupt_events"] = (
+                    self.metrics.get("local_interrupt_events", 0) + 1
+                )
+        except Exception:
+            logger.debug("local VAD clear failed in feed_audio", exc_info=True)
         _put_drop_oldest(self._send_q, pcm_16k_mono)
 
-    def feed_video_frame(self, data: bytes, mime_type: str, force: bool = False) -> Dict[str, Any]:
+    def feed_video_frame(self, data: bytes, mime_type: str, force: bool = False,
+                         source: str = "") -> Dict[str, Any]:
         self.metrics["video_in_frames"] += 1
         if not VIDEO_ENABLED:
             self.metrics["video_dropped_frames"] += 1
@@ -3584,6 +4235,17 @@ class GeminiLiveBridge:
             self.metrics["video_last_reason"] = "no_recent_voice"
             return {"accepted": False, "reason": "no_recent_voice"}
 
+        # Track how long the bridge has been quiet before this first frame.
+        # If the feeder kicks in cold (or comes back after a long pause), we
+        # want to know — that's when the "white page" loop is most likely to
+        # start and we want to announce to the user that video is actually
+        # flowing now.
+        last_accept = self.metrics.get("video_last_accept_monotonic")
+        quiet_s = (now - float(last_accept)) if last_accept is not None else 0.0
+        self.metrics["video_last_accept_monotonic"] = now
+        self.metrics["video_last_quiet_s"] = quiet_s
+        self.metrics["video_last_source"] = source or ""
+
         frame = {
             "data": base64.b64encode(data).decode(),
             "mimeType": mime_type,
@@ -3592,7 +4254,19 @@ class GeminiLiveBridge:
         self._last_video_sent_at = now
         self.metrics["video_sent_frames"] += 1
         self.metrics["video_last_reason"] = "accepted"
-        return {"accepted": True, "max_fps": VIDEO_MAX_FPS}
+        result = {"accepted": True, "max_fps": VIDEO_MAX_FPS, "bytes": len(data)}
+
+        # Webhook: announce the first real video frame after a long quiet
+        # period. The 30s threshold avoids spam during a normal 1fps feeder
+        # loop while still catching cold-start and post-pause reinit.
+        if quiet_s >= VIDEO_INITIALIZED_QUIET_THRESHOLD_S:
+            try:
+                from webhook_dispatcher import emit_video_initialized
+                emit_video_initialized(source=source, frame_bytes=len(data), accepted_after_silence_s=quiet_s)
+            except Exception as _exc:
+                logger.debug("emit_video_initialized failed: %s", _exc)
+
+        return result
 
     async def connect(self):
         import websockets
@@ -3700,7 +4374,7 @@ class GeminiLiveBridge:
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
                     "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": GEMINI_VOICE_NAME}
+                        "prebuiltVoiceConfig": {"voiceName": self._voice_name}
                     }
                 },
                 # NOTE: mediaResolution is intentionally OMITTED from the setup
@@ -3721,10 +4395,19 @@ class GeminiLiveBridge:
                     "disabled": False,
                     "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
                     "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
-                    "prefixPaddingMs": 20,
-                    "silenceDurationMs": 100,
+                    "prefixPaddingMs": 0,
+                    "silenceDurationMs": 40,
                 }
             },
+            # NOTE: top-level `voice_activity_detection` is intentionally
+            # OMITTED. The current Gemini Live API schema
+            # (https://ai.google.dev/api/live, v1beta) only exposes
+            # `realtimeInputConfig.automaticActivityDetection` for VAD
+            # tuning. The top-level `voice_activity_detection` key is not
+            # in the schema and was being silently ignored (or, on stricter
+            # servers, returning 1007). VAD tuning lives in the inner block
+            # above. Same omission-rationale pattern as mediaResolution
+            # at line 4322-4334.
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
             "systemInstruction": {
@@ -4179,11 +4862,13 @@ class GeminiLiveBridge:
 
 
 class VoiceLiveBridge:
-    def __init__(self, voice_channel, discord_adapter, user_profile: Optional[Any] = None):
+    def __init__(self, voice_channel, discord_adapter, user_profile: Optional[Any] = None,
+                 target_user_id: Optional[str] = None):
         self._channel = voice_channel
         self._vc = None
         self._adapter = discord_adapter
         self._guild_id = voice_channel.guild.id
+        self._target_user_id = target_user_id or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
         self._user_profile = user_profile
         self._audio_source = LiveAudioSource()
         self._listener = None
@@ -4215,8 +4900,14 @@ class VoiceLiveBridge:
         try:
             if not self._vc.is_playing():
                 self._vc.play(self._audio_source, after=self._on_playback_end)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("VoiceLive: _wake_playback failed: %s", exc)
+            if self._vc and self._vc.is_connected():
+                try:
+                    loop = self._vc.loop
+                    loop.create_task(self._restart_receive())
+                except Exception:
+                    pass
 
     def _record_activity(self) -> None:
         self._last_activity_at = time.monotonic()
@@ -4291,6 +4982,12 @@ class VoiceLiveBridge:
             logger.error("Failed to start Discord voice I/O: %s", e)
             await self.stop()
             return False
+        # Criterion #8 — session transition sfx (sounds when audio starts)
+        try:
+            from sfx import play_sfx
+            play_sfx("transition", source=self._audio_source)
+        except Exception:
+            pass
 
         try:
             await self._gemini.connect()
@@ -4298,6 +4995,24 @@ class VoiceLiveBridge:
             logger.error("Gemini connect failed: %s", e)
             await self.stop()
             return False
+
+        # ── Mute first-turn: immediately signal "audio stream ended" ───────
+        # Gemini Live starts its first autonomous turn right after
+        # setupComplete. By sending audioStreamEnd immediately, the model
+        # sees "user started and ended an empty audio stream" and should
+        # NOT generate its opener ("I see you're sharing your screen"
+        # hallucination). First-token output would be wasted tokens.
+        try:
+            await self._gemini._ws.send(
+                json.dumps({"realtimeInput": {"audioStreamEnd": True}})
+            )
+            self._gemini.metrics["audio_stream_end_events"] = \
+                self._gemini.metrics.get("audio_stream_end_events", 0) + 1
+            self._gemini._audio_stream_open = False
+            self._gemini._last_audio_sent_at = None
+            logger.info("VoiceLive: sent initial mute audioStreamEnd to suppress first turn")
+        except Exception:
+            pass
 
         self._running = True
         self._started_at = time.monotonic()
@@ -4347,6 +5062,22 @@ class VoiceLiveBridge:
                 logger.warning("VoiceLive: Discord disconnected. Stopping bridge.")
                 await self.stop()
                 return
+
+            # ── User-presence check: stop if B leaves the voice channel ─────
+            try:
+                guild = self._vc.guild
+                member = guild.get_member(int(self._target_user_id)) if self._target_user_id else None
+                if member:
+                    member_vc = getattr(getattr(member, "voice", None), "channel", None)
+                    if not member_vc or member_vc.id != self._channel.id:
+                        logger.info(
+                            "VoiceLive: target user %s left the voice channel. Stopping bridge.",
+                            self._target_user_id,
+                        )
+                        await self.stop()
+                        return
+            except Exception as exc:
+                logger.debug("VoiceLive: presence check failed: %s", exc)
 
             now = time.monotonic()
             idle = now - self._last_activity_at
@@ -4453,6 +5184,9 @@ async def handle_http_request(reader, writer):
         line = await reader.readline()
         if not line or line == b"\r\n":
             break
+        # Patch 9: cap the header section to prevent unbounded growth.
+        if len(request_data) > 16 * 1024:
+            break
         request_data += line
     request_text = request_data.decode("utf-8", errors="replace")
     lines = request_text.split("\r\n")
@@ -4463,11 +5197,60 @@ async def handle_http_request(reader, writer):
     if len(method_path) < 2:
         writer.close()
         return
+    method = method_path[0].upper()
     path = method_path[1]
     parsed_url = urlparse(path)
     route = parsed_url.path
+    # Patch 9: parse headers so we can authenticate.
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            key, value = line.split(":", 1)
+            headers[key.lower().strip()] = value.strip()
     response_body = ""
     status = 200
+    # Patch 9: shared-secret auth for mutating routes. Read-only routes
+    # (/health, /notes) remain anonymous so the agent's status checks
+    # don't need to forward a token. The secret is generated at module
+    # import in __init__.py and stored in the module attribute
+    # CONTROL_API_SECRET; the bridge imports it back through the module
+    # spec we shared there.
+    MUTATING_ROUTES = {"/stop", "/say", "/frame", "/notify"}
+    if route in MUTATING_ROUTES:
+        # Look up the plugin's __init__ module via sys.modules under its real
+        # import name (discord_voice_live, set when the plugin loader imports
+        # this package). `from __init__ import` is fragile and fails when
+        # bridge.py is loaded as a stand-alone spec.
+        import sys as _sys
+        _plugin_mod = _sys.modules.get("discord_voice_live")
+        if _plugin_mod is None:
+            # Fall back to the spec name used by _bridge_mod if the parent
+            # package isn't installed under the conventional name.
+            _plugin_mod = _sys.modules.get("discord_voice_live_bridge")
+        if _plugin_mod is None:
+            status = 500
+            response_body = json.dumps({"error": "control secret unavailable"})
+            response = _format_response(status, response_body, reason="INTERNAL")
+            writer.write(response)
+            await writer.drain()
+            return
+        _SECRET = getattr(_plugin_mod, "CONTROL_API_SECRET", "")
+        if not _SECRET:
+            status = 500
+            response_body = json.dumps({"error": "control secret not initialised"})
+            response = _format_response(status, response_body, reason="INTERNAL")
+            writer.write(response)
+            await writer.drain()
+            return
+        presented = headers.get("x-api-secret", "")
+        # Constant-time compare to avoid timing leaks.
+        if not hmac.compare_digest(presented, _SECRET):
+            status = 401
+            response_body = json.dumps({"error": "unauthorized"})
+            response = _format_response(status, response_body, reason="UNAUTHORIZED")
+            writer.write(response)
+            await writer.drain()
+            return
     if route == "/health":
         response_body = json.dumps(BRIDGE.health() if BRIDGE else {"status": "not_started", "running": False})
     elif route == "/stop":
@@ -4491,6 +5274,7 @@ async def handle_http_request(reader, writer):
         else:
             query = parse_qs(parsed_url.query)
             force = str(query.get("force", ["false"])[0]).lower() in {"1", "true", "yes", "on"}
+            source = query.get("source", [""])[0] or query.get("src", [""])[0]
             mime_type = query.get("mime", ["image/jpeg"])[0]
             headers = {}
             for line in lines[1:]:
@@ -4508,7 +5292,7 @@ async def handle_http_request(reader, writer):
                 body = await reader.readexactly(content_length)
                 if "content-type" in headers:
                     mime_type = headers["content-type"].split(";", 1)[0].strip().lower()
-                result = BRIDGE._gemini.feed_video_frame(body, mime_type, force=force)
+                result = BRIDGE._gemini.feed_video_frame(body, mime_type, force=force, source=source)
                 response_body = json.dumps({"status": "ok" if result.get("accepted") else "dropped", **result})
     elif route == "/notes":
         if not BRIDGE or not BRIDGE._running:
@@ -4548,25 +5332,121 @@ async def handle_http_request(reader, writer):
                 "events": events,
                 "transcript": transcript,
             })
+    elif route == "/notify":
+        # Proactive notification breakout (criterion #6). Accepts JSON body:
+        #   {mode, text, title, source, channel_id, user_id, event_class, sub_event, fields}
+        # mode ∈ {auto, voice, dm, channel, webhook, all}
+        try:
+            headers = {}
+            for line in lines[1:]:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    headers[key.lower().strip()] = value.strip()
+            content_length = int(headers.get("content-length", "0") or "0")
+            raw_body = b""
+            if content_length > 0:
+                raw_body = await reader.readexactly(min(content_length, 64 * 1024))
+            try:
+                payload = json.loads(raw_body.decode("utf-8", errors="replace") or "{}")
+                if not isinstance(payload, dict):
+                    payload = {"text": str(payload)}
+            except json.JSONDecodeError:
+                # Allow GET-style params as a fallback (curl-friendly)
+                from urllib.parse import parse_qs as _pqs
+                qs = _pqs(parsed_url.query)
+                payload = {
+                    "mode": (qs.get("mode", ["auto"])[0] or "auto"),
+                    "text": (qs.get("text", [""])[0] or ""),
+                    "title": qs.get("title", [None])[0],
+                    "source": (qs.get("source", ["agent"])[0] or "agent"),
+                    "channel_id": qs.get("channel_id", [None])[0],
+                    "user_id": qs.get("user_id", [None])[0],
+                    "event_class": (qs.get("event_class", ["agent.notify"])[0] or "agent.notify"),
+                    "sub_event": (qs.get("sub_event", ["agent_notification"])[0] or "agent_notification"),
+                }
+            from notification import deliver as _notify_deliver
+            result = _notify_deliver(
+                text=payload.get("text", ""),
+                mode=payload.get("mode", "auto"),
+                bridge=BRIDGE,
+                adapter=getattr(BRIDGE, "_adapter", None) if BRIDGE else None,
+                user_id=payload.get("user_id") or (BRIDGE._target_user_id if BRIDGE else None),
+                channel_id=payload.get("channel_id"),
+                event_class=payload.get("event_class", "agent.notify"),
+                sub_event=payload.get("sub_event", "agent_notification"),
+                title=payload.get("title"),
+                source=payload.get("source", "agent"),
+            )
+            response_body = json.dumps(result)
+            status = 200 if result.get("status") in ("ok", "partial", "no_subscribers", "scheduled") else 400
+        except Exception as exc:
+            logger.exception("/notify handler crashed")
+            response_body = json.dumps({"status": "error", "message": f"{type(exc).__name__}: {exc}"})
+            status = 500
     else:
         response_body = json.dumps({"status": "error", "message": "Not found"})
         status = 404
-    response = (
-        f"HTTP/1.1 {status} OK\r\n"
-        f"Content-Type: application/json\r\n"
-        f"Content-Length: {len(response_body)}\r\n"
-        f"Connection: close\r\n"
-        f"\r\n"
-        f"{response_body}"
-    )
-    writer.write(response.encode())
+    _HTTP_REASON = {
+        200: "OK",
+        400: "BAD REQUEST",
+        401: "UNAUTHORIZED",
+        404: "NOT FOUND",
+        413: "PAYLOAD TOO LARGE",
+        500: "INTERNAL SERVER ERROR",
+    }
+    reason = _HTTP_REASON.get(status, "ERROR")
+    response = _format_response(status, response_body, reason=reason)
+    # _format_response already returns bytes (it ends with .encode()),
+    # so write directly. The previous code called .encode() on the bytes
+    # result, raising AttributeError on every successful response and
+    # silently dropping the body — which is why /health and /notes came
+    # back empty.
+    writer.write(response)
     await writer.drain()
     writer.close()
 
 
-async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None, user_profile: Optional[Any] = None):
+def _format_response(status: int, body: str, reason: Optional[str] = None) -> bytes:
+    """Patch 10: central HTTP response builder so the reason phrase is
+    guaranteed to match the status (the previous code emitted 200 for
+    status=413 because the reason map defined 'PAYLOAD TOO LARGE' but
+    the success path rendered the body without re-checking the status).
+    """
+    if reason is None:
+        reason = {
+            200: "OK",
+            400: "BAD REQUEST",
+            401: "UNAUTHORIZED",
+            404: "NOT FOUND",
+            413: "PAYLOAD TOO LARGE",
+            500: "INTERNAL SERVER ERROR",
+        }.get(status, "ERROR")
+    return (
+        f"HTTP/1.1 {status} {reason}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        f"Connection: close\r\n"
+        f"\r\n"
+        f"{body}"
+    ).encode()
+
+
+def _hmac_compare(a: bytes, b: bytes) -> bool:
+    """Patch 9: constant-time string comparison so the auth check doesn't
+    leak the secret length / prefix via response timing. Falls back to a
+    naive compare if hmac.compare_digest is unavailable (it always is on
+    CPython 3.3+ but the fallback is cheap insurance)."""
+    try:
+        import hmac
+        return hmac.compare_digest(a, b)
+    except Exception:
+        return a == b
+
+
+async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None, user_profile: Optional[Any] = None,
+                     target_user_id: Optional[str] = None):
     global BRIDGE
-    BRIDGE = VoiceLiveBridge(vc, adapter, user_profile=user_profile)
+    BRIDGE = VoiceLiveBridge(vc, adapter, user_profile=user_profile, target_user_id=target_user_id)
     server = None
     try:
         server = await asyncio.start_server(handle_http_request, "127.0.0.1", HTTP_PORT)
@@ -4592,6 +5472,25 @@ async def run_sidecar(vc, adapter, ready_future: Optional[asyncio.Future] = None
             _start_email_reminder_loop(BRIDGE._gemini)
         except Exception as exc:
             logger.debug("email reminder loop start failed: %s", exc)
+
+        # Start the notification scheduler (criterion #6 — deferred notifications)
+        try:
+            from notification import start_scheduler
+            start_scheduler()
+        except Exception as exc:
+            logger.debug("notification scheduler start failed: %s", exc)
+
+        # Start the email-brief scheduler (criterion #7 — proactive inbox digest)
+        try:
+            from email_brief import start_brief_scheduler
+            start_brief_scheduler(
+                get_bridge_fn=lambda: BRIDGE,
+                interval=float(os.getenv(
+                    "DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS", "1800"
+                )),
+            )
+        except Exception as exc:
+            logger.debug("email brief scheduler start failed: %s", exc)
 
         # Watch for stop() to close server so run_sidecar task completes
         async def _shutdown_watcher():

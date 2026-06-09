@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture — Hermes Live</title>
+<meta name="description" content="End-to-end audio path, threading model, and lifecycle of the Hermes Live Discord voice bridge.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html" class="active">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Architecture</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Architecture</h1>
+
+<p>End-to-end audio path, threading model, and lifecycle of the Discord voice bridge.</p>
+
+<h2>Audio path</h2>
+
+<pre><code class="lang-">Discord Voice (Opus)
+    ↓  discord-ext-voice-recv decode
+48 kHz PCM stereo (16-bit)
+    ↓  VoiceListener._feed_audio
+16 kHz PCM mono  (24 kHz internally, then downsampled in GeminiLiveBridge)
+    ↓  WebSocket binary frame
+Gemini Multimodal Live API  (WSS)
+    ↓  WebSocket binary frame
+24 kHz PCM mono  (PCM16)
+    ↓  LiveAudioSource.feed
+48 kHz PCM stereo (upsample_for_discord)
+    ↓  discord.AudioSource
+Discord Voice (Opus encode)</code></pre>
+
+<h2>Threading model</h2>
+
+<p>The bridge runs <strong>three</strong> long-lived threads plus a small pool of timers.</p>
+
+<table><thead><tr><th>Thread</th><th>Owner</th><th>Purpose</th></tr></thead><tbody><tr><td><strong>Gateway event loop</strong></td><td><code>discord.py</code></td><td>Owns the bot, voice client, and all <code>LiveAudioSource</code> playback. Async.</td></tr><tr><td><strong>Gemini receive loop</strong></td><td><code>GeminiLiveBridge._ws_recv_loop</code></td><td>Reads WSS frames, dispatches audio / tool calls / transcripts. Runs <code>_run_in_executor</code> for any blocking work.</td></tr><tr><td><strong>Tool worker</strong></td><td><code>_run_local_tool</code> (module-level)</td><td>Synchronous; called from a thread-pool for each Gemini <code>toolCalls</code> event.</td></tr><tr><td><strong>Schedulers</strong></td><td><code>notification.start_scheduler</code>, <code>email_brief.start_brief_scheduler</code></td><td>Daemon threads, JSONL-polling, ~1-2s tick.</td></tr></tbody></table>
+
+<h2>Lifecycle</h2>
+
+<ol><li><strong>User runs <code>/voice-live</code> in Discord</strong></li><li><code>_<em>init</em>_.py:voice_live()</code> checks the user is in the target voice channel (user-presence gate, criterion #33). If not, it rejects with a "you're not in voice" message.</li><li>If a stale bridge is in <code>_active_bridges</code> (vc disconnected), it's cleaned up.</li><li>A new <code>VoiceLiveBridge</code> is created and <code>run()</code> is spawned as a background task.</li><li><code>VoiceLiveBridge.start()</code>:</li></ol>
+<ul><li>Calls <code>channel.connect()</code> (Discord CDN handshake quirk: first 5 attempts fail with code 4006; takes ~27s)</li><li>Creates <code>LiveAudioSource</code> (the audio-output queue)</li><li>Creates <code>GeminiLiveBridge</code> and registers it in <code>sfx.register_active_source</code> for cross-bridge sfx</li><li>Wires <code>vc.listen()</code> (RX) and <code>vc.play()</code> (TX)</li><li>Plays the <code>transition</code> sfx into the audio source</li><li>Calls <code>await gemini.connect()</code> (sends setup message, waits for <code>setupComplete</code>)</li><li>Sends <code>audioStreamEnd</code> immediately after <code>setupComplete</code> to mute first-turn</li><li>Returns</li></ul>
+<ol><li><strong>Connection watchdog</strong> polls <code>vc.is_connected()</code> and the user's voice-channel membership every 1s. If either fails, calls <code>stop()</code>.</li><li><strong>Auto-leave</strong> kicks in if <code>AUTO_LEAVE_QUIET_SECONDS</code> passes with no audio.</li><li><strong>User runs <code>/voice-live-leave</code></strong> → <code>_<em>init</em>_.py:voice_live_leave()</code> calls <code>bridge.stop()</code>.</li><li><code>stop()</code> cancels the recv loop, ends the WSS, disconnects from the voice channel, deletes the autostart file (if any).</li></ol>
+
+<h2>Key files</h2>
+
+<table><thead><tr><th>File</th><th>Role</th></tr></thead><tbody><tr><td><code>_<em>init</em>_.py</code></td><td>Hermes plugin entry. Registers <code>/voice-live</code>, <code>/voice-live-leave</code>, autostart mechanism, video frame control.</td></tr><tr><td><code>bridge.py</code></td><td>Core. <code>VoiceLiveBridge</code>, <code>GeminiLiveBridge</code>, <code>LiveAudioSource</code>, audio I/O, all tool definitions, sidecar HTTP server.</td></tr><tr><td><code>notification.py</code></td><td>Multi-channel proactive notification dispatcher.</td></tr><tr><td><code>email_brief.py</code></td><td>Inbox digest (scheduled + on-demand).</td></tr><tr><td><code>sfx.py</code></td><td>Slot-based UI sound effects library.</td></tr><tr><td><code>delegation_agent.py</code></td><td>Multi-CLI delegation with health registry and fallback chain.</td></tr><tr><td><code>user_profiles.py</code></td><td>Per-user Honcho peer mapping, onboarding.</td></tr><tr><td><code>webhook_dispatcher.py</code></td><td>Event-class webhook fanout.</td></tr></tbody></table>
+
+<h2>Key env vars (full list in <code>env-vars.md</code>)</h2>
+
+<ul><li><code>DISCORD_VOICE_LIVE_PORT=18943</code> — sidecar HTTP control port</li><li><code>DISCORD_VOICE_LIVE_USER_ID=&lt;b_snowflake&gt;</code> — who the bridge listens to</li><li><code>DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS=900</code> — idle timeout</li><li><code>DISCORD_VOICE_LIVE_VOICE=en-US-JennyNeural</code> — TTS voice</li><li><code>DISCORD_VOICE_LIVE_TYPING_SFX=~/.hermes/voice-live-typing.wav</code> — keyboard click sfx</li></ul>
+
+<div class="pager"><a class="prev" href="quickstart.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Quick start — Hermes Live</span>
+        </a><a class="next" href="personality.html">
+          <span class="label">Next →</span>
+          <span class="title">Personality — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

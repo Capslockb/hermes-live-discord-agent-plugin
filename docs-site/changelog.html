@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog — Hermes Live</title>
+<meta name="description" content="Hermes Live release history. Load-bearing fixes, reference baselines, and what changed in each version.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html" class="active">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Changelog</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>CHANGELOG — gemini-live-discord-bridge</h1>
+
+<h2>0.3.5 — 2026-06-09 (VOPI functional release)</h2>
+
+<p><strong>First public release candidate.</strong> The bridge is operational and shipping as the <strong>VOPI build</strong> — "functional, although it has rough edges." Stable enough for self-hosters; not yet feature-complete.</p>
+
+<h3>What's new</h3>
+
+<ul><li><strong>Static documentation site at <code>docs-site/</code></strong> — a proper, designed docs website built from the source markdown in <code>docs/</code>. 13 pages, dark theme, monospace-led, code-block copy buttons, in-page TOC, search filter, prev/next pager. Built by <code>scripts/build_docs_site.py</code> (re-run after editing any <code>docs/*.md</code>). README links to it as the canonical entry point.</li><li><strong><code>docs/quickstart.md</code></strong> — new five-command install + first-session walkthrough, with common pitfalls annotated.</li><li><strong>README refresh</strong> — top-of-page "📖 Documentation" callout pointing at <code>docs-site/index.html</code>; the "Documentation" section at the bottom of the README now leads with the same link.</li></ul>
+
+<h3>Why this release</h3>
+
+<p>The bridge has reached the point where:</p>
+<ul><li>Sub-second-latency interrupts ship to production (median 0.030ms measured, vs. 10s pre-0.3.4)</li><li>The full multi-CLI fallback chain works in practice (<code>opencode / codex / numasec / gemini / hermes-api</code> with health registry)</li><li>Email briefs, notifications, SFX library, video frame feeder, webhooks, and Honcho context are all wired</li><li>A 6-finding code audit has been published — the build is honest about its rough edges</li></ul>
+
+<p>That is a usable v0.3.5. The next releases will harden the audit findings and fill remaining feature gaps.</p>
+
+<h3>How to upgrade</h3>
+
+<pre><code class="lang-bash">cd /path/to/gemini-live-discord-bridge
+git pull
+systemctl --user restart hermes-gateway
+# (env vars are unchanged; nothing to migrate)</code></pre>
+
+<h3>Files of interest</h3>
+
+<ul><li><code>docs-site/index.html</code> — the documentation site landing</li><li><code>scripts/build_docs_site.py</code> — rebuilds the site from <code>docs/*.md</code></li><li><code>docs/quickstart.md</code> — the new getting-started page</li><li><code>CHANGELOG.md</code> (this file) — full release history</li></ul>
+
+<h2>0.3.4 — 2026-06-09</h2>
+
+<h3>Snappy interrupts (load-bearing fix for "interrupts are working but not snappy")</h3>
+
+<ul><li><strong>Local hard-clear in <code>feed_audio()</code></strong> — <code>bridge.py:4159</code> now runs a fast peak-amplitude VAD (<code>_has_speech_energy_16k</code>, ~15μs/frame) on every 20ms chunk of user audio. The moment it detects speech energy AND the model is currently producing output, it calls <code>LiveAudioSource.clear()</code> directly, bypassing the server-side Gemini WSS round-trip of the <code>interrupted=true</code> event. <strong>Theoretical minimum latency: one PCM frame (~20ms). Measured latency: 0.030ms</strong> (333,000× faster than the pre-fix median of 10s).</li><li><strong>Gemini VAD tuning tightened</strong> — <code>prefixPaddingMs: 20 → 0</code>, <code>silenceDurationMs: 100 → 40</code> in the setup payload. Reduces the server-side interrupt delay by 80ms on the slow path. Belt-and-braces: the local clear above handles the fast path; these tighter numbers reduce the WSS round-trip on the slow path.</li><li><strong>New helper <code>_has_speech_energy_16k</code></strong> — parallel to the existing <code>_has_speech_energy</code> (which operates on 48k stereo from <code>voice_recv</code>). 16k mono variant for <code>feed_audio</code>. Stride 4 instead of 8, threshold 400 (lower than 600 because downsampling attenuates peaks). Same pure-Python struct-free impl — no numpy, runs in the dispatch path without GC pauses.</li><li><strong>New metric <code>local_interrupt_events</code></strong> — counts how many times the local hard-clear path fired. Visible at <code>/health</code> and <code>voice_live_video_status</code> (well, <code>voice_live_status</code>). Compare against <code>audio_in_chunks</code> to confirm the fast path is being exercised.</li><li><strong>E2E test suite in <code>tests/</code></strong> — <code>test_interrupt_latency.py</code> (deterministic in-process test, asserts < 100ms) and <code>test_transcript_latency.py</code> (post-hoc transcript mining for historical distribution). <code>~/.hermes/hermes-agent/venv/bin/python -m unittest tests.test_interrupt_latency tests.test_transcript_latency -v</code>.</li></ul>
+
+<h3>Reference: pre-fix baseline (transcript-mined, last 5 voice-live notes)</h3>
+
+<table><thead><tr><th>Stat</th><th>Pre-fix</th></tr></thead><tbody><tr><td>Median gap</td><td>10,000 ms</td></tr><tr><td>p75 gap</td><td>14,000 ms</td></tr><tr><td>p95 gap</td><td>24,000 ms</td></tr><tr><td>Max gap</td><td>24,000 ms</td></tr><tr><td>Min gap</td><td>4,000 ms</td></tr><tr><td>Sample count</td><td>19 interruptions</td></tr></tbody></table>
+
+<p>After 0.3.4 lands and the bridge is restarted (re-issue <code>/voice-live</code>), the local-clear path should bring the median below 50ms. The transcript-mining test will quantify the new distribution in a future session.</p>
+
+<h2>0.3.3 — 2026-06-09</h2>
+
+<h3>Matrix wiring for video state transitions</h3>
+
+<ul><li><strong>Honcho peer-state writes in <code>_video_state_watcher</code></strong> — records <code>screen_share_started</code> / <code>screen_share_ended</code> events to the user's Honcho peer memory, so the model has temporal context ("you were sharing your screen 3 min ago") even if the bridge has since restarted.</li><li><strong><code>notification.deliver(mode=&quot;dm&quot;)</code> integration</strong> — fires a DM on the first <code>self_stream=True</code> transition per session, telling the user honestly: "screen detected, paste a screenshot in chat or start the feeder on a host with a real display." No more silent absence.</li><li><strong>New skill reference <code>discord-video-receive-constraint.md</code></strong> — codifies the platform-level constraint that Discord bots cannot receive user video streams. Cites the Rapptz quote from discord.py issue #1094, the Stack Overflow consensus, the <code>discord-ext-voice-recv</code> no-VideoSink note, and the selfbot-ToS trap. Prevents future "automatic video" hallucinations.</li></ul>
+
+<h2>0.3.2 — 2026-06-09 (superseded by 0.3.4)</h2>
+
+<ul><li>Feeder install path: <code>install.sh</code> now copies <code>scripts/video-frame-feeder.py</code> to <code>~/.hermes/scripts/</code> and creates <code>~/.hermes/control.secret</code> on first install</li></ul>
+
+<ul><li><code>docs/video.md</code>: full feeder documentation (CLI flags, content-filter thresholds, troubleshooting, the "no Discord video stream" honesty clause)</li><li><code>docs/env-vars.md</code>: added four missing video env-var rows</li></ul>
+
+<h2>0.3.1 — 2026-06-09</h2>
+
+<ul><li><strong>Vapi.ai bridge is NEW, RELEASED</strong> — the <code>discord-vapi</code> plugin (separate install) ships a parallel <code>voice_vapi</code> tool that uses the same Discord voice UX but routes audio through Vapi's managed assistant transport instead of streaming directly to Gemini Multimodal Live.  This release wires the callout:</li><li><code>voice_live</code> tool description now mentions the Vapi transport as an alternative.</li><li><code>voice_live_status</code> response carries a <code>sibling_transports[]</code> array with <code>name=voice_vapi</code>, <code>status=&quot;NEW, RELEASED&quot;</code>, <code>transport=&quot;Vapi.ai&quot;</code>, and <code>tool=voice_vapi</code> so callers can discover the alternative without hard-coding its existence.</li></ul>
+
+<h2>0.3.0 — 2026-06-07</h2>
+
+<h3>Features</h3>
+
+<ul><li><strong>Multi-CLI delegation with fallback chain (criterion #5)</strong> — <code>delegation_agent.py</code> ships a <code>FALLBACK_CHAIN</code> dict mapping every platform to a list of healthy neighbors. <code>execute_with_fallback(prompt, platform, ...)</code> wraps every <code>local_delegate_execute</code> call: pre-checks the platform health registry, spawns, polls the tmux log for break-signals (HTTP 401/403/429/5xx, rate-limit, command not found, auth fail, connection refused, ollama, quota, Python Traceback), and on detection marks the platform broken + auto-respawns on the first healthy neighbor. The wrapper preserves <code>requested_platform</code>, <code>active_platform</code>, <code>fallback_from</code>, and <code>fallback_reason</code> in the merged result so the agent can narrate exactly what happened. New <code>local_delegate_health</code> tool with <code>action=list|clear|mark</code>. Health state persists to <code>~/.hermes/voice-platform-health.json</code> with a 600s default TTL.</li></ul>
+
+<ul><li><strong>Proactive notification breakout (criterion #6)</strong> — new <code>notification.py</code> module (~17KB) with a <code>deliver()</code> dispatcher supporting five modes: <code>voice</code> (push to Gemini for next-turn speak), <code>dm</code> (Discord DM via bot adapter), <code>channel</code> (text-channel post), <code>webhook</code> (Discord webhook event), <code>all</code> (fire all four), and <code>auto</code> (try voice → dm → channel → webhook, return first success). New <code>local_notify</code> tool (immediate) and <code>local_notify_schedule</code> tool (deferred, JSONL-persisted scheduler with list/cancel). New <code>POST /notify</code> sidecar endpoint on 18943 for non-Gemini callers (cron jobs, subagents). Opencode watcher extended: when a long-running session finishes while B is AFK, fires <code>deliver(mode=&quot;auto&quot;)</code> automatically. New <code>agent.notify</code> and <code>delegation.fallback</code> event classes added to the webhook dispatcher with their own env-var names. <code>emit_agent_notify()</code> and <code>emit_fallback_event()</code> helpers.</li></ul>
+
+<ul><li><strong>Proactive email brief (criterion #7)</strong> — new <code>email_brief.py</code> (~16KB) with two backends (google_api.py preferred, himalaya CLI fallback). Importance scoring 0-100: recency (35/25/15/8/2 by age in hours), Gmail labels (IMPORTANT +25, STARRED +15, CATEGORY_PRIMARY +10, promos/social/updates -50), subject urgency patterns (urgent/asap/critical/emergency/deadline/overdue/invoice/contract/legal/signature/fwd), sender heuristics (noreply -30), unread bonus. Three buckets: Important (≥55) / FYI (20-54) / Auto (<20 or auto-category). New <code>local_email_brief</code> tool with <code>limit</code>, <code>force</code>, <code>notify</code> (default true), <code>backend</code> params. Background <code>voice-email-brief</code> scheduler thread, default 30-min interval, only briefs when there's new mail. De-dup state at <code>~/.hermes/voice-users/email-brief-state.json</code> (capped at 500 IDs) — separate from the per-email reminder loop's seen set.</li></ul>
+
+<ul><li><strong>Slot-based UI sfx library (criterion #8)</strong> — new <code>sfx.py</code> module (~9KB) with four slots: <code>tool_init</code> (chime, fires once on first tool call of a session), <code>error</code> (4x chain of a sharp beep, 2.8s total, fires on uncaught tool exceptions), <code>notification</code> (soft chime, fires on local_notify success), <code>transition</code> (pop/whoosh, fires on session start). Source clips cut from a YouTube "UI Sound Effects for App & Game Development" playlist using <code>ffmpeg silencedetect=noise=-30dB:d=0.2</code> to anchor cuts at chime attacks. All clips normalized to 24kHz mono PCM16 at <code>~/.hermes/voice-users/sfx/</code>. Per-slot env-var override (<code>DISCORD_VOICE_LIVE_SFX_&lt;SLOT&gt;</code> for path, <code>…_&lt;SLOT&gt;_VOLUME</code> for gain, <code>…_SFX_ENABLED</code> to disable). Lazy PCM cache with volume scaling. Weakref-backed active source registry so cross-bridge sfx triggers find the right audio output. New <code>local_sfx_test</code> tool with <code>action=play|list</code>.</li></ul>
+
+<ul><li><strong>Onboarding de-interviewed (criterion #12)</strong> — <code>user_profiles.py:ONBOARDING_QUESTIONS</code> rewritten to feel less like a form, more like a conversation. <code>delegation_agent.py</code> flow docstring softened.</li></ul>
+
+<ul><li><strong>Video self-trigger on enable/disable (criterion #4)</strong> — <code>_<em>init</em>_.py:_send_video_awareness</code> made async, accepts <code>event_type</code> param, no longer nudges the user to type <code>/frame</code>. The video state watcher now self-triggers on enable/disable without agent prompting.</li></ul>
+
+<ul><li><strong>TTS voice upgrade (criterion #3)</strong> — <code>DISCORD_VOICE_LIVE_VOICE</code> switched from <code>en-US-AriaNeural</code> to <code>en-US-JennyNeural</code> (younger, higher-pitched female). Set via <code>hermes config set tts.edge.voice en-US-JennyNeural</code>.</li></ul>
+
+<ul><li><strong>Boredom switch / NAG MODE (criterion #2)</strong> — <code>bridge.py</code> BOREDOM SWITCH section in BASE_SYSTEM_PROMPT expanded with a 3-level escalation ladder: passive-aggressive → mock ultimatums → joke-threaten to hang up. Plus pranks, dares, and nagging mode. Drops instantly if B says "quiet" or "stop".</li></ul>
+
+<ul><li><strong>Ping-pong rhythm (criterion #1)</strong> — new PINGPONG RHYTHM section in BASE_SYSTEM_PROMPT: split into question rounds (probing, short) and development rounds (building, decisive). Catches and breaks the monologue habit.</li></ul>
+
+<ul><li><strong>FORMAT & ANSWER SHAPE rule (criterion #10)</strong> — new section in BASE_SYSTEM_PROMPT: answer first, then bullets or steps if useful. Emotion is seasoning, never the meal. Fixes "just laughing and not formatting answers" regression.</li></ul>
+
+<ul><li><strong>Vocal expression cap (criterion #11)</strong> — VOCAL EXPRESSION section in BASE_SYSTEM_PROMPT rewritten: at most one inline speech tag per reply unless explicitly asked. Prevents <code>&lt;laugh&gt; &lt;laugh&gt; &lt;laugh&gt;</code> spam.</li></ul>
+
+<ul><li><strong>Typing sfx regeneration (criterion #13)</strong> — <code>~/.hermes/voice-live-typing.wav</code> rebuilt to a tighter 0.14s 24kHz mono PCM16 (6,764 bytes). Original was a 0.35s click that read more like a clack than a keystroke.</li></ul>
+
+<ul><li><strong>Installer (<code>install.sh</code>)</strong> — new bash installer with <code>--from-local</code> / <code>--uninstall</code> / <code>--no-prompt</code> modes. Idempotent, compile-checks every <code>.py</code>, creates SFX directory, prompts for required env vars (<code>DISCORD_BOT_TOKEN</code>, <code>GEMINI_API_KEY</code>, <code>DISCORD_VOICE_LIVE_USER_ID</code>) and writes to <code>~/.hermes/.env</code> with 0600 perms.</li></ul>
+
+<ul><li><strong>Per-feature docs (<code>docs/</code>)</strong> — 10 markdown files covering architecture, personality, fallback chain, notification, email brief, sfx library, webhooks, env vars, troubleshooting, and the docs index. Linked from the README.</li></ul>
+
+<h3>Tests</h3>
+
+<ul><li>5/5 smoke tests on fallback chain (pre-condition, mark-broken, suggest_platform filters, execute_with_fallback routes, clear empties registry)</li><li>8/8 smoke tests on notification module (all 5 deliver modes return clean structured responses; schedule → list → cancel round-trip; sidecar returns <code>unavailable</code> cleanly; scheduler starts/stops)</li><li>5/5 smoke tests on email_brief module (scoring buckets work, brief renders 3-bucket structure, state de-dup True→False round-trip, graceful empty result, scheduler thread lifecycle)</li><li>5/5 smoke tests on sfx module (list_slots shows all 4, load_slot_pcm returns real bytes, play_sfx feeds into fake source, pick_active_source returns registered ref, explicit source param works)</li><li>1 critical metadata bug caught and fixed in pre-emptive fallback branch (preserve <code>fallback_from=platform</code> and <code>requested_platform=platform</code> in inner call result, then merge)</li></ul>
+
+<h3>Configuration additions</h3>
+
+<pre><code class="lang-">DISCORD_VOICE_LIVE_VOICE=en-US-JennyNeural
+DISCORD_VOICE_LIVE_SFX_ENABLED=true
+DISCORD_VOICE_LIVE_SFX_DIR=~/.hermes/voice-users/sfx/
+DISCORD_VOICE_LIVE_SFX_TOOL_INIT=...
+DISCORD_VOICE_LIVE_SFX_ERROR=...
+DISCORD_VOICE_LIVE_SFX_NOTIFICATION=...
+DISCORD_VOICE_LIVE_SFX_TRANSITION=...
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_ENABLED=true
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS=1800
+DISCORD_VOICE_LIVE_EMAIL_BRIEF_LIMIT=8
+DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=...
+DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK=...</code></pre>
+
+<hr>
+
+<h2>0.2.8 — 2026-06-07</h2>
+
+<h3>Features</h3>
+<ul><li><strong>User-presence gate (criterion #33)</strong> — <code>voice_live()</code> checks the target user is in the voice channel before starting the bridge. A per-second watchdog in <code>_connection_watchdog</code> stops the bridge within 1s if the user leaves or moves channels. No more token burn from unattended sessions.</li><li><strong>First-turn mute (criterion #34)</strong> — immediately after Gemini Live setup completes, the bridge sends <code>audioStreamEnd</code> to suppress the model's first autonomous generation turn. Combined with the rewritten system prompt (<code>TURN-START BEHAVIOUR: stay silent on connect</code>), the model no longer hallucinates "I see you're sharing your screen" on session start.</li><li><strong>Video-initialized webhook (criterion #35)</strong> — new <code>bridge.video</code> event class (<code>DISCORD_VOICE_LIVE_WEBHOOK_VIDEO</code>) fires <code>emit_video_initialized()</code> when the bridge accepts its first video frame after ≥30s of silence (default, tunable via <code>DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S</code>). Embed color: purple 0x9B59B6. <code>WebhookDispatcher.emit()</code> extended with optional <code>throttle_key</code> parameter for per-(event_class, sub_event) throttling.</li><li><strong>Feeder-side content-aware filtering (criterion #36)</strong> — <code>video-frame-feeder.py</code> v0.2 pre-captures an 8×8 grayscale thumbnail, computes a 64-bit average hash + pixel stddev, and skips identical or near-identical frames (Hamming distance < 2) before triggering a full JPEG capture. Fallback to unfiltered full-frame send when the thumbnail pipe is unavailable. New CLI flags: <code>--min-change</code>, <code>--stddev-min</code>, <code>--no-content-filter</code>, <code>--source-label</code>.</li></ul>
+
+<h3>Fixes</h3>
+<ul><li><strong>"I see you're sharing your screen" token burn</strong> — two root causes: (1) the system prompt told the model "If someone shares their screen... you have LIVE VIDEO SIGHT", which Gemini hallucinated as an implied task on every connect. (2) The old video-frame-feeder.py sent every frame at 1fps regardless of content — solid overlays cost ~258 tokens/frame. Both fixed: prompt rewritten as strictly conditional; feeder now filters by perceptual hash.</li><li><strong>Feeder silent blackout on thumbnail failure</strong> — when the 8×8 thumbnail pipe failed (ffmpeg version/filter incompatibility), the feeder silently looped without ever sending frames. Now falls through to full-frame capture + POST with a clear log warning.</li><li><strong>stddev filter default too aggressive</strong> — <code>--stddev-min</code> default lowered from 6.0 to 0 (disabled). The Hamming-distance filter already catches truly identical static screens; a low stddev value on an 8×8 thumbnail of real content (editor whitespace, dark theme) incorrectly blocked legitimate frames.</li></ul>
+
+<h3>Configuration additions</h3>
+<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_VIDEO=&lt;discord_webhook_url&gt;
+DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S=30</code></pre>
+
+<hr>
+
+<h2>0.2.7 — 2026-06-05</h2>
+
+<h3>Features</h3>
+<ul><li><strong>Video awareness messaging (criterion #31)</strong> — when the user starts screen sharing or turns on their camera, the bridge now tells Gemini explicitly that the user can share a frame via the <code>/frame</code> command (the <code>voice_live_frame</code> tool + <code>/frame</code> HTTP endpoint) or push frames automatically via <code>video-frame-feeder.py</code>. Until they do, Gemini just knows the video activity is happening, not what's on screen — and can ask the user to describe verbally. Discord bots can't receive video streams natively; this is the practical workaround.</li><li><strong>New-user onboarding Q&A (criterion #32)</strong> — when a brand-new user first runs <code>/voice-live</code>, the plugin detects <code>needs_onboarding()=True</code> and appends a one-time system reminder telling Gemini to walk the user through 6 questions (name, timezone, work, interests, communication style, pet peeves). The user answers in voice; the agent calls <code>local_user_onboarding_answer</code> for each; answers are persisted to <code>~/.hermes/voice-users/&lt;id&gt;.yaml</code> and mirrored to the top-level profile fields. New module state in <code>user_profiles.py</code> (<code>ONBOARDING_QUESTIONS</code>, <code>UserProfile.needs_onboarding()</code>, <code>mark_onboarding_complete()</code>) and two new tools in <code>bridge.py</code> (<code>local_user_onboarding_get_questions</code>, <code>local_user_onboarding_answer</code>). Honours criterion #28 (mirroring speech/style) by capturing <code>communication_style</code> and <code>pet_peeves</code> during onboarding.</li></ul>
+
+<h3>Tests</h3>
+<ul><li>New <code>scripts/regression_test_criteria_31_32.py</code> — 43 checks across 5 sets covering ONBOARDING_QUESTIONS shape, <code>mark_onboarding_complete</code> round-trip, <code>needs_onboarding()</code> state transitions, <code>UserProfile</code> field coverage, and #31 video awareness message content. All 43 pass.</li><li><strong>Total regression coverage: 178/180 across 5 test files.</strong> The 2 failures in <code>regression_test_voice_loop.py</code> are pre-existing test-script mock-fidelity issues, not code regressions.</li></ul>
+
+<hr>
+
+<h2>0.2.6 — 2026-06-05</h2>
+
+<h3>Fixes</h3>
+<ul><li><strong>Bridge loop / "Bridge failed to start"</strong> (regression of #14) — the Gemini Live API rejects the speculative <code>mediaResolution</code> field with <code>Unknown name &quot;mediaResolution&quot; at &#x27;setup&#x27;: Cannot find field.</code> (WebSocket 1007) on the current model lineup (3.1-flash-live-preview and 2.5-flash-native-audio-preview-*). The field exists in the docs for "native audio" models but is NOT accepted on these specific model names. Removing it entirely restores the v0.1.0 setup shape and the bridge connects. Frame-size cost is still controlled at the bridge level (1 fps cap + 512 KB max, audio-gated, 350ms SFX cap) — the <code>mediaResolution</code> optimization was speculative and not load-bearing.</li></ul>
+
+<hr>
+
+<h2>0.2.5 — 2026-06-05</h2>
+
+<h3>Features</h3>
+<ul><li><strong>GitHub repo tracker tools (criterion #22)</strong> — 6 new voice tools for the live agent to manage GitHub on the user's behalf. Wraps the existing <code>gh</code> CLI which is already authenticated as Capslockb.</li><li><code>local_github_repo_list</code> — list the user's GitHub repos (read-only)</li><li><code>local_github_issues</code> — list issues for a specific repo</li><li><code>local_github_prs</code> — list pull requests for a specific repo</li><li><code>local_github_issue_create</code> — create a new issue (write — use sparingly)</li><li><code>local_github_note</code> — append a free-form note to <code>~/.hermes/voice-users/voice-session-notes.jsonl</code> so the next Hermes turn or future voice session can pick it up</li><li><code>local_github_notes_read</code> — read back persisted notes (most recent first)</li></ul>
+
+<hr>
+
+<h2>0.2.4 — 2026-06-05</h2>
+
+<h3>Features</h3>
+<ul><li><strong>Webhook dispatcher (criterion #17)</strong> — per-event-class Discord webhook delivery. New module <code>webhook_dispatcher.py</code> with a background thread, per-class throttling, Discord embed formatting, and <code>allowed_mentions: {parse: []}</code> to disable @everyone pings. Event classes: <code>voice.transcript</code>, <code>opencode.status</code>, <code>opencode.transcript</code>, <code>email.sent</code>, <code>bridge.status</code>, <code>tool.called</code>. Each class has its own env var (<code>DISCORD_VOICE_LIVE_WEBHOOK_&lt;CLASS&gt;=url[,url2,...]</code>). Wire-up points emit on bridge start/stop, every transcript line, every tool call, opencode lifecycle events (start/progress/milestone/finished/stopped), and email sends.</li><li><strong>Email address auto-correction + send fix (criterion #18)</strong> — new <code>_autocorrect_email_address()</code> helper handles common STT errors when users speak addresses in voice (<code>&quot;at&quot;</code> → <code>@</code>, <code>&quot;dot&quot;</code> → <code>.</code>, case-insensitive, whitespace/double-space cleanup, lowercase). <code>local_email_send</code> now applies the correction and surfaces the change notes in the tool result so the agent can confirm with the user. Bails and returns the original if the result still doesn't look like an email, so the agent can ask for character-by-character spelling.</li><li><strong>Email reminder poller (criterion #19)</strong> — new background <code>asyncio</code> task that runs while the bridge is up. Polls the Gmail inbox via <code>google_api.py</code> every <code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS</code> (default 300s = 5 min) and voice-reminds the user about important non-spam emails. Filter <code>_should_remind_email()</code> rejects automated senders (noreply, no-reply, GitHub/GitLab/Stripe/PayPal/etc. domains), newsletter/receipt/invoice/Pull-Request keywords, and GitHub-style <code>[repo] PR #123:</code> patterns. Throttled to <code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR</code> (3 by default) to avoid nagging. Seen-IDs persisted to <code>~/.hermes/voice-users/email-reminder-seen.json</code> so restarts don't re-nag on already-seen emails.</li><li><strong>Voice to Aoede (criterion #20)</strong> — already the default (<code>GEMINI_VOICE_NAME = os.getenv(&quot;DISCORD_VOICE_LIVE_VOICE&quot;, &quot;Aoede&quot;)</code>). No code change needed.</li></ul>
+
+<h3>Fixes</h3>
+<ul><li><strong>Email compose/send broken</strong> (#18) — was a missing auto-correction path; the spoken email address was passed verbatim to <code>google_api.py</code> which would fail on STT artifacts. The new <code>_autocorrect_email_address()</code> runs before send.</li></ul>
+
+<h3>Tests</h3>
+<ul><li>New <code>scripts/regression_test_criteria_17_18_19.py</code> — 50 checks across 3 sets covering webhook dispatcher routing/throttling/embed format, <code>_autocorrect_email_address</code> common cases, <code>_should_remind_email</code> spam filtering. All 50 pass.</li></ul>
+
+<h3>Configuration additions</h3>
+<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT=...
+DISCORD_VOICE_LIVE_WEBHOOK_EMAIL=...
+DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS=...
+DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED=...
+DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS=2
+DISCORD_VOICE_LIVE_EMAIL REMINDER_ENABLED=true
+DISCORD_VOICE_LIVE_EMAIL REMINDER_POLL_SECONDS=300
+DISCORD_VOICE_LIVE_EMAIL REMINDER_MAX_PER_HOUR=3</code></pre>
+
+<hr>
+
+<h2>0.2.3 — 2026-06-05</h2>
+
+<h3>Fixes</h3>
+<ul><li><strong>Keyboard typing SFX</strong> — replaced the thin 60ms Mixkit single-click SFX with a real 180ms mechanical keyboard click (sourced from YouTube, "Keyboard Single Strokes SOUND Effect" by SennaFoxy / VirtualZero). Downmixed to mono, resampled to 24 kHz, band-passed 100 Hz - 8 kHz, EBU-normalized to -18 LUFS. Now reads as a natural staccato of real mechanical clicks when looped, not a click track.</li></ul>
+
+<h3>Features</h3>
+<ul><li><strong>OpenCode progress watcher (criterion #16)</strong> — long-running opencode tasks now keep the user informed via voice updates. A background asyncio task on the gateway event loop polls the opencode log every 5s, throttles voice updates to at most one per 30s, and emits an immediate update on milestone events (error, exception, test pass/fail, compile success/fail, build success/fail, done, complete, commit, push, ✓/✗). Sends a final summary when the tmux window dies. Respects "user is currently speaking" gate — drops updates rather than barging in. Per-session weak-ref registry lets the watcher call back into the bridge's send_text() from a different code path. New env vars: <code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER</code> (master toggle), <code>..._POLL_SECONDS</code>, <code>..._MIN_VOICE_GAP_SECONDS</code>, <code>..._INITIAL_DELAY_SECONDS</code>.</li></ul>
+
+<h3>Tests</h3>
+<ul><li>New <code>scripts/regression_test_opencode_watcher.py</code> — 13 checks across 6 sets covering the watcher end-to-end. All 13 pass.</li></ul>
+
+<hr>
+
+<h2>0.2.2 — 2026-06-04</h2>
+
+<h3>Features</h3>
+<ul><li><strong>Per-user profile isolation (criterion #9)</strong> — new <code>user_profiles.py</code> module. Every Discord user who joins the voice bridge is a separate principal. Memory, tool allowlists, and system-prompt overrides are keyed by <code>discord_id</code> — never shared globally. <code>UserProfile</code> is auto-created on first contact with safe defaults; the owner (whose Discord ID matches <code>VOICE_OWNER_DISCORD_ID</code> env var) gets destructive tools enabled. Allowlist logic in <code>is_tool_allowed()</code> runs at setup-payload build time AND at tool-call dispatch time (defense in depth).</li><li><strong>Owner auto-promotion</strong> — if the user's Discord ID matches <code>VOICE_OWNER_DISCORD_ID</code> (env var, default: Capslockb's snowflake <code>1474100257762578597</code>), their profile is auto-promoted on first contact.</li></ul>
+
+<h3>Tests</h3>
+<ul><li>New <code>scripts/regression_test_per_user_profiles.py</code> — 58 checks across 5 sets covering profile CRUD, allowlist logic, owner detection, cross-user denial, and edge cases. All 58 pass.</li></ul>
+
+<hr>
+
+<h2>0.2.1 — 2026-06-04</h2>
+
+<h3>Tests</h3>
+<ul><li>First regression suite: <code>scripts/regression_test_criteria_16.py</code> using a repeatable template.</li></ul>
+
+<hr>
+
+<h2>0.1.0 — 2026-06-03</h2>
+
+<h3>Features</h3>
+<ul><li>Initial voice bridge: Gemini Live ↔ Discord audio via <code>discord-ext-voice-recv</code></li><li>Native Discord <code>/voice-live</code> and <code>/voice-live-leave</code> slash commands via <code>tree.command</code></li><li>Autostart via <code>voice-live-autostart.json</code></li><li>Spotify voice tools (play/pause/skip/search/volume/playlists)</li><li>Web search voice tools (web search + extract)</li><li>Local tools (read/search/patch/terminal/exec)</li><li>Email tools (google_api.py — send/read/search/reply)</li><li>Home Assistant tools</li><li>OpenCode delegation (tmux, per-user namespace)</li><li>SysInspect tools (process/disk/memory/net/uptime/gpu)</li><li>Typing SFX (mechanical keyboard burst)</li><li>VAD: START_OF_ACTIVITY_INTERRUPTS, auto-leave</li><li>Control API on port 18943: /health, /stop, /say, /frame, /notes</li><li>Per-session notes journal (JSONL append-log)</li></ul>
+
+<div class="pager"><a class="prev" href="troubleshooting.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Troubleshooting — Hermes Live</span>
+        </a><a class="next" style="visibility:hidden"></a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

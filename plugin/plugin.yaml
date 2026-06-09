@@ -1,8 +1,8 @@
 name: discord-voice
-version: 0.3.0
+version: 0.3.5
 kind: standalone
 platforms: [linux]
-description: Hermes Live Discord Agent Plugin — full-duplex Discord voice ↔ Google Gemini Multimodal Live (audio + vision + function calling + transcripts + multi-CLI delegation)
+description: High-performance Discord Voice bridge via Gemini Multimodal Live API
 python_requirements:
   - requirements.txt
 provides_tools:
@@ -24,4 +24,7 @@ optional_env:
     password: false
   - name: DISCORD_VOICE_LIVE_PORT
     prompt: "Local HTTP control port (default: 18943)"
+    password: false
+  - name: DISCORD_VOICE_LIVE_VOICE
+    prompt: "TTS voice (default: en-US-JennyNeural — high-pitched female)"
     password: false

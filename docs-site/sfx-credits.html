@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SFX credits — Hermes Live</title>
+<meta name="description" content="Provenance and license of the default sfx clips bundled with Hermes Live.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html" class="active">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Sfx Credits</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>SFX credits and provenance</h1>
+
+<p>The default sfx files shipped in <code>sfx/</code> are extracted from a YouTube playlist published under terms that allow non-commercial use with attribution. The clips are short (≤2 seconds each), heavily transformed (resampled to 24kHz mono PCM16, gain-adjusted, faded), and serve as the "starter" sfx library. Users are encouraged to swap in their own licensed audio via the <code>DISCORD_VOICE_LIVE_SFX_&lt;SLOT&gt;</code> env vars.</p>
+
+<h2>Source</h2>
+
+<p>Playlist: <strong>"UI Sound Effects for App & Game Development"</strong> by <strong>Brand Name Audio</strong> on YouTube URL: https://www.youtube.com/playlist?list=PLOK_EJ2O31LrGG7HvPiMeIsEiq4Wg6j-U Accessed: 2026-06-07</p>
+
+<h2>Specific source videos</h2>
+
+<table><thead><tr><th>Slot</th><th>YouTube ID</th><th>Title</th><th>Why this clip</th></tr></thead><tbody><tr><td><code>tool_init</code></td><td>oYS1Qg98QTg</td><td>"UI Notification CHIMES PACK"</td><td>First chime at t=1.96s (anchored via <code>silencedetect</code>); light, friendly opener</td></tr><tr><td><code>error</code></td><td>1QweURriLQA</td><td>"Loud Beep Sound Effects (UI User Interface)"</td><td>First loud beep at t=1.00s; looped 4× to make a 2.8s alert pattern</td></tr><tr><td><code>notification</code></td><td>XhLOi8C7FLc</td><td>"iPhone Android UI / UX Ringtones"</td><td>Mobile-OS style ping — clean, recognizable as a notification</td></tr><tr><td><code>transition</code></td><td>x8njWIqFKms</td><td>"The BEST POP Sound Effects"</td><td>First pop at t=1.91s with +8dB gain — pop/whoosh for session transitions</td></tr></tbody></table>
+
+<h2>How the clips were processed</h2>
+
+<ol><li><strong>Download</strong> with <code>yt-dlp -f bestaudio --extract-audio --audio-format wav</code></li><li><strong>Locate the attack</strong> with <code>ffmpeg -af silencedetect=noise=-30dB:d=0.2</code> — each <code>silence_end</code> timestamp marks where a loud region begins</li><li><strong>Cut</strong> a 0.7s window starting at the first <code>silence_end</code> (or 1.0s in for transition)</li><li><strong>Loop</strong> for the error slot (4× chain = 2.8s total)</li><li><strong>Resample</strong> to 24kHz mono PCM16 (the format the Gemini Live audio output expects)</li><li><strong>Gain</strong> +6 to +8dB on quieter clips (transition needed the boost)</li><li><strong>Fade-out</strong> at the end (0.12s) to prevent click artifacts on natural ends</li></ol>
+
+<p>The full recipe is in the <code>silence-detect-sfx-cutting</code> skill.</p>
+
+<h2>License</h2>
+
+<p>The source videos are published by <strong>Brand Name Audio</strong> and are widely used as YouTube royalty-free SFX. The exact license terms should be confirmed on the source videos before commercial use. For personal / open-source use (this plugin's intended audience), the clips are credited here and can be swapped out by users with their own audio.</p>
+
+<p>If you're a rights holder and want these clips removed from the repo, please open an issue at https://github.com/Capslockb/gemini-live-discord-bridge/issues.</p>
+
+<div class="pager"><a class="prev" href="sfx-library.html">
+          <span class="label">Prev ←</span>
+          <span class="title">SFX library — Hermes Live</span>
+        </a><a class="next" href="webhooks.html">
+          <span class="label">Next →</span>
+          <span class="title">Webhooks — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Webhooks — Hermes Live</title>
+<meta name="description" content="Nine event classes for fanout: voice.transcript, bridge.status, email.sent, tool.called, and more.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html" class="active">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Webhooks</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Webhooks — event-class fanout</h1>
+
+<p>The plugin can fan out events to Discord webhooks for any number of independent channels. The system is built on <code>webhook_dispatcher.py</code>.</p>
+
+<h2>Event classes</h2>
+
+<p>Each event class has its own env var (a comma-separated list of Discord webhook URLs):</p>
+
+<table><thead><tr><th>Class</th><th>Env var</th><th>Fires on</th></tr></thead><tbody><tr><td><code>voice.transcript</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_TRANSCRIPT</code></td><td>Every voice input/output line</td></tr><tr><td><code>bridge.status</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS</code></td><td>Bridge start/stop</td></tr><tr><td><code>bridge.video</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_VIDEO</code></td><td>First video frame after ≥30s silence</td></tr><tr><td><code>opencode.status</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_STATUS</code></td><td>Opencode lifecycle</td></tr><tr><td><code>email.sent</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_EMAIL</code></td><td>Email sent via voice</td></tr><tr><td><code>email.received</code></td><td>(same env)</td><td>Important email received</td></tr><tr><td><code>tool.called</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED</code></td><td>Any tool invocation (sampled, throttled)</td></tr><tr><td><code>delegation.fallback</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK</code></td><td>Platform fallback triggered</td></tr><tr><td><code>agent.notify</code></td><td><code>DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY</code></td><td>Agent-initiated notification fired</td></tr></tbody></table>
+
+<p>Setting a webhook URL = opt in. Empty env = no fanout for that class.</p>
+
+<h2>Embed shape</h2>
+
+<p>Each webhook fires a Discord embed with a consistent shape:</p>
+
+<pre><code class="lang-json">{
+  &quot;username&quot;: &quot;S0RA Bridge&quot;,
+  &quot;embeds&quot;: [{
+    &quot;title&quot;: &quot;Bridge stopped&quot;,
+    &quot;description&quot;: &quot;Reason: user requested /voice-live-leave&quot;,
+    &quot;color&quot;: 0x747F8D,
+    &quot;fields&quot;: [
+      {&quot;name&quot;: &quot;user&quot;, &quot;value&quot;: &quot;1474100257762578597&quot;, &quot;inline&quot;: true},
+      {&quot;name&quot;: &quot;uptime_s&quot;, &quot;value&quot;: &quot;342.5&quot;, &quot;inline&quot;: true}
+    ],
+    &quot;footer&quot;: {&quot;text&quot;: &quot;sub_event: bridge_stopped | event_class: bridge.status&quot;},
+    &quot;timestamp&quot;: &quot;2026-06-07T12:34:56Z&quot;
+  }]
+}</code></pre>
+
+<p>Sub-events get specific embed colors (<code>_SUB_COLORS</code> in <code>webhook_dispatcher.py</code>).</p>
+
+<h2>Throttling</h2>
+
+<p><code>WebhookDispatcher.emit()</code> accepts a <code>throttle_key</code> parameter. When set, the event is dropped if the same key fired within <code>throttle_seconds</code> (default = <code>DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS</code>, default 60s).</p>
+
+<p>Use case: <code>bridge.video</code> should not fire 30 times in a row if 30 frames arrive in quick succession. Set <code>throttle_key=&quot;bridge.video&quot;</code> and <code>throttle_seconds=30</code>.</p>
+
+<h2>Emit helpers</h2>
+
+<p><code>webhook_dispatcher.py</code> provides typed emit helpers for each event class:</p>
+
+<pre><code class="lang-python">from webhook_dispatcher import (
+    emit_bridge_started, emit_bridge_stopped,
+    emit_video_initialized,
+    emit_opencode_status,
+    emit_email_sent, emit_email_received,
+    emit_tool_called,
+    emit_fallback_event,
+    emit_agent_notify,
+)</code></pre>
+
+<p>All return the number of webhooks the event was delivered to (0 if no subscribers).</p>
+
+<h2>Notes file</h2>
+
+<p>Independent of webhooks, the plugin writes call notes to <code>~/.hermes/voice-live-notes/</code> (configurable via <code>DISCORD_VOICE_LIVE_NOTES_DIR</code>). Each note is a JSONL line with timestamp, speaker, text, and metadata. The <code>/notes</code> sidecar endpoint reads them back for replay or summarization.</p>
+
+<div class="pager"><a class="prev" href="sfx-credits.html">
+          <span class="label">Prev ←</span>
+          <span class="title">SFX credits — Hermes Live</span>
+        </a><a class="next" href="video.html">
+          <span class="label">Next →</span>
+          <span class="title">Video frame feeder — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

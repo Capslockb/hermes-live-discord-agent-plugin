@@ -53,7 +53,10 @@ _WEBHOOK_ENV_VARS = {
     "opencode.transcript": "DISCORD_VOICE_LIVE_WEBHOOK_OPENCODE_TRANSCRIPT",
     "email.sent": "DISCORD_VOICE_LIVE_WEBHOOK_EMAIL",
     "bridge.status": "DISCORD_VOICE_LIVE_WEBHOOK_BRIDGE_STATUS",
+    "bridge.video": "DISCORD_VOICE_LIVE_WEBHOOK_VIDEO",
     "tool.called": "DISCORD_VOICE_LIVE_WEBHOOK_TOOL_CALLED",
+    "agent.notify": "DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY",
+    "platform.fallback": "DISCORD_VOICE_LIVE_WEBHOOK_PLATFORM_FALLBACK",
 }
 
 # Friendly event-class label shown in the embed
@@ -63,7 +66,10 @@ _EVENT_CLASS_LABEL = {
     "opencode.transcript": "OpenCode Transcript",
     "email.sent": "Email Sent",
     "bridge.status": "Bridge Status",
+    "bridge.video": "Bridge Video",
     "tool.called": "Tool Called",
+    "agent.notify": "Agent Notification",
+    "platform.fallback": "Platform Fallback",
 }
 
 # Sub-event colors (mapped from sub-event names)
@@ -79,6 +85,11 @@ _SUB_COLORS = {
     "opencode_stopped": 0x747F8D,      # grey
     "email_sent": 0x00B4D8,            # cyan
     "tool_called": 0x99AAB5,           # grey
+    "video_initialized": 0x9B59B6,     # purple
+    "video_still_noisy": 0xFEE75C,    # yellow (warn — feeder sending low-info frames)
+    "agent_notification": 0xE67E22,   # orange — agent-initiated proactive notify
+    "agent_notify_scheduled": 0xF39C12, # amber — deferred notification fired
+    "platform_broken": 0xED4245,      # red — platform marked unhealthy
     "info": 0x99AAB5,
     "warning": 0xFEE75C,
     "error": 0xED4245,
@@ -191,20 +202,27 @@ class WebhookDispatcher:
         *,
         fields: Optional[List[Dict[str, Any]]] = None,
         throttle: bool = True,
+        throttle_key: Optional[Tuple[str, str]] = None,
     ) -> int:
-        """Enqueue an event for delivery. Returns number of URLs that will receive it."""
+        """Enqueue an event for delivery. Returns number of URLs that will receive it.
+
+        throttle_key: optional explicit (key, url) prefix for throttling. Use this
+        when you want a non-default throttle bucket (e.g. per-(event_class, sub_event)
+        rather than the global per-sub_event default). When provided, it overrides
+        the _THROTTLE_KEYS lookup.
+        """
         urls = self.urls_for_class(event_class)
         if not urls:
             return 0
 
         # Throttling: skip if the same (throttle_key, url) was sent
         # within WEBHOOK_THROTTLE_SECONDS. Throttling is per-(sub-event, url).
-        throttle_key = _THROTTLE_KEYS.get(sub_event)
-        if throttle and throttle_key:
+        effective_key = throttle_key[0] if throttle_key else _THROTTLE_KEYS.get(sub_event)
+        if throttle and effective_key:
             now = time.monotonic()
             kept_urls = []
             for url in urls:
-                key = (throttle_key, url)
+                key = (effective_key, url)
                 last = self._last_sent.get(key, 0.0)
                 if (now - last) >= WEBHOOK_THROTTLE_SECONDS:
                     kept_urls.append(url)
@@ -212,7 +230,7 @@ class WebhookDispatcher:
             if not urls:
                 return 0
             for url in urls:
-                self._last_sent[(throttle_key, url)] = now
+                self._last_sent[(effective_key, url)] = now
 
         envelope = {
             "event_class": event_class,
@@ -374,10 +392,74 @@ def emit_bridge_status(sub_event: str, detail: str = "") -> int:
     )
 
 
+def emit_video_initialized(source: str, frame_bytes: int, accepted_after_silence_s: float) -> int:
+    """Announce that the bridge just accepted its first real video frame after a
+    quiet period. The user gets a Discord notification via webhook so they know
+    their camera/screen is actually flowing.
+
+    Throttled by default to avoid spam if the feeder briefly hiccups and the
+    "first frame" event fires repeatedly.
+    """
+    desc = f"Video feed is live ({frame_bytes} bytes, after {accepted_after_silence_s:.1f}s of silence)"
+    if source:
+        desc = f"Video feed from `{source}` is live ({frame_bytes} bytes, after {accepted_after_silence_s:.1f}s of silence)"
+    return get_dispatcher().emit(
+        "bridge.video", "video_initialized", desc,
+        throttle=True,
+        throttle_key=("bridge.video", "video_initialized"),
+        fields=[
+            {"name": "Source", "value": str(source) or "unknown", "inline": True},
+            {"name": "Frame size", "value": f"{frame_bytes} B", "inline": True},
+            {"name": "Quiet before", "value": f"{accepted_after_silence_s:.1f}s", "inline": True},
+        ],
+    )
+
+
 def emit_tool_called(tool_name: str, args_summary: str) -> int:
     return get_dispatcher().emit(
         "tool.called", "tool_called",
         f"**{tool_name}**\n{args_summary[:1500]}",
         throttle=True,
+    )
+
+
+def emit_fallback_event(platform: str, reason: str, neighbors: list) -> int:
+    """Announce that a delegation platform was marked broken and the
+    fallback chain is now active. Helps the agent narrate in voice.
+    """
+    neighbor_list = ", ".join(f"`{n}`" for n in (neighbors or [])[:5]) or "(none)"
+    desc = (
+        f"**{platform}** marked unhealthy: {reason[:200]}\n"
+        f"Next delegate will auto-route to: {neighbor_list}"
+    )
+    return get_dispatcher().emit(
+        "platform.fallback", "platform_broken",
+        desc,
+        throttle=True,
+        throttle_key=("platform.fallback", platform),
+        fields=[
+            {"name": "Platform", "value": f"`{platform}`", "inline": True},
+            {"name": "Reason", "value": reason[:200] or "?", "inline": False},
+            {"name": "Fallback chain", "value": neighbor_list, "inline": False},
+        ],
+    )
+
+
+def emit_agent_notify(text: str, source: str = "agent", title: Optional[str] = None) -> int:
+    """Announce a proactive agent-initiated notification (criterion #6).
+
+    Triggered when the agent breaks out of reply-only mode to push a
+    status update, completion ping, or scheduled reminder to the user.
+    """
+    sub = "agent_notify_scheduled" if source == "scheduled" else "agent_notification"
+    desc = text[:1900] if text else ""
+    return get_dispatcher().emit(
+        "agent.notify", sub, desc,
+        throttle=True,
+        throttle_key=("agent.notify", source),
+        fields=[
+            {"name": "Source", "value": source, "inline": True},
+            {"name": "Title", "value": (title or "Agent notification")[:256], "inline": True},
+        ],
     )
 

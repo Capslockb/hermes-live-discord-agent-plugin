@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Troubleshooting — Hermes Live</title>
+<meta name="description" content="Common bridge failures and how to fix them: bridge won&#x27;t start, interrupts lag, sfx not playing, email brief fails.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html" class="active">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Troubleshooting</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Troubleshooting</h1>
+
+<p>Common bridge failures and how to fix them.</p>
+
+<h2>"Bridge failed to start"</h2>
+
+<p>Most common cause: <strong>Discord CDN handshake quirk</strong> (criterion #38, see <code>AGENTS.md</code>). The voice WebSocket endpoint rejects the first 5 handshakes with code 4006 before accepting. A single <code>channel.connect()</code> takes ~27 seconds of internal retries.</p>
+
+<p><strong>Do not</strong> restart the gateway repeatedly to "retry" — each restart resets the retry clock and you'll hit the rate limit harder.</p>
+
+<p><strong>What to do</strong>: wait ~30 seconds. The bridge will connect on its own.</p>
+
+<h2>"Bridge still starting" hangs on <code>/voice-live</code></h2>
+
+<p>If a previous bridge is in <code>_active_bridges</code> but <code>vc.is_connected()</code> is False, the new <code>/voice-live</code> will hang with "Bridge still starting" instead of starting fresh.</p>
+
+<p><strong>Fix</strong>: the <code>_<em>init</em>_.py:voice_live()</code> handler should detect stale entries (vc disconnected) and pop them. If you see this hang in production, restart the gateway (<code>systemctl --user restart hermes-gateway</code>) and the cleanup will run on boot.</p>
+
+<h2>First-turn "I see you're sharing your screen" hallucination</h2>
+
+<p>Two root causes (criterion #34):</p>
+<ol><li>The system prompt told the model "if someone shares their screen..." — Gemini hallucinated this as an implied task on every connect.</li><li>The first-turn mute (<code>audioStreamEnd</code> after setup) wasn't being sent.</li></ol>
+
+<p><strong>Verify the fix is in</strong>: <code>bridge.py</code> should have an <code>await self._gemini._ws.send(json.dumps({&quot;realtimeInput&quot;: {&quot;audioStreamEnd&quot;: True}}))</code> right after <code>await self._gemini.connect()</code>.</p>
+
+<h2>Token burn on connect</h2>
+
+<p>The bridge sends <code>setupComplete</code> → <code>audioStreamEnd</code> immediately to prevent the model from starting a first autonomous turn. If you see logs showing model output within 100ms of <code>setupComplete</code>, the audioStreamEnd is not being sent or the model is generating despite it.</p>
+
+<p><strong>Check</strong>: <code>journalctl --user -u hermes-gateway -n 50 --no-pager | grep setupComplete</code></p>
+
+<h2>Voice CDN rate limit (4006 after 5 attempts)</h2>
+
+<p>A long-running session can hit the rate limit. The bridge handles it by waiting up to 60s for <code>secret_key</code> readiness. If it still fails, the gateway returns an error. Wait 5-10 minutes before retrying.</p>
+
+<h2>Tool calls hang</h2>
+
+<p><code>_run_local_tool</code> runs in a thread-pool. Long-running tools (delegation, web search) should return control immediately and let the user poll for status. If a tool blocks the worker thread, <strong>all</strong> subsequent tool calls queue up.</p>
+
+<p><strong>Watch for</strong>: tools that don't return a <code>dict</code> within 30 seconds. They might be stuck on a network call. Check <code>journalctl --user -u hermes-gateway -n 20 --no-pager</code> for the traceback.</p>
+
+<h2>Fallback chain always picks opencode</h2>
+
+<p><code>FALLBACK_CHAIN[&quot;codex&quot;]</code> is <code>[&quot;opencode&quot;, &quot;hermes-api&quot;, &quot;gemini&quot;]</code> — opencode is the first fallback by design. If you want codex to fall back to a different neighbor, edit <code>delegation_agent.py:FALLBACK_CHAIN</code>.</p>
+
+<p><strong>Verify the health registry is working</strong>: call <code>local_delegate_health(action=&quot;list&quot;)</code> from voice or <code>~/.hermes/voice-platform-health.json</code> from the shell. If a platform is in there with <code>seconds_remaining &gt; 0</code>, it's still considered broken.</p>
+
+<h2>Sfx not playing</h2>
+
+<ol><li>Check the WAV files exist: <code>ls -la ~/.hermes/voice-users/sfx/</code></li><li>Check the volumes: <code>DISCORD_VOICE_LIVE_SFX_&lt;SLOT&gt;_VOLUME=0.5</code> (default)</li><li>Test manually: <code>local_sfx_test(action=&quot;list&quot;)</code> returns the configured slots</li><li>Test playback: <code>local_sfx_test(slot=&quot;notification&quot;)</code> — should return <code>status: &quot;played&quot;</code>. If <code>no_active_source</code>, no voice session is running.</li></ol>
+
+<p>If the sfx is loaded but inaudible, the source's audio queue might be stuck. Restart the gateway to reset.</p>
+
+<h2>Email brief returns "no backend"</h2>
+
+<p>Both backends (<code>google_api.py</code> and <code>himalaya</code>) failed. Common causes:</p>
+<ul><li><code>google_api.py</code> not authenticated: run <code>python ~/.hermes/hermes-agent/skills/productivity/google-workspace/scripts/google_api.py auth</code></li><li><code>himalaya</code> not configured: check <code>~/.config/himalaya/config.toml</code></li></ul>
+
+<p>The brief is <strong>graceful</strong> when both fail — returns <code>{status: &quot;ok&quot;, backend: &quot;none&quot;, count: 0}</code> instead of crashing.</p>
+
+<h2>Notification not delivered</h2>
+
+<p><code>local_notify</code> returns <code>{status, channel, results, notified_at}</code>. Check <code>channel</code>:</p>
+<ul><li><code>voice</code> — the model will speak it in the next turn</li><li><code>dm</code> — sent via bot DM</li><li><code>channel</code> — posted in a text channel</li><li><code>webhook</code> — fired a webhook event</li><li><code>no_subscribers</code> — no webhook URL configured for <code>agent.notify</code></li></ul>
+
+<p>If <code>channel: &quot;no_subscribers&quot;</code> and you expected a DM, the bot might not share a guild with the target user. Verify the bot is in the same server.</p>
+
+<h2>Log locations</h2>
+
+<ul><li><strong>Gateway</strong>: <code>journalctl --user -u hermes-gateway -f</code> or <code>~/.hermes/logs/gateway.log</code></li><li><strong>Plugin</strong>: same journalctl, with <code>VoiceLive:</code> prefix in messages</li><li><strong>Errors</strong>: <code>~/.hermes/logs/errors.log</code></li><li><strong>Opencode tmux logs</strong>: <code>/tmp/delegate-&lt;platform&gt;-&lt;timestamp&gt;.log</code></li></ul>
+
+<h2>Voice bridges down after gateway restart</h2>
+
+<p>Voice bridges (ports 18943 and 9232) are consistently down after gateway restart. The gateway needs to bind the sockets, then ~30s for the Discord CDN handshake. Don't restart repeatedly — let one connect cycle complete.</p>
+
+<div class="pager"><a class="prev" href="env-vars.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Environment variables — Hermes Live</span>
+        </a><a class="next" href="changelog.html">
+          <span class="label">Next →</span>
+          <span class="title">Changelog — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>
