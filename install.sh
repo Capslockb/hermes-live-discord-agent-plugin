@@ -19,6 +19,7 @@ PLUGINS_DIR="$HERMES_HOME/plugins"
 INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
 SFX_DIR="$HOME/.hermes/voice-users/sfx"
 PYTHON_BIN="$HERMES_HOME/hermes-agent/venv/bin/python"
+ENV_FILE="$HERMES_HOME/.env"
 
 # ── Argument parsing ──────────────────────────────────────────────────────
 FROM_LOCAL=0
