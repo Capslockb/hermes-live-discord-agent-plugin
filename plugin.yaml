@@ -1,5 +1,5 @@
 name: discord-voice
-version: 0.3.0
+version: 0.3.1
 kind: standalone
 platforms: [linux]
 description: High-performance Discord Voice bridge via Gemini Multimodal Live API

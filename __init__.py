@@ -151,12 +151,29 @@ def _coerce_tool_args(args: Optional[Dict[str, Any]], kwargs: Dict[str, Any]) ->
 
 
 def register(ctx):
+    # Sibling-release callout: Vapi.ai bridge is now available as a parallel
+    # transport for Discord voice.  The Gemini Live bridge (this plugin) is the
+    # default; the Vapi bridge is exposed by the `discord-vapi` plugin and
+    # registers the `voice_vapi` tool.  See PLUGIN_SIBLINGS below.
+    PLUGIN_SIBLINGS = {
+        "voice_vapi": {
+            "status": "NEW, RELEASED",
+            "transport": "Vapi.ai",
+            "tagline": "Managed conversational AI — same Discord voice UX, different LLM/voice stack.",
+            "use_when": "You want Vapi's hosted assistant model (durable call IDs, dashboard-managed prompts, multi-provider voice/TTS) instead of streaming directly to Gemini Live.",
+        },
+    }
+
     ctx.register_tool(
         name="voice_live",
         toolset="hermes",
         schema={
             "name": "voice_live",
-            "description": "Start a live Discord voice bridge in a voice channel.",
+            "description": (
+                "Start a live Discord voice bridge in a voice channel via Gemini Multimodal Live. "
+                "If a sibling Vapi bridge is also installed, this tool is the Gemini transport; "
+                "use the `voice_vapi` tool to start the Vapi transport instead."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -337,7 +354,23 @@ async def _voice_live_leave_handler(args: Optional[Dict[str, Any]] = None, **kwa
 
 
 async def _voice_live_status_handler(args: Optional[Dict[str, Any]] = None, **kwargs) -> str:
-    return await _control_get("/health")
+    body = await _control_get("/health")
+    # Sibling-release hint: the Vapi bridge (also a Discord voice transport)
+    # is NEW, RELEASED.  Append a transport_choice note so callers know an
+    # alternative exists without making this handler the source of truth.
+    try:
+        data = json.loads(body) if isinstance(body, str) else body
+        if isinstance(data, dict):
+            data.setdefault("sibling_transports", []).append({
+                "name": "voice_vapi",
+                "status": "NEW, RELEASED",
+                "transport": "Vapi.ai",
+                "tool": "voice_vapi",
+            })
+            return json.dumps(data)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return body
 
 
 async def _voice_live_notes_handler(args: Optional[Dict[str, Any]] = None, **kwargs) -> str:

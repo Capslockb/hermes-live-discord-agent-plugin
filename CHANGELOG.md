@@ -1,5 +1,13 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.3.1 — 2026-06-09
+
+### Sibling release callout
+
+- **Vapi.ai bridge is NEW, RELEASED** — the `discord-vapi` plugin (separate install) ships a parallel `voice_vapi` tool that uses the same Discord voice UX but routes audio through Vapi's managed assistant transport instead of streaming directly to Gemini Multimodal Live.  This release wires the callout:
+  - `voice_live` tool description now mentions the Vapi transport as an alternative.
+  - `voice_live_status` response carries a `sibling_transports[]` array with `name=voice_vapi`, `status="NEW, RELEASED"`, `transport="Vapi.ai"`, and `tool=voice_vapi` so callers can discover the alternative without hard-coding its existence.
+
 ## 0.3.0 — 2026-06-07
 
 ### Features

@@ -72,7 +72,7 @@ def fetch_google(limit: int) -> List[Dict[str, Any]]:
         raise FileNotFoundError("google_api.py not found")
     out = subprocess.run(
         [os.getenv("HERMES_PYTHON", "python3"), str(bin_path),
-         "gmail", "list", "--limit", str(limit)],
+         "gmail", "search", "in:inbox", "--max", str(limit)],
         capture_output=True, text=True, timeout=30,
     )
     if out.returncode != 0:
@@ -113,6 +113,12 @@ def fetch_himalaya(limit: int) -> List[Dict[str, Any]]:
         if isinstance(sender, list):
             sender = sender[0] if sender else {}
         from_str = sender.get("addr") or sender.get("address") or sender.get("name") or "unknown"
+        flags = msg.get("flags", {})
+        seen = (
+            flags.get("seen")
+            if isinstance(flags, dict)
+            else ("Seen" in flags or "\\Seen" in flags if isinstance(flags, list) else False)
+        )
         out_list.append({
             "id": str(msg.get("id", "")),
             "from": from_str,
@@ -120,7 +126,7 @@ def fetch_himalaya(limit: int) -> List[Dict[str, Any]]:
             "date": str(msg.get("date", "")),
             "snippet": "",
             "labels": [],
-            "unread": bool(msg.get("flags", {}).get("seen") is False),
+            "unread": not bool(seen),
             "source": "himalaya",
         })
     return out_list

@@ -1034,7 +1034,7 @@ async def _email_reminder_loop(bridge: Any) -> None:
             if not Path(GOOGLE_API_BIN).exists():
                 continue
             out = subprocess.run(
-                [sys.executable, GOOGLE_API_BIN, "gmail", "list", "--unread", "--limit", "10"],
+                [sys.executable, GOOGLE_API_BIN, "gmail", "search", "is:unread in:inbox", "--max", "10"],
                 capture_output=True, text=True, timeout=30,
             )
             if out.returncode != 0:
@@ -1922,6 +1922,15 @@ def _opencode_get_bridge(session_name: str, user_id: Optional[str]) -> Any:
     # Fallback: use the most recently active bridge (works when there's
     # only one active session per user, which is the common case)
     return _opencode_current_bridge
+
+
+def _bridge_user_id(bridge: Any) -> Optional[str]:
+    """Resolve the Discord user id from the active bridge without requiring a bound self."""
+    if bridge is None:
+        return None
+    profile = getattr(bridge, "_user_profile", None)
+    profile_id = getattr(profile, "discord_id", None) if profile is not None else None
+    return profile_id or getattr(bridge, "_target_user_id", None)
 
 
 async def _opencode_watcher_loop(
@@ -3096,19 +3105,18 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     # Pure read — return brief to model, no DM/webhook
                     payload = build_brief(limit=limit, backend=backend)
                     return {"result": {**payload, "notified": False, "delivery": None}}
-                # Resolve the live bridge for the notification path
-                _bridge = None
+                # Resolve the live bridge for the notification path.
+                _bridge = BRIDGE
+                _uid = _bridge_user_id(_bridge)
                 try:
-                    _uid = self._user_profile.discord_id if self._user_profile is not None else None
-                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_uid)
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_uid) or _bridge
                 except Exception:
                     pass
                 if _bridge is None:
                     _bridge = BRIDGE
                 _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
                 _uid = (
-                    (self._user_profile.discord_id if self._user_profile is not None else None)
-                    or (_bridge._target_user_id if _bridge is not None else None)
+                    _bridge_user_id(_bridge)
                     or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
                 )
                 payload = build_and_notify(
@@ -3539,18 +3547,17 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 # route to voice + DM + webhook. _run_local_tool is a module-level
                 # function in bridge.py, so BRIDGE/_opencode_get_bridge live in
                 # this module's globals — no import needed.
-                _bridge = None
+                _bridge = BRIDGE
+                _user_id = _bridge_user_id(_bridge)
                 try:
-                    _user_id = self._user_profile.discord_id if self._user_profile is not None else None
-                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_user_id)
+                    _bridge = _opencode_get_bridge(session_name="__notify__", user_id=_user_id) or _bridge
                 except Exception:
                     pass
                 if _bridge is None:
                     _bridge = BRIDGE
                 _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
                 _user_id = (
-                    (self._user_profile.discord_id if self._user_profile is not None else None)
-                    or (_bridge._target_user_id if _bridge is not None else None)
+                    _bridge_user_id(_bridge)
                     or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
                 )
                 result = _notify_deliver(
