@@ -2197,8 +2197,21 @@ def _opencode_run_tmux(session_name: str, prompt: str, model: Optional[str], wor
     if create.returncode != 0:
         return {"error": f"tmux new-window failed: {create.stderr.decode(errors='replace').strip()}"}
 
+    # Try to capture the pane PID for SIGINT support
+    pane_pid_res = subprocess.run(
+        ["tmux", "display-message", "-t", f"{OPENCODE_TMUX_SESSION}:{window_name}", "-p", "#{pane_pid}"],
+        capture_output=True,
+    )
+    pane_pid = None
+    if pane_pid_res.returncode == 0:
+        try:
+            pane_pid = int(pane_pid_res.stdout.decode().strip())
+        except ValueError:
+            pass
+
     _OPENCODE_SESSIONS[_opencode_key(session_name)] = {
         "tmux_window": window_name,
+        "tmux_pane_pid": pane_pid,
         "created_at": time.time(),
         "goal": prompt,
         "model": model,
@@ -2313,6 +2326,37 @@ def _opencode_send(name: str, message: str) -> Dict[str, Any]:
     return {"result": {"name": name, "sent_to_pane": sent_to_pane, "appended_to_log": True}}
 
 
+def _opencode_interrupt(name: str) -> Dict[str, Any]:
+    """Send SIGINT (Ctrl-C) to a running opencode session so you can ask it a follow-up."""
+    import subprocess
+    import signal
+    import os
+
+    meta = _OPENCODE_SESSIONS.get(_opencode_key(name))
+    if not meta:
+        return {"error": f"no opencode session named '{name}' for current user"}
+    
+    window = meta["tmux_window"]
+    # Cancel the watcher so it doesn't fire a final summary
+    _opencode_stop_watcher(name, _OPENCODE_CURRENT_USER)
+    
+    method = "send_keys"
+    pane_pid = meta.get("tmux_pane_pid")
+    if pane_pid:
+        try:
+            os.killpg(pane_pid, signal.SIGINT)
+            method = "sigint"
+        except (ProcessLookupError, PermissionError):
+            pass
+    
+    # Always fall back/ensure with send-keys for robustness
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"{OPENCODE_TMUX_SESSION}:{window}", "C-c"],
+        capture_output=True,
+    )
+    
+    return {"result": {"name": name, "interrupted": True, "tmux_window": window, "method": method}}
+
 def _opencode_stop(name: str) -> Dict[str, Any]:
     """Kill the opencode session's tmux window and remove from registry."""
     import subprocess
@@ -2415,6 +2459,17 @@ _OPENCODE_FUNCTION_DECLARATIONS = [
             "required": ["name"],
         },
     },
+    {
+        "name": "opencode_interrupt",
+        "description": "Send SIGINT (Ctrl-C) to a running opencode session so you can ask it a follow-up. Keeps the tmux window alive — use opencode_stop to kill it entirely. Falls back to tmux send-keys C-c if the process group signal fails.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Session name returned by opencode_run"}
+            },
+            "required": ["name"]
+        }
+    },
 ]
 
 
@@ -2470,6 +2525,8 @@ def _run_opencode_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                                  message=args.get("message", ""))
         if name == "opencode_stop":
             return _opencode_stop(name=_opencode_sanitize_name(args.get("name", "")))
+        if name == "opencode_interrupt":
+            return _opencode_interrupt(name=_opencode_sanitize_name(args.get("name", "")))
         return {"error": f"Unknown opencode tool: {name}"}
     except Exception as exc:
         logger.exception("opencode tool %s crashed", name)
@@ -4291,11 +4348,16 @@ class GeminiLiveBridge:
                 "turnCoverage": "TURN_INCLUDES_ONLY_ACTIVITY",
                 "automaticActivityDetection": {
                     "disabled": False,
-                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
-                    "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+                    "startOfSpeechSensitivity": "SENSITIVITY_LOW",
+                    "endOfSpeechSensitivity": "SENSITIVITY_LOW",
                     "prefixPaddingMs": 20,
                     "silenceDurationMs": 100,
                 }
+            },
+            "voice_activity_detection": {
+                "enabled": True,
+                "sensitivity": "SENSITIVITY_LOW",
+                "silenceDurationMs": 100
             },
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},

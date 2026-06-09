@@ -1,8 +1,12 @@
 # CHANGELOG — gemini-live-discord-bridge
 
-## 0.3.1 — 2026-06-09
+## 0.3.2 — 2026-06-09
 
-### Sibling release callout
+- Feeder install path: `install.sh` now copies `scripts/video-frame-feeder.py` to `~/.hermes/scripts/` and creates `~/.hermes/control.secret` on first install
+- `docs/video.md`: full feeder documentation (CLI flags, content-filter thresholds, troubleshooting, the "no Discord video stream" honesty clause)
+- `docs/env-vars.md`: added four missing video env-var rows
+
+## 0.3.1 — 2026-06-09
 
 - **Vapi.ai bridge is NEW, RELEASED** — the `discord-vapi` plugin (separate install) ships a parallel `voice_vapi` tool that uses the same Discord voice UX but routes audio through Vapi's managed assistant transport instead of streaming directly to Gemini Multimodal Live.  This release wires the callout:
   - `voice_live` tool description now mentions the Vapi transport as an alternative.

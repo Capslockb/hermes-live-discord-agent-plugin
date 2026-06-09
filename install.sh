@@ -140,8 +140,34 @@ for slot in tool_init error notification transition; do
   fi
 done
 
+# ── Install Video Feeder ──────────────────────────────────────────────────
+echo
+echo ">> Installing Video Frame Feeder..."
+SCRIPTS_DIR="$HERMES_HOME/scripts"
+mkdir -p "$SCRIPTS_DIR"
+FEEDER_SRC="$INSTALL_DIR/scripts/video-frame-feeder.py"
+FEEDER_DEST="$SCRIPTS_DIR/video-frame-feeder.py"
+
+if [ -f "$FEEDER_SRC" ]; then
+  cp "$FEEDER_SRC" "$FEEDER_DEST"
+  chmod 0755 "$FEEDER_DEST"
+  echo "  installed $FEEDER_DEST"
+else
+  echo "  WARNING: feeder source not found at $FEEDER_SRC"
+fi
+
+# Create control.secret if missing (used for bridge auth)
+SECRET_FILE="$HERMES_HOME/control.secret"
+if [ ! -f "$SECRET_FILE" ]; then
+  echo "  generating $SECRET_FILE..."
+  "$PYTHON_BIN" -c "import secrets; print(secrets.token_urlsafe(32))" > "$SECRET_FILE"
+  chmod 0600 "$SECRET_FILE"
+fi
+
+echo "Video frame feeder installed: $HERMES_HOME/scripts/video-frame-feeder.py"
+
 # ── Env var prompts ──────────────────────────────────────────────────────
-ENV_FILE="$HERMES_HOME/.env"
+
 if [ "$NO_PROMPT" = 0 ]; then
   echo
   echo ">> Required environment variables (written to $ENV_FILE)"

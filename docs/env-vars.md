@@ -75,13 +75,13 @@ Slots: `TOOL_INIT`, `ERROR`, `NOTIFICATION`, `TRANSITION`.
 
 | Var | Default | Description |
 |---|---|---|
-| `DISCORD_VOICE_LIVE_VIDEO_ENABLED` | `true` | Allow video frame input |
-| `DISCORD_VOICE_LIVE_VIDEO_MAX_FPS` | `1.0` | Max frames per second |
-| `DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES` | `524288` | Max JPEG size (default 512 KB) |
-| `DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S` | `30` | Seconds of silence before a "video initialized" event fires |
-| `DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION` | `true` | Auto-react to video enable/disable (criterion #4) |
-| `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval for video state changes |
-| `DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS` | `5` | Don't fire video events when audio is recent |
+  - `DISCORD_VOICE_LIVE_VIDEO_MAX_FPS` | `1` | Hard cap on feeder frame rate. Gemini rejects faster anyway. |
+  - `DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES` | `524288` | Per-frame JPEG size cap (512 KB). |
+  - `DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS` | `8` | Drop frames if no voice activity in the last N seconds. |
+  - `DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S` | `30` | Webhook announce fires only when a frame is accepted after at least this many seconds of silence. |
+  - `DISCORD_VOICE_LIVE_VIDEO_ENABLED` | `true` | Allow video frame input |
+  - `DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION` | `true` | Auto-react to video enable/disable |
+  - `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval for video state changes |
 
 ## Tool enable/disable
 
