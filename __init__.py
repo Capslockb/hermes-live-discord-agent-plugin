@@ -294,19 +294,80 @@ def register(ctx):
         is_async=True,
     )
 
-    # Slash command registration for Discord is handled natively by the
-    # Discord platform adapter at `gateway/platforms/discord/adapter.py`,
-    # which exposes `/voice-live` and `/voice-live-leave` as real Discord
-    # Application Commands via @tree.command(). The adapter imports the
-    # module-level `voice_live` and `voice_live_leave` symbols from this
-    # plugin (loaded as `hermes_plugins.discord_voice`) and dispatches to
-    # them directly.
-    #
-    # We deliberately do NOT call `ctx.register_command()` here. That
-    # method registers a Hermes CLI / in-session command, which Discord
-    # does not surface as a native slash command — the original
-    # `register_command` workaround did nothing useful on Discord and
-    # caused confusion in /commands listings.
+    # Slash commands for Discord: register via `ctx.register_command()`.
+    # The Discord adapter (`plugins/platforms/discord/adapter.py:3189-3216`)
+    # iterates `_iter_plugin_command_entries()` and mirrors every plugin
+    # command into Discord's native slash picker. Earlier code skipped this
+    # call (assumption: `register_command` was Hermes-CLI only), which broke
+    # `/voice-live` and `/voice-live-leave` with `CommandNotFound`. The
+    # adapter has a dedicated plugin-command mirror path; the wrappers below
+    # are what it surfaces to Discord.
+    async def _slash_voice_live(raw_args: str) -> str:
+        import gateway.run as _gw
+        from gateway.platforms.base import Platform
+        runner = None
+        ref = getattr(_gw, "_gateway_runner_ref", None)
+        if callable(ref):
+            runner = ref()
+        if runner is None:
+            runner = getattr(getattr(_gw, "GatewayRunner", object), "_instance", None)
+        if not runner:
+            return "Gateway not available."
+        adapter = runner.adapters.get(Platform("discord"))
+        if not adapter:
+            return "Discord adapter not found."
+        user_id = DEFAULT_USER_ID
+        inferred = _infer_user_voice_channel(adapter, str(user_id))
+        if not inferred:
+            return "Could not infer your current voice channel. Join a voice channel first."
+        guild_id_str, channel_id_str = inferred
+        result = json.loads(await voice_live(adapter, guild_id_str, channel_id_str))
+        status = result.get("status", "error")
+        msg = result.get("message", "")
+        if status == "success":
+            return f"✅ voice-live: {msg}"
+        if status == "pending":
+            return f"⏳ voice-live: {msg}"
+        return f"❌ voice-live: {msg or status}"
+
+    async def _slash_voice_live_leave(raw_args: str) -> str:
+        import gateway.run as _gw
+        from gateway.platforms.base import Platform
+        runner = None
+        ref = getattr(_gw, "_gateway_runner_ref", None)
+        if callable(ref):
+            runner = ref()
+        if runner is None:
+            runner = getattr(getattr(_gw, "GatewayRunner", object), "_instance", None)
+        if not runner:
+            return "Gateway not available."
+        adapter = runner.adapters.get(Platform("discord"))
+        if not adapter:
+            return "Discord adapter not found."
+        user_id = DEFAULT_USER_ID
+        inferred = _infer_user_voice_channel(adapter, str(user_id))
+        if not inferred:
+            return "No active voice session found."
+        guild_id_str = inferred[0]
+        result = json.loads(await voice_live_leave(guild_id_str))
+        status = result.get("status", "error")
+        msg = result.get("message", "")
+        if status == "success":
+            return f"✅ voice-live-leave: {msg}"
+        return f"❌ voice-live-leave: {msg or status}"
+
+    ctx.register_command(
+        name="voice-live",
+        handler=_slash_voice_live,
+        description="Start Gemini Live voice bridge in your current voice channel",
+        args_hint="",
+    )
+    ctx.register_command(
+        name="voice-live-leave",
+        handler=_slash_voice_live_leave,
+        description="Stop Gemini Live voice bridge",
+        args_hint="",
+    )
 
 
 
