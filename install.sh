@@ -166,6 +166,24 @@ fi
 
 echo "Video frame feeder installed: $HERMES_HOME/scripts/video-frame-feeder.py"
 
+# ── Run e2e tests (post-fix regression gate) ─────────────────────────────
+echo
+echo ">> Running e2e regression tests..."
+TESTS_DIR="$INSTALL_DIR/tests"
+if [ -d "$TESTS_DIR" ]; then
+  if "$PYTHON_BIN" -m unittest tests.test_interrupt_latency tests.test_transcript_latency -v 2>&1 | tee /tmp/discord-voice-tests.log; then
+    echo
+    echo "  ✓ e2e tests passed (interrupt latency < 100ms target)"
+  else
+    echo
+    echo "  ⚠ e2e tests FAILED — see /tmp/discord-voice-tests.log"
+    echo "  The plugin is installed but interrupt latency is not verified."
+    echo "  Re-run manually: cd $INSTALL_DIR && $PYTHON_BIN -m unittest tests.test_interrupt_latency tests.test_transcript_latency -v"
+  fi
+else
+  echo "  WARNING: tests/ not found at $TESTS_DIR (skipped regression gate)"
+fi
+
 # ── Env var prompts ──────────────────────────────────────────────────────
 
 if [ "$NO_PROMPT" = 0 ]; then

@@ -39,8 +39,10 @@ def _analyze_files(n_files: int = 5):
     )[:n_files]
     gaps = []
     for fp in files:
+        events = []
         try:
-            events = [json.loads(line) for line in open(fp) if line.strip()]
+            with open(fp) as fh:
+                events = [json.loads(line) for line in fh if line.strip()]
         except Exception:
             continue
         burst_len = 0
