@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hermes Live — Discord voice agent on Gemini Multimodal Live</title>
+<meta name="description" content="Drop a real-time multimodal AI into any Discord voice channel. Full-duplex audio, vision, function calling, multi-CLI delegation, proactive notifications. Built on Google Gemini Multimodal Live, packaged as a self-hostable Hermes Agent plugin.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Overview</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+
+      <div class="hero">
+        <div class="hero-inner">
+          <div class="hero-mark">H</div>
+          <div class="hero-tag">🎙️ Discord voice agent · Gemini Multimodal Live</div>
+          <h1 class="hero-title">Hermes Live</h1>
+          <p class="hero-sub">A real-time, multimodal AI you can drop into any Discord voice channel. Open source, self-hostable, MIT.</p>
+          <div class="hero-meta">
+            <span class="hero-pill good">v0.3.4.2</span>
+            <span class="hero-pill accent">VOPI build</span>
+            <span class="hero-pill">sub-second latency</span>
+            <span class="hero-pill">30+ voice tools</span>
+            <span class="hero-pill">multi-CLI fallback</span>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true"></div>
+      </div>
+
+      <div class="callout">
+        <span class="ico">status</span>
+        <div>
+          <strong>VOPI build — first public functional release.</strong>
+          The bridge is operational and shipping. Snappy interrupts (median 0.030ms), full multi-CLI fallback, email briefs, sfx library, video frame feeder, webhooks, and the full personality system are all in. A 6-finding code audit is published; the build is "functional, although it has rough edges." Stable enough for self-hosters; not yet feature-complete.
+        </div>
+      </div>
+
+      <h2>What's in the box</h2>
+
+      <div class="cards">
+        <div class="card">
+          <div class="icon">voice</div>
+          <h3>Full-duplex audio</h3>
+          <p>Sub-second latency. Discord UDP → Opus → 16 kHz mono → Gemini WSS. A 30ms local hard-clear VAD makes interrupts feel instant.</p>
+        </div>
+        <div class="card">
+          <div class="icon">vision</div>
+          <h3>Vision + frame feed</h3>
+          <p>Send images or stream 1 fps screenshare. The model sees what you see — via a separate feeder on a host with a real display.</p>
+        </div>
+        <div class="card">
+          <div class="icon">tools</div>
+          <h3>Function calling</h3>
+          <p>30+ voice tools. Calendar, mail, Home Assistant, GitHub, Spotify, files, search, and a multi-CLI delegation agent.</p>
+        </div>
+        <div class="card">
+          <div class="icon">delegate</div>
+          <h3>Multi-CLI fallback</h3>
+          <p>opencode / codex / numasec / gemini / hermes-api with a health registry. If one is broken, work reroutes automatically.</p>
+        </div>
+        <div class="card">
+          <div class="icon">proactive</div>
+          <h3>Proactive notifications</h3>
+          <p>Five channels: voice, DM, channel, webhook, auto. Fires on long-task completion, AFK pings, scheduled alerts.</p>
+        </div>
+        <div class="card">
+          <div class="icon">mail</div>
+          <h3>Email brief</h3>
+          <p>Scheduled Gmail digest with 3-bucket importance scoring. AFK delivery via the notification dispatcher.</p>
+        </div>
+        <div class="card">
+          <div class="icon">sfx</div>
+          <h3>SFX library</h3>
+          <p>Four slots — tool-init chime, error chain, notification ping, transition pop. Per-slot env overrides, lazy PCM cache.</p>
+        </div>
+        <div class="card">
+          <div class="icon">memory</div>
+          <h3>Honcho context</h3>
+          <p>Per-user peer memory injected into the system prompt. The model remembers what you talked about last session.</p>
+        </div>
+        <div class="card">
+          <div class="icon">control</div>
+          <h3>Sidecar HTTP API</h3>
+          <p>Local on 127.0.0.1:18943. <code>/health</code>, <code>/frame</code>, <code>/say</code>, <code>/leave</code>, <code>/notify</code>.</p>
+        </div>
+      </div>
+
+      <h2 id="start">Get started</h2>
+
+      <p>Five commands, two minutes.</p>
+<pre><code class="lang-bash"># 1. Clone
+git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
+cd gemini-live-discord-bridge
+
+# 2. Install (prompts for env: DISCORD_BOT_TOKEN, GEMINI_API_KEY, user ID)
+./install.sh
+
+# 3. Restart the gateway
+systemctl --user restart hermes-gateway
+
+# 4. From Discord, in any voice channel:
+/voice-live          # join
+/voice-live-leave    # leave
+
+# 5. Verify
+curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre>
+
+      <p>Full walkthrough, environment variable reference, and troubleshooting in the sidebar →</p>
+
+      <h2 id="docs">Documentation</h2>
+
+      <div class="landing-grid">
+
+        <div class="card">
+          <h3><a href="architecture.html">Architecture →</a></h3>
+          <p>End-to-end audio path, threading model, lifecycle, key files. Read this first if you want to understand the bridge internals.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="personality.html">Personality →</a></h3>
+          <p>The 14-section system prompt, ping-pong rhythm, boredom switch, vocal expression cap. Why the prompt is <em>so</em> long.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="fallback-chain.html">Fallback chain →</a></h3>
+          <p>Multi-CLI delegation. opencode / codex / numasec / gemini / hermes-api, with a health registry and automatic rerouting.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="notification.html">Notifications →</a></h3>
+          <p>Five delivery channels, scheduled notifications, AFK delivery, sidecar HTTP endpoint for non-Gemini callers.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="email-brief.html">Email brief →</a></h3>
+          <p>Importance scoring formula, 3-bucket triage, de-dup, scheduled briefs, backend fallback chain.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="sfx-library.html">SFX library →</a></h3>
+          <p>Four slots, env-driven paths and volumes, lazy PCM cache, <code>local_sfx_test</code> tool. <a href="sfx-credits.html">SFX credits</a>.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="webhooks.html">Webhooks →</a></h3>
+          <p>Nine event classes, throttling, embed shape, emit helpers, notes file.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="video.html">Video feeder →</a></h3>
+          <p>Companion script for pushing local screen frames to the bridge. The Discord-bot-can't-see-screenshare constraint, with a real workaround.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="env-vars.html">Environment variables →</a></h3>
+          <p>Every <code>DISCORD_VOICE_LIVE_*</code> env var, with defaults and descriptions. The reference page.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="troubleshooting.html">Troubleshooting →</a></h3>
+          <p>Bridge won't start, interrupts lag, fallback chain always picks opencode, sfx not playing, email brief returns "no backend".</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="changelog.html">Changelog →</a></h3>
+          <p>Release history from 0.2.8 → 0.3.4. Each release documents its load-bearing fixes and reference baselines.</p>
+        </div>
+
+        <div class="card">
+          <h3><a href="quickstart.html">Quick start →</a></h3>
+          <p>The five-command install + first session, with the common pitfalls annotated.</p>
+        </div>
+
+      </div>
+
+      <h2 id="cost">Cost</h2>
+      <p>~<strong>$0.03–0.06 / hour</strong> of voice on Gemini's Flex tier. Calls cost tokens; a 30-min voice session runs roughly the cost of a long text chat with a generous model.</p>
+
+      <h2 id="license">License</h2>
+      <p>MIT. See top of <code>bridge.py</code> for full text. Free to fork, host, and extend.</p>
+
+      <div class="pager">
+        <a class="prev" href="quickstart.html">
+          <span class="label">Next →</span>
+          <span class="title">Quick start</span>
+        </a>
+        <span></span>
+      </div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

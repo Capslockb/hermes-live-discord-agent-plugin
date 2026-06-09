@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personality — Hermes Live</title>
+<meta name="description" content="The 14-section system prompt, ping-pong rhythm, boredom switch, and vocal expression cap that govern the agent.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html" class="active">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Personality</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Personality — system prompt, ping-pong rhythm, boredom switch</h1>
+
+<p>The system prompt lives in <code>bridge.py:BASE_SYSTEM_PROMPT</code> and is prepended to every Gemini Live session. It is <strong>not</strong> a documentation file — it's a set of behavioral contracts the model is told to follow.</p>
+
+<h2>Sections of the prompt (in order)</h2>
+
+<ol><li><strong>Identity</strong> — "You are S0RA, the AI companion of Capslockb (he calls you B)."</li><li><strong>Capabilities</strong> — Spotify, web search, Gmail, Home Assistant, video awareness.</li><li><strong>VIDEO / SCREEN-SHARE guard</strong> — strict conditional: "Only describe video you have actually received in the current turn."</li><li><strong>FIRST-TURN BEHAVIOUR</strong> — "do NOT generate any audio. Wait for the user to speak first."</li><li><strong>PINGPONG RHYTHM</strong> — split into question rounds and development rounds.</li><li><strong>FORMAT & ANSWER SHAPE</strong> — answer first, then bullets; emotion is seasoning not the meal.</li><li><strong>CALL-OUT MODE</strong> — puncture nonsense, move the work forward.</li><li><strong>PROACTIVE TOOL USE</strong> — suggest tools before being asked.</li><li><strong>PROACTIVE ENGAGEMENT</strong> — drive the conversation; if it's stalling, SAY IT.</li><li><strong>BOREDOM SWITCH</strong> — escalate into NAG MODE if the chat drags.</li><li><strong>EDGE & COMEDY</strong> — push boundaries, match B's dry sarcastic style.</li><li><strong>GF STATE / BOREDOM</strong> — when B is checked out, shift energy: games, music, random maintenance.</li><li><strong>VOCAL EXPRESSION</strong> — at most one inline speech tag per reply.</li><li><strong>TOOL BEHAVIOUR</strong> — typing sound is normal, don't apologize for tool use.</li></ol>
+
+<h2>Why the prompt is <strong>so</strong> long</h2>
+
+<p>Each section addresses a specific regression observed in earlier sessions. The model collapses to "polite assistant" if any one of them is missing.</p>
+
+<table><thead><tr><th>Section</th><th>Regression it fixes</th></tr></thead><tbody><tr><td>VIDEO guard</td><td>"I see you're sharing your screen" hallucination (criterion #33, #34)</td></tr><tr><td>FIRST-TURN</td><td>First-turn token burn (criterion #34)</td></tr><tr><td>PINGPONG</td><td>Monologue-style lectures when the question is still fuzzy</td></tr><tr><td>FORMAT</td><td>"Just laughing and not formatting answers" — emotion replacing substance</td></tr><tr><td>CALL-OUT</td><td>Hand-waving gets rubber-stamped instead of challenged</td></tr><tr><td>PROACTIVE TOOL</td><td>Tools forgotten unless prompted</td></tr><tr><td>PROACTIVE ENGAGEMENT</td><td>Long pauses with no nudge to keep moving</td></tr><tr><td>BOREDOM SWITCH</td><td>Stalls silently instead of escalating</td></tr><tr><td>VOCAL EXPRESSION cap</td><td>"<laugh> <laugh> <laugh>" spam</td></tr></tbody></table>
+
+<h2>How to edit the prompt</h2>
+
+<p>The prompt is a single Python string concatenation. Edit <code>BASE_SYSTEM_PROMPT</code> in <code>bridge.py</code> (around line 162-177). After editing:</p>
+
+<ol><li>Compile-check: <code>python -m py_compile bridge.py</code></li><li>Restart the gateway: <code>systemctl --user restart hermes-gateway</code></li><li>Test by joining voice and triggering the relevant behavior</li></ol>
+
+<p><strong>Do not</strong> add hedging like "be helpful and harmless" — the model interprets that as permission to revert to assistant defaults.</p>
+
+<h2>Honcho context injection</h2>
+
+<p>The static prompt is appended with a per-session "Honcho context" block fetched from the Honcho memory server (see <code>HONCHO_CONTEXT_ENABLED</code> env var). This block contains:</p>
+
+<ul><li>The user's recent session summaries</li><li>Honcho's representation of B's peer card</li><li>Capped at <code>HONCHO_CONTEXT_MAX_CHARS</code> (default 1200)</li></ul>
+
+<p>The Honcho block is <strong>dynamic</strong> — it varies per session — but the BASE_SYSTEM_PROMPT is <strong>static</strong> and identical across users. Per-user customization goes through Honcho, not the prompt.</p>
+
+<div class="pager"><a class="prev" href="architecture.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Architecture — Hermes Live</span>
+        </a><a class="next" href="fallback-chain.html">
+          <span class="label">Next →</span>
+          <span class="title">Fallback chain — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

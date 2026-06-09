@@ -9,6 +9,14 @@
 
 ---
 
+## 📖 [Documentation →](docs-site/index.html)
+
+A proper website is now available in [`docs-site/`](docs-site/index.html) — built from the source markdown in `docs/`. Open `docs-site/index.html` in a browser, or serve it with any static host (`python3 -m http.server` works). 13 pages covering architecture, personality, fallback chain, notifications, email brief, SFX library, webhooks, video feeder, env vars, troubleshooting, and the changelog.
+
+If you prefer raw markdown, every page is also in [`docs/`](docs/).
+
+---
+
 ## Quick start
 
 ```bash
@@ -144,6 +152,12 @@ See [`docs/personality.md`](docs/personality.md) for the section index and how t
 
 ## Documentation
 
+**📖 [Open the docs website →](docs-site/index.html)**
+
+A proper, designed docs site lives in `docs-site/`. It's a static site built from the markdown in `docs/`, so you can host it on GitHub Pages, Vercel, or just `python3 -m http.server` from the repo.
+
+Individual pages (also browseable as raw markdown):
+
 - [`docs/architecture.md`](docs/architecture.md) — end-to-end audio path, threading, lifecycle
 - [`docs/personality.md`](docs/personality.md) — system prompt shape and behavioral contracts
 - [`docs/fallback-chain.md`](docs/fallback-chain.md) — multi-CLI delegation with health registry
@@ -151,6 +165,7 @@ See [`docs/personality.md`](docs/personality.md) for the section index and how t
 - [`docs/email-brief.md`](docs/email-brief.md) — scheduled inbox digest
 - [`docs/sfx-library.md`](docs/sfx-library.md) — slot-based UI sound effects
 - [`docs/webhooks.md`](docs/webhooks.md) — event-class webhook fanout
+- [`docs/video.md`](docs/video.md) — video frame feeder
 - [`docs/env-vars.md`](docs/env-vars.md) — every env var, defaults, descriptions
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — common bridge failures
 

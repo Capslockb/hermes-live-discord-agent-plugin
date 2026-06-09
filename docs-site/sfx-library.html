@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SFX library — Hermes Live</title>
+<meta name="description" content="Four-slot UI sound effects library: tool-init, error, notification, transition. Env-driven, lazy PCM cache.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html" class="active">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Sfx Library</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>SFX library — multi-slot UI sound effects</h1>
+
+<p>A small slot-based system for playing UI sound effects into the active voice session. Each slot maps to a 24kHz mono PCM16 WAV file and fires on a specific bridge event.</p>
+
+<h2>The four slots</h2>
+
+<table><thead><tr><th>Slot</th><th>Triggered by</th><th>Typical sound</th></tr></thead><tbody><tr><td><code>tool_init</code></td><td>First tool call of a session (one-shot per session)</td><td>Soft chime — "I'm ready to work"</td></tr><tr><td><code>error</code></td><td>Uncaught exception in <code>_run_local_tool</code></td><td>Sharp beep — "something went wrong"</td></tr><tr><td><code>notification</code></td><td>Successful <code>local_notify</code> delivery (incl. email brief)</td><td>Light ping — "you have a message"</td></tr><tr><td><code>transition</code></td><td>Session start (after <code>vc.play()</code> succeeds)</td><td>Pop/swoosh — "we're connected"</td></tr></tbody></table>
+
+<p>The <code>tool_init</code> sfx uses a one-shot guard (<code>_run_local_tool._tool_init_played</code>) so it doesn't replay on every tool call.</p>
+
+<h2>File layout</h2>
+
+<p>Default directory: <code>~/.hermes/voice-users/sfx/</code></p>
+
+<pre><code class="lang-">~/.hermes/voice-users/sfx/
+├── tool_init.wav       # chime (e.g. UI Notification Chimes Pack, first chime)
+├── error.wav           # 4x chain of a sharp beep (~2.8s total)
+├── notification.wav    # mobile-OS style ping
+└── transition.wav      # pop / whoosh</code></pre>
+
+<p>All four files are <strong>24 kHz mono PCM16</strong>. The loader auto-resamples if you give it a different format, but cutting directly to the target format keeps the loader's resample path simple.</p>
+
+<h2>Where the clips came from</h2>
+
+<p>Cut from a YouTube playlist ("UI Sound Effects for App & Game Development" by Brand Name Audio) using <code>ffmpeg silencedetect=noise=-30dB:d=0.2</code>. See <code>silencedetect</code> log lines for the <code>silence_end</code> timestamps that anchor each cut.</p>
+
+<p>To re-cut or add new slots, see the recipe in <code>silence-detect-sfx-cutting</code> skill.</p>
+
+<h2>Environment variables</h2>
+
+<p>Per-slot override (path):</p>
+
+<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT=/path/to/custom_chime.wav
+DISCORD_VOICE_LIVE_SFX_ERROR=/path/to/custom_beep.wav
+DISCORD_VOICE_LIVE_SFX_NOTIFICATION=/path/to/custom_ping.wav
+DISCORD_VOICE_LIVE_SFX_TRANSITION=/path/to/custom_pop.wav</code></pre>
+
+<p>Per-slot volume (0.0 to 1.5, where 1.0 = no scaling):</p>
+
+<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_TOOL_INIT_VOLUME=0.55
+DISCORD_VOICE_LIVE_SFX_ERROR_VOLUME=0.45
+DISCORD_VOICE_LIVE_SFX_NOTIFICATION_VOLUME=0.50
+DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60</code></pre>
+
+<p>Global enable:</p>
+
+<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_ENABLED=true    # default</code></pre>
+
+<p>Global SFX directory (overrides the default <code>~/.hermes/voice-users/sfx/</code>):</p>
+
+<pre><code class="lang-bash">DISCORD_VOICE_LIVE_SFX_DIR=/custom/sfx/dir</code></pre>
+
+<h2><code>local_sfx_test</code> tool</h2>
+
+<p>The agent can play any slot in the current voice session:</p>
+
+<pre><code class="lang-json">// play a slot
+{&quot;slot&quot;: &quot;notification&quot;}
+
+// inspect all configured slots
+{&quot;action&quot;: &quot;list&quot;}</code></pre>
+
+<p>Returns:</p>
+<pre><code class="lang-json">// play result
+{&quot;result&quot;: {&quot;status&quot;: &quot;played&quot;, &quot;slot&quot;: &quot;notification&quot;, &quot;bytes&quot;: 33600, &quot;duration_s&quot;: 0.7}}
+
+// list result
+{&quot;result&quot;: {&quot;slots&quot;: {
+  &quot;tool_init&quot;:    {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.55, &quot;cached_bytes&quot;: 33600},
+  &quot;error&quot;:        {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.45, &quot;cached_bytes&quot;: 134400},
+  &quot;notification&quot;: {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.50, &quot;cached_bytes&quot;: 33600},
+  &quot;transition&quot;:   {&quot;path&quot;: &quot;...&quot;, &quot;exists&quot;: true,  &quot;volume&quot;: 0.60, &quot;cached_bytes&quot;: 33600}
+}}}</code></pre>
+
+<p>If no voice session is active, returns <code>{&quot;status&quot;: &quot;no_active_source&quot;}</code> — the sfx library is voice-only.</p>
+
+<h2>Adding a new slot</h2>
+
+<ol><li>Add a <code>sfx_&lt;slot&gt;.wav</code> file to the sfx dir</li><li>In <code>sfx.py</code>, add the slot name to <code>DEFAULT_SFX_PATHS</code> and <code>DEFAULT_SFX_VOLUMES</code></li><li>Call <code>play_sfx(&quot;&lt;slot&gt;&quot;)</code> from the bridge event you want it to fire on</li><li>Add the slot name to the <code>local_sfx_test</code> tool declaration enum</li></ol>
+
+<p>No need to restart the gateway for step 1 if the cache is invalidated, but steps 2-4 require a gateway restart.</p>
+
+<h2>Cache invalidation</h2>
+
+<p>If you swap a WAV file but keep the same path, the in-memory cache still holds the old bytes. Two ways to invalidate:</p>
+
+<ul><li>Restart the gateway</li><li>Call <code>invalidate_cache()</code> (currently no public tool for this; add <code>local_sfx_invalidate</code> if needed)</li></ul>
+
+<div class="pager"><a class="prev" href="email-brief.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Email brief — Hermes Live</span>
+        </a><a class="next" href="sfx-credits.html">
+          <span class="label">Next →</span>
+          <span class="title">SFX credits — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

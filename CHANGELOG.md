@@ -1,5 +1,41 @@
 # CHANGELOG — gemini-live-discord-bridge
 
+## 0.3.5 — 2026-06-09 (VOPI functional release)
+
+**First public release candidate.** The bridge is operational and shipping as the **VOPI build** — "functional, although it has rough edges." Stable enough for self-hosters; not yet feature-complete.
+
+### What's new
+
+- **Static documentation site at `docs-site/`** — a proper, designed docs website built from the source markdown in `docs/`. 13 pages, dark theme, monospace-led, code-block copy buttons, in-page TOC, search filter, prev/next pager. Built by `scripts/build_docs_site.py` (re-run after editing any `docs/*.md`). README links to it as the canonical entry point.
+- **`docs/quickstart.md`** — new five-command install + first-session walkthrough, with common pitfalls annotated.
+- **README refresh** — top-of-page "📖 Documentation" callout pointing at `docs-site/index.html`; the "Documentation" section at the bottom of the README now leads with the same link.
+
+### Why this release
+
+The bridge has reached the point where:
+- Sub-second-latency interrupts ship to production (median 0.030ms measured, vs. 10s pre-0.3.4)
+- The full multi-CLI fallback chain works in practice (`opencode / codex / numasec / gemini / hermes-api` with health registry)
+- Email briefs, notifications, SFX library, video frame feeder, webhooks, and Honcho context are all wired
+- A 6-finding code audit has been published — the build is honest about its rough edges
+
+That is a usable v0.3.5. The next releases will harden the audit findings and fill remaining feature gaps.
+
+### How to upgrade
+
+```bash
+cd /path/to/gemini-live-discord-bridge
+git pull
+systemctl --user restart hermes-gateway
+# (env vars are unchanged; nothing to migrate)
+```
+
+### Files of interest
+
+- `docs-site/index.html` — the documentation site landing
+- `scripts/build_docs_site.py` — rebuilds the site from `docs/*.md`
+- `docs/quickstart.md` — the new getting-started page
+- `CHANGELOG.md` (this file) — full release history
+
 ## 0.3.4 — 2026-06-09
 
 ### Snappy interrupts (load-bearing fix for "interrupts are working but not snappy")

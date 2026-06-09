@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Environment variables — Hermes Live</title>
+<meta name="description" content="Every DISCORD_VOICE_LIVE_* environment variable, with defaults and descriptions.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html" class="active">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Env Vars</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Environment variables</h1>
+
+<p>All <code>DISCORD_VOICE_LIVE_*</code> env vars the plugin reads. Defaults shown in <strong>bold</strong>.</p>
+
+<h2>Required</h2>
+
+<table><thead><tr><th>Var</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_BOT_TOKEN</code></td><td>Discord bot token</td></tr><tr><td><code>GEMINI_API_KEY</code></td><td>Google Gemini API key</td></tr><tr><td><code>DISCORD_VOICE_LIVE_USER_ID</code></td><td>Your Discord snowflake — the bridge listens to this user</td></tr></tbody></table>
+
+<h2>Core</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>GEMINI_MODEL</code></td><td><code>gemini-3.1-flash-live-preview</code></td><td>Primary Gemini Live model</td></tr><tr><td><code>GEMINI_LIVE_MODEL_FALLBACKS</code></td><td>—</td><td>Comma-separated fallback models, tried in order if primary fails</td></tr><tr><td><code>DISCORD_VOICE_LIVE_VOICE</code></td><td><code>en-US-JennyNeural</code></td><td>TTS voice (criterion #3 — high-pitched female)</td></tr><tr><td><code>DISCORD_VOICE_LIVE_PORT</code></td><td><code>18943</code></td><td>Sidecar HTTP control port</td></tr><tr><td><code>DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS</code></td><td>empty</td><td>Comma-separated list of user IDs the bridge accepts audio from. Empty = listen to the channel.</td></tr><tr><td><code>DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS</code></td><td><code>900</code></td><td>Idle timeout (15 min) before the bridge auto-leaves</td></tr><tr><td><code>DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS</code></td><td><code>30</code></td><td>Don't auto-leave within the first 30s of a session (avoids killing right after start)</td></tr><tr><td><code>DISCORD_VOICE_LIVE_LEAVE_PHRASES</code></td><td>(built-in list)</td><td>Phrases that trigger <code>/voice-live-leave</code> (e.g. "stop", "hang up", "bye", "exit voice")</td></tr><tr><td><code>DISCORD_VOICE_LIVE_GREETING</code></td><td>—</td><td>Optional greeting text on first turn</td></tr><tr><td><code>DISCORD_VOICE_LIVE_CLEAR_ON_INTERRUPT</code></td><td><code>true</code></td><td>When user interrupts the model, clear the audio queue</td></tr><tr><td><code>DISCORD_VOICE_LIVE_NOTES_DIR</code></td><td><code>~/.hermes/voice-live-notes/</code></td><td>Where to write per-call notes</td></tr><tr><td><code>DISCORD_VOICE_LIVE_KEEP_AUTOSTART_FILE</code></td><td><code>false</code></td><td>If true, the autostart file is not deleted after use</td></tr><tr><td><code>DISCORD_VOICE_LIVE_AUTOSTART</code></td><td><code>false</code></td><td>Auto-join the channel in <code>voice-live-autostart.json</code> on gateway boot</td></tr><tr><td><code>DISCORD_VOICE_LIVE_AUTOSTART_FILE</code></td><td><code>~/.hermes/voice-live-autostart.json</code></td><td>Path to the autostart file</td></tr><tr><td><code>DISCORD_VOICE_LIVE_GUILD_ID</code></td><td>—</td><td>Guild ID for autostart; required if autostart is enabled</td></tr><tr><td><code>DISCORD_VOICE_LIVE_CHANNEL_ID</code></td><td>—</td><td>Voice channel ID for autostart; required if autostart is enabled</td></tr></tbody></table>
+
+<h2>Voice output</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>GEMINI_AUDIO_STREAM_IDLE_END_SECONDS</code></td><td><code>0.25</code></td><td>Time of audio silence before the model considers the user turn ended</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OUTPUT_PREROLL_MS</code></td><td><code>200</code></td><td>Pre-roll audio before first byte lands in Discord</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OUTPUT_TAIL_PAD_MS</code></td><td><code>120</code></td><td>Tail padding after last byte (prevents click on natural ends)</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OUTPUT_FADE_IN_MS</code></td><td><code>60</code></td><td>Fade-in on each chunk (prevents click on joins)</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OUTPUT_READ_WAIT_SECONDS</code></td><td><code>0.05</code></td><td>How long <code>LiveAudioSource.read()</code> blocks waiting for the next chunk</td></tr></tbody></table>
+
+<h2>Idle prompts</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS</code></td><td><code>120</code></td><td>Seconds of inactivity before the model generates a nudge</td></tr><tr><td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS</code></td><td><code>30</code></td><td>Initial grace period after session start before nudging</td></tr><tr><td><code>DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT</code></td><td>(built-in)</td><td>The nudge prompt injected after idle timeout</td></tr></tbody></table>
+
+<h2>SFX library</h2>
+
+<p>See <code>sfx-library.md</code> for full list. Highlights:</p>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_SFX_ENABLED</code></td><td><code>true</code></td><td>Master enable</td></tr><tr><td><code>DISCORD_VOICE_LIVE_SFX_DIR</code></td><td><code>~/.hermes/voice-users/sfx/</code></td><td>Default sfx directory</td></tr><tr><td><code>DISCORD_VOICE_LIVE_SFX_&lt;SLOT&gt;</code></td><td>per-slot</td><td>Per-slot WAV path override</td></tr><tr><td><code>DISCORD_VOICE_LIVE_SFX_&lt;SLOT&gt;_VOLUME</code></td><td>per-slot</td><td>Per-slot volume (0.0-1.5)</td></tr></tbody></table>
+
+<p>Slots: <code>TOOL_INIT</code>, <code>ERROR</code>, <code>NOTIFICATION</code>, <code>TRANSITION</code>.</p>
+
+<h2>Typing sfx (legacy single-slot)</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_TYPING_SOUND</code></td><td><code>true</code></td><td>Enable the keyboard click sfx on tool calls</td></tr><tr><td><code>DISCORD_VOICE_LIVE_TYPING_SFX</code></td><td><code>~/.hermes/voice-live-typing.wav</code></td><td>Path to the WAV</td></tr><tr><td><code>DISCORD_VOICE_LIVE_TYPING_SFX_VOLUME</code></td><td><code>0.35</code></td><td>Volume</td></tr><tr><td><code>DISCORD_VOICE_LIVE_TYPING_SYNTH_FALLBACK</code></td><td><code>false</code></td><td>If true and the WAV is missing, generate a synthetic click instead of going silent</td></tr></tbody></table>
+
+<h2>Video</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody></tbody></table>
+<ul><li><code>DISCORD_VOICE_LIVE_VIDEO_MAX_FPS</code> | <code>1</code> | Hard cap on feeder frame rate. Gemini rejects faster anyway. |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES</code> | <code>524288</code> | Per-frame JPEG size cap (512 KB). |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS</code> | <code>8</code> | Drop frames if no voice activity in the last N seconds. |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S</code> | <code>30</code> | Webhook announce fires only when a frame is accepted after at least this many seconds of silence. |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_ENABLED</code> | <code>true</code> | Allow video frame input |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION</code> | <code>true</code> | Auto-react to video enable/disable |</li><li><code>DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS</code> | <code>2.0</code> | Poll interval for video state changes |</li></ul>
+
+<h2>Tool enable/disable</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_LOCAL_TOOLS</code></td><td><code>true</code></td><td>All local tools (umbrella)</td></tr><tr><td><code>DISCORD_VOICE_LIVE_WEB_TOOLS</code></td><td><code>true</code></td><td>Web search / extract</td></tr><tr><td><code>DISCORD_VOICE_LIVE_SPOTIFY_TOOLS</code></td><td><code>true</code></td><td>Spotify playback</td></tr><tr><td><code>DISCORD_VOICE_LIVE_GITHUB_TOOLS</code></td><td><code>true</code></td><td>GitHub repo / issue / PR tools</td></tr><tr><td><code>DISCORD_VOICE_LIVE_HA_TOOLS</code></td><td><code>true</code></td><td>Home Assistant</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OPENCODE_TOOLS</code></td><td><code>true</code></td><td>Opencode delegation</td></tr><tr><td><code>DISCORD_VOICE_LIVE_SYSINSPECT_TOOLS</code></td><td><code>true</code></td><td>System inspection</td></tr><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_TOOLS</code></td><td><code>true</code></td><td>Email read / send / reply / brief</td></tr></tbody></table>
+
+<h2>Webhooks</h2>
+
+<p>See <code>webhooks.md</code>. One env var per event class, all start with <code>DISCORD_VOICE_LIVE_WEBHOOK_&lt;CLASS&gt;</code>.</p>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS</code></td><td><code>60</code></td><td>Default throttle window when <code>throttle_key</code> is set</td></tr></tbody></table>
+
+<h2>Email brief</h2>
+
+<p>See <code>email-brief.md</code>.</p>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_BRIEF_ENABLED</code></td><td><code>true</code></td><td>Enable the scheduler</td></tr><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS</code></td><td><code>1800</code></td><td>30 min default</td></tr><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_BRIEF_LIMIT</code></td><td><code>8</code></td><td>Max emails per brief</td></tr></tbody></table>
+
+<h2>Per-email reminder loop</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_ENABLED</code></td><td><code>true</code></td><td>Enable per-email pings</td></tr><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_POLL_SECONDS</code></td><td><code>120</code></td><td>2 min poll interval</td></tr><tr><td><code>DISCORD_VOICE_LIVE_EMAIL_REMINDER_MAX_PER_HOUR</code></td><td><code>3</code></td><td>Cap pings per hour to avoid spam</td></tr></tbody></table>
+
+<h2>Notification system</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>DISCORD_VOICE_LIVE_NOTIFY_TIMEOUT</code></td><td><code>10</code></td><td>HTTP timeout for webhook delivery (s)</td></tr></tbody></table>
+
+<h2>Honcho integration</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>VOICE_LIVE_HONCHO_CONTEXT</code></td><td><code>true</code></td><td>Inject Honcho context into the system prompt</td></tr><tr><td><code>VOICE_LIVE_HONCHO_MAX_CHARS</code></td><td><code>1200</code></td><td>Cap Honcho context block size</td></tr><tr><td><code>VOICE_LIVE_HONCHO_PEER</code></td><td>(user_id)</td><td>Override the Honcho peer name</td></tr></tbody></table>
+
+<h2>Opencode delegation</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>OPENCODE_BIN</code></td><td><code>~/.local/bin/opencode</code></td><td>Path to opencode binary</td></tr><tr><td><code>OPENCODE_DEFAULT_MODEL</code></td><td>(opencode default)</td><td>Model passed to opencode</td></tr><tr><td><code>OPENCODE_TMUX_SESSION</code></td><td><code>voice-opencode</code></td><td>Tmux session name</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER</code></td><td><code>true</code></td><td>Watch opencode tmux sessions for status changes</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER_POLL_SECONDS</code></td><td><code>2.0</code></td><td>Poll interval</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER_INITIAL_DELAY_SECONDS</code></td><td><code>5</code></td><td>Delay before first poll after session start</td></tr><tr><td><code>DISCORD_VOICE_LIVE_OPENCODE_WATCHER_MIN_VOICE_GAP_SECONDS</code></td><td><code>10</code></td><td>Minimum gap between narrations to avoid spam</td></tr></tbody></table>
+
+<h2>Misc</h2>
+
+<table><thead><tr><th>Var</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>VOICE_USERS_DIR</code></td><td><code>~/.hermes/voice-users/</code></td><td>Per-user profile directory</td></tr><tr><td><code>VOICE_OWNER_DISCORD_ID</code></td><td>(env)</td><td>Used for owner-only commands</td></tr><tr><td><code>HERMES_PYTHON</code></td><td><code>python3</code></td><td>Python interpreter for subprocess calls</td></tr><tr><td><code>GOOGLE_API_BIN</code></td><td>(auto-detected)</td><td>Path to <code>google_api.py</code> for email + Google Workspace</td></tr><tr><td><code>HASS_URL</code></td><td><code>http://homeassistant.local:8123</code></td><td>Home Assistant base URL</td></tr><tr><td><code>HASS_TOKEN</code></td><td>—</td><td>Home Assistant long-lived access token</td></tr></tbody></table>
+
+<div class="pager"><a class="prev" href="video.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Video frame feeder — Hermes Live</span>
+        </a><a class="next" href="troubleshooting.html">
+          <span class="label">Next →</span>
+          <span class="title">Troubleshooting — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notification system — Hermes Live</title>
+<meta name="description" content="Five delivery channels, scheduled notifications, and AFK delivery for the Hermes Live voice agent.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html" class="active">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Notification</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Notification system — proactive breakout from reply-only</h1>
+
+<p>Before criterion #6 the agent could only respond when B spoke. It had no tool to break out and notify on its own. Now it does.</p>
+
+<h2>Three channels</h2>
+
+<p><code>notification.py:deliver(text, mode, ...)</code> dispatches via one of five modes:</p>
+
+<table><thead><tr><th>Mode</th><th>What happens</th><th>When to use</th></tr></thead><tbody><tr><td><code>voice</code></td><td>Push <code>text</code> into Gemini via <code>bridge._gemini.send_text()</code> so the model speaks it in the next turn</td><td>Voice session is active; B is in the channel</td></tr><tr><td><code>dm</code></td><td>Send a Discord DM directly to the user via the bot adapter</td><td>B is offline / AFK</td></tr><tr><td><code>channel</code></td><td>Post to a text channel in the same guild</td><td>A "voice log" or notes channel exists</td></tr><tr><td><code>webhook</code></td><td>Emit a <code>agent.notify</code> event class webhook</td><td>Configure a webhook URL in the channel where you want the brief to land</td></tr><tr><td><code>auto</code></td><td>Try voice → dm → channel → webhook in order, return first success</td><td>Default. The right choice when you don't know B's state.</td></tr><tr><td><code>all</code></td><td>Fire all four at once</td><td>For the "definitely get this to B" case</td></tr></tbody></table>
+
+<h2>Gemini tools</h2>
+
+<h3><code>local_notify</code></h3>
+
+<pre><code class="lang-json">{
+  &quot;text&quot;: &quot;Hey, codex is back online&quot;,
+  &quot;mode&quot;: &quot;auto&quot;,
+  &quot;title&quot;: &quot;Tool online&quot;,
+  &quot;source&quot;: &quot;health_watcher&quot;
+}</code></pre>
+
+<p>Returns:</p>
+
+<pre><code class="lang-json">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;channel&quot;: &quot;voice&quot;,
+  &quot;results&quot;: {&quot;voice&quot;: {&quot;status&quot;: &quot;ok&quot;, &quot;queued&quot;: true}, ...},
+  &quot;notified_at&quot;: 1749312456.7
+}</code></pre>
+
+<h3><code>local_notify_schedule</code></h3>
+
+<pre><code class="lang-json">{
+  &quot;text&quot;: &quot;Reminder: standup in 10&quot;,
+  &quot;delay_seconds&quot;: 600,
+  &quot;mode&quot;: &quot;auto&quot;
+}</code></pre>
+
+<p>Returns <code>{scheduled: &lt;id&gt;, fire_at_epoch: &lt;ts&gt;}</code>. The schedule persists to <code>~/.hermes/voice-users/notifications-schedule.jsonl</code> and survives bridge restarts. Polled every 2s by a background thread.</p>
+
+<p><strong>Other actions</strong> on the same tool:</p>
+<ul><li><code>{&quot;list&quot;: true}</code> → list all scheduled</li><li><code>{&quot;cancel_id&quot;: &quot;abc123&quot;}</code> → remove one</li></ul>
+
+<h2>Sidecar HTTP endpoint</h2>
+
+<p>For callers that aren't in a Gemini session (e.g. cron jobs, subagents):</p>
+
+<pre><code class="lang-bash">curl -X POST -H &quot;Content-Type: application/json&quot; \
+     -d &#x27;{&quot;text&quot;:&quot;inbox is huge&quot;,&quot;mode&quot;:&quot;dm&quot;,&quot;title&quot;:&quot;Brief&quot;}&#x27; \
+     &quot;http://127.0.0.1:18943/notify&quot;</code></pre>
+
+<p>Also accepts GET with <code>?text=...&amp;mode=...&amp;title=...</code> for trivial cases. The handler reads <code>BRIDGE</code> from the global to find the live <code>GeminiLiveBridge</code> for the <code>voice</code> mode; falls through to other modes if voice is unavailable.</p>
+
+<h2>AFK ping from opencode watcher</h2>
+
+<p>The opencode watcher (which polls long-running <code>local_delegate_execute</code> tmux sessions) was extended to call <code>notification.deliver(mode=&quot;auto&quot;)</code> after a session finishes. So when B is AFK and a 5-minute refactor finishes, the bot DMs B "refactor done" automatically.</p>
+
+<h2>Webhook fanout</h2>
+
+<p>The notification dispatcher also fires the <code>agent.notify</code> event class via <code>WebhookDispatcher</code>, which is configurable through env vars:</p>
+
+<pre><code class="lang-">DISCORD_VOICE_LIVE_WEBHOOK_AGENT_NOTIFY=https://discord.com/api/webhooks/...</code></pre>
+
+<p>If unset, the dispatcher still tries DM and channel paths. Setting the webhook URL just gives you a third destination.</p>
+
+<h2>Notification sfx</h2>
+
+<p>When a notification is delivered, the bridge plays the <code>notification</code> sfx slot (see <code>sfx-library.md</code>). To disable: <code>DISCORD_VOICE_LIVE_SFX_ENABLED=false</code>.</p>
+
+<h2>When NOT to use</h2>
+
+<ul><li>For <strong>task results</strong> (delegate finished, web search returned), prefer the tool's own return value to the model — the model is already in the loop and will narrate.</li><li>For <strong>urgent alerts</strong> that must interrupt B (call coming in, server down), use the webhook directly with <code>urgent: true</code> to bypass throttling.</li><li>For <strong>scheduled reminders</strong> the user asked for, use <code>local_notify_schedule</code> — it has a clear audit trail.</li></ul>
+
+<div class="pager"><a class="prev" href="fallback-chain.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Fallback chain — Hermes Live</span>
+        </a><a class="next" href="email-brief.html">
+          <span class="label">Next →</span>
+          <span class="title">Email brief — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

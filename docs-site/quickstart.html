@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quick start — Hermes Live</title>
+<meta name="description" content="Five commands, two minutes. Install the bridge, restart the gateway, run /voice-live in Discord.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">H</div>
+      <div>
+        <div class="brand-text">Hermes Live</div>
+        <div class="brand-sub">v0.3.4 · VOPI build</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a>
+      <a href="quickstart.html" class="active">Quick start</a>
+      <a href="architecture.html">Architecture</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a>
+      <a href="fallback-chain.html">Fallback chain</a>
+      <a href="notification.html">Notifications</a>
+      <a href="email-brief.html">Email brief</a>
+      <a href="sfx-library.html">SFX library</a>
+      <a href="sfx-credits.html">SFX credits</a>
+      <a href="webhooks.html">Webhooks</a>
+      <a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a>
+      <a href="troubleshooting.html">Troubleshooting</a>
+      <a href="changelog.html">Changelog</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
+      MIT licensed · Hermes Agent plugin
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="crumb">Quickstart</span>
+      <span class="sep">/</span>
+      <span>docs-site/</span>
+      <div class="right">
+        <span class="pill good">v0.3.4.2</span>
+        <span class="pill warn">VOPI build</span>
+      </div>
+    </div>
+
+    <article class="content">
+<h1>Quick start</h1>
+
+<p>Five commands, two minutes.</p>
+
+<h2>Install</h2>
+
+<pre><code class="lang-bash"># 1. Clone
+git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
+cd gemini-live-discord-bridge
+
+# 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
+./install.sh
+
+# 3. Restart the gateway so the plugin loads
+systemctl --user restart hermes-gateway</code></pre>
+
+<h2>First session</h2>
+
+<p>From Discord, join a voice channel, then in any text channel:</p>
+
+<pre><code class="lang-">/voice-live          # join
+/voice-live-leave    # leave</code></pre>
+
+<p>That's it. The bridge will:</p>
+
+<ol><li>Connect to your voice channel (Discord CDN quirk: first attempt takes ~27s — this is normal, do not restart the gateway)</li><li>Handshake with Gemini Live</li><li>Play the <code>transition</code> sfx</li><li>Wait for you to speak — first turn is muted by design</li></ol>
+
+<h2>Verify</h2>
+
+<pre><code class="lang-bash">curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre>
+
+<p>You should see <code>&quot;voice_connected&quot;: true</code>, <code>&quot;running&quot;: true</code>, and a non-zero <code>audio_in_chunks</code> after you speak.</p>
+
+<h2>Common pitfalls</h2>
+
+<ul><li><strong>"Bridge failed to start"</strong> — wait ~30s. The first 5 voice WebSocket handshakes are rejected by the Discord CDN; the bridge retries.</li><li><strong>First-turn hallucination</strong> ("I see you're sharing your screen") — the system prompt has the guard, but if you see this, the audioStreamEnd mute is missing. Check <code>bridge.py</code> for <code>await self._gemini._ws.send(json.dumps({&quot;realtimeInput&quot;: {&quot;audioStreamEnd&quot;: True}}))</code> right after <code>connect()</code>.</li><li><strong>No audio in voice</strong> — check <code>~/.hermes/voice-users/sfx/</code> exists and the four WAV files are present.</li></ul>
+
+<h2>Next</h2>
+
+<ul><li><a href="architecture.html">Architecture</a> — understand the audio path and threading model.</li><li><a href="env-vars.html">Environment variables</a> — every <code>DISCORD_VOICE_LIVE_*</code> env var.</li><li><a href="troubleshooting.html">Troubleshooting</a> — what to do when it doesn't work.</li></ul>
+
+<div class="pager"><a class="prev" href="index.html">
+          <span class="label">Prev ←</span>
+          <span class="title">Overview</span>
+        </a><a class="next" href="architecture.html">
+          <span class="label">Next →</span>
+          <span class="title">Architecture — Hermes Live</span>
+        </a></div>
+
+      <div class="foot">
+        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+      </div>
+
+    </article>
+
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+
+</div>
+<script src="nav.js"></script>
+</body>
+</html>
