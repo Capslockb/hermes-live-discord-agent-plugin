@@ -4348,17 +4348,21 @@ class GeminiLiveBridge:
                 "turnCoverage": "TURN_INCLUDES_ONLY_ACTIVITY",
                 "automaticActivityDetection": {
                     "disabled": False,
-                    "startOfSpeechSensitivity": "SENSITIVITY_LOW",
-                    "endOfSpeechSensitivity": "SENSITIVITY_LOW",
+                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+                    "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
                     "prefixPaddingMs": 20,
                     "silenceDurationMs": 100,
                 }
             },
-            "voice_activity_detection": {
-                "enabled": True,
-                "sensitivity": "SENSITIVITY_LOW",
-                "silenceDurationMs": 100
-            },
+            # NOTE: top-level `voice_activity_detection` is intentionally
+            # OMITTED. The current Gemini Live API schema
+            # (https://ai.google.dev/api/live, v1beta) only exposes
+            # `realtimeInputConfig.automaticActivityDetection` for VAD
+            # tuning. The top-level `voice_activity_detection` key is not
+            # in the schema and was being silently ignored (or, on stricter
+            # servers, returning 1007). VAD tuning lives in the inner block
+            # above. Same omission-rationale pattern as mediaResolution
+            # at line 4322-4334.
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
             "systemInstruction": {
