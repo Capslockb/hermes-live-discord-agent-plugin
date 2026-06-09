@@ -1009,10 +1009,10 @@ async def _video_state_watcher(guild_id: int) -> None:
                 # user has to start themselves, and on a headless host
                 # there's no display to capture from anyway. So this nudge
                 # is ONLY an awareness ping. Do NOT promise automatic
-                # frames. Tell the user they need to either: (a) upload a
                 # screenshot to chat, (b) start video-frame-feeder.py on a
-                # machine with a real display and point it at the bridge.
-                _send_video_awareness(
+                # machine with a real display and point it at the bridge. You should acknowledge the screen share and
+                # ask whether they want to share a specific frame.
+                await _send_video_awareness(
                     bridge_mod,
                     f"[SYSTEM EVENT] {member.display_name} started screen sharing. "
                     f"Note: I cannot see Discord video streams automatically — "
@@ -1022,9 +1022,10 @@ async def _video_state_watcher(guild_id: int) -> None:
                     f"at the bridge. You should acknowledge the screen share and "
                     f"ask whether they want to share a specific frame.",
                     event_type="video_state",
+                    bridge_info=bridge_info,
                 )
             elif not current["stream"] and previous["stream"]:
-                _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} stopped screen sharing. Video feed ended.", event_type="video_ended")
+                await _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} stopped screen sharing. Video feed ended.", event_type="video_ended", bridge_info=bridge_info)
 
             if current["video"] and not previous["video"]:
                 # User enabled camera. Same constraint as screen share —
@@ -1046,7 +1047,7 @@ async def _video_state_watcher(guild_id: int) -> None:
             last_states[mid] = current
 
 
-async def _send_video_awareness(bridge_mod, text: str, event_type: str = "video_state") -> None:
+async def _send_video_awareness(bridge_mod, text: str, event_type: str = "video_state", bridge_info: Optional[Dict[str, Any]] = None) -> None:
     """Send a text nudge to Gemini Live via the active bridge.
     
     event_type: "video_state" (camera/screen on/off), "video_frame" (feeder active), "video_ended" (stopped)
@@ -1057,3 +1058,53 @@ async def _send_video_awareness(bridge_mod, text: str, event_type: str = "video_
             asyncio.create_task(bridge._gemini.send_text(text))
     except Exception:
         logger.debug("Failed to send video awareness text", exc_info=True)
+
+    if not bridge_info:
+        return
+
+    # 1. Honcho peer message (every transition)
+    try:
+        from honcho.client import Honcho
+        import json
+        from pathlib import Path
+        honcho_json = Path.home() / ".hermes" / "honcho.json"
+        if honcho_json.exists():
+            cfg = json.loads(honcho_json.read_text())
+            workspace = cfg.get("workspace") or "default"
+            profile = bridge_info.get("user_profile")
+            peer_name = profile.honcho_peer_name if profile and hasattr(profile, "honcho_peer_name") else None
+            if not peer_name:
+                peer_name = f"discord-{bridge_info.get('user_id', 'unknown')}"
+            h = Honcho(workspace=workspace, api_key=cfg.get("apiKey"))
+            p = h.peer(id=peer_name)
+            p.message(text)
+    except Exception:
+        logger.debug("Honcho write failed in _video_state_watcher", exc_info=True)
+
+    # 2. Discord DM notification (START transitions only)
+    if event_type == "video_state":
+        try:
+            from notification import deliver as _matrix_deliver
+            dm_text = (
+                "You just turned on screen share. Heads-up: I can't actually see Discord video streams — "
+                "to get a frame to me, paste a screenshot in this chat or run the feeder on a host with a real display."
+                if "screen sharing" in text.lower() else
+                "Camera on. Same note as screen share — Discord doesn't send the bot the video, "
+                "so paste a screenshot or run the feeder if you want me to see what you're seeing."
+            )
+            user_id = bridge_info.get("user_id")
+            adapter = bridge_info.get("adapter")
+            
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: _matrix_deliver(
+                    text=dm_text,
+                    mode="dm",
+                    source="video_state_watcher",
+                    user_id=user_id,
+                    adapter=adapter,
+                ),
+            )
+        except Exception:
+            logger.debug("notification.deliver failed in _video_state_watcher", exc_info=True)
