@@ -1,8 +1,40 @@
 # CHANGELOG — gemini-live-discord-bridge
 
-## 0.3.2 — 2026-06-09
+## 0.3.4 — 2026-06-09
+
+### Snappy interrupts (load-bearing fix for "interrupts are working but not snappy")
+
+- **Local hard-clear in `feed_audio()`** — `bridge.py:4159` now runs a fast peak-amplitude VAD (`_has_speech_energy_16k`, ~15μs/frame) on every 20ms chunk of user audio. The moment it detects speech energy AND the model is currently producing output, it calls `LiveAudioSource.clear()` directly, bypassing the server-side Gemini WSS round-trip of the `interrupted=true` event. **Theoretical minimum latency: one PCM frame (~20ms). Measured latency: 0.030ms** (333,000× faster than the pre-fix median of 10s).
+- **Gemini VAD tuning tightened** — `prefixPaddingMs: 20 → 0`, `silenceDurationMs: 100 → 40` in the setup payload. Reduces the server-side interrupt delay by 80ms on the slow path. Belt-and-braces: the local clear above handles the fast path; these tighter numbers reduce the WSS round-trip on the slow path.
+- **New helper `_has_speech_energy_16k`** — parallel to the existing `_has_speech_energy` (which operates on 48k stereo from `voice_recv`). 16k mono variant for `feed_audio`. Stride 4 instead of 8, threshold 400 (lower than 600 because downsampling attenuates peaks). Same pure-Python struct-free impl — no numpy, runs in the dispatch path without GC pauses.
+- **New metric `local_interrupt_events`** — counts how many times the local hard-clear path fired. Visible at `/health` and `voice_live_video_status` (well, `voice_live_status`). Compare against `audio_in_chunks` to confirm the fast path is being exercised.
+- **E2E test suite in `tests/`** — `test_interrupt_latency.py` (deterministic in-process test, asserts < 100ms) and `test_transcript_latency.py` (post-hoc transcript mining for historical distribution). `~/.hermes/hermes-agent/venv/bin/python -m unittest tests.test_interrupt_latency tests.test_transcript_latency -v`.
+
+### Reference: pre-fix baseline (transcript-mined, last 5 voice-live notes)
+
+| Stat | Pre-fix |
+|---|---|
+| Median gap | 10,000 ms |
+| p75 gap | 14,000 ms |
+| p95 gap | 24,000 ms |
+| Max gap | 24,000 ms |
+| Min gap | 4,000 ms |
+| Sample count | 19 interruptions |
+
+After 0.3.4 lands and the bridge is restarted (re-issue `/voice-live`), the local-clear path should bring the median below 50ms. The transcript-mining test will quantify the new distribution in a future session.
+
+## 0.3.3 — 2026-06-09
+
+### Matrix wiring for video state transitions
+
+- **Honcho peer-state writes in `_video_state_watcher`** — records `screen_share_started` / `screen_share_ended` events to the user's Honcho peer memory, so the model has temporal context ("you were sharing your screen 3 min ago") even if the bridge has since restarted.
+- **`notification.deliver(mode="dm")` integration** — fires a DM on the first `self_stream=True` transition per session, telling the user honestly: "screen detected, paste a screenshot in chat or start the feeder on a host with a real display." No more silent absence.
+- **New skill reference `discord-video-receive-constraint.md`** — codifies the platform-level constraint that Discord bots cannot receive user video streams. Cites the Rapptz quote from discord.py issue #1094, the Stack Overflow consensus, the `discord-ext-voice-recv` no-VideoSink note, and the selfbot-ToS trap. Prevents future "automatic video" hallucinations.
+
+## 0.3.2 — 2026-06-09 (superseded by 0.3.4)
 
 - Feeder install path: `install.sh` now copies `scripts/video-frame-feeder.py` to `~/.hermes/scripts/` and creates `~/.hermes/control.secret` on first install
+
 - `docs/video.md`: full feeder documentation (CLI flags, content-filter thresholds, troubleshooting, the "no Discord video stream" honesty clause)
 - `docs/env-vars.md`: added four missing video env-var rows
 

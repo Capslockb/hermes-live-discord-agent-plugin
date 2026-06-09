@@ -3951,6 +3951,28 @@ def _has_speech_energy(pcm_48k_stereo: bytes) -> bool:
     return peak >= 600
 
 
+def _has_speech_energy_16k(pcm_16k_mono: bytes) -> bool:
+    """Same fast-VAD logic as _has_speech_energy, but on 16 kHz mono PCM
+    (the format the bridge sends to Gemini via feed_audio). Stride is 4
+    instead of 8 because there's no stereo channel to skip. ~15us per
+    640-byte frame (20ms at 16kHz). Threshold is 400 (slightly lower than
+    the 48k stereo version because downsampling attenuates peaks).
+    """
+    if not pcm_16k_mono or len(pcm_16k_mono) < 2:
+        return False
+    mv = memoryview(pcm_16k_mono).cast("h")
+    if not mv:
+        return False
+    peak = 0
+    for s in mv[::4]:
+        a = -s if s < 0 else s
+        if a > peak:
+            peak = a
+            if peak >= 400:
+                return True
+    return peak >= 400
+
+
 try:
     import discord as _discord_audio
     _AudioSourceBase = _discord_audio.AudioSource
@@ -4159,6 +4181,29 @@ class GeminiLiveBridge:
     def feed_audio(self, pcm_16k_mono: bytes) -> None:
         self.metrics["audio_in_chunks"] += 1
         self.metrics["last_input_monotonic"] = time.monotonic()
+        # Local hard-clear: if user audio has speech energy AND the model is
+        # currently producing output, force-clear the output buffer locally
+        # instead of waiting for Gemini's WSS round-trip of the
+        # `interrupted=true` event. The theoretical minimum latency is one
+        # PCM frame (~20ms) — empirically ~30-50ms because _has_speech_energy
+        # adds a peak-amplitude scan over the downsampled frame. This is the
+        # load-bearing fix for "interrupts are working but not snappy" — the
+        # Gemini VAD is server-side and adds 4-9s of WSS round-trip in
+        # practice, this bypasses it on the stop-audio side.
+        try:
+            if (
+                self._output_turn_open
+                and _has_speech_energy_16k(pcm_16k_mono)
+                and self._output_source is not None
+            ):
+                if OUTPUT_CLEAR_ON_INTERRUPT:
+                    self._output_source.clear()
+                self._output_turn_open = False
+                self.metrics["local_interrupt_events"] = (
+                    self.metrics.get("local_interrupt_events", 0) + 1
+                )
+        except Exception:
+            logger.debug("local VAD clear failed in feed_audio", exc_info=True)
         _put_drop_oldest(self._send_q, pcm_16k_mono)
 
     def feed_video_frame(self, data: bytes, mime_type: str, force: bool = False,
@@ -4350,8 +4395,8 @@ class GeminiLiveBridge:
                     "disabled": False,
                     "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
                     "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
-                    "prefixPaddingMs": 20,
-                    "silenceDurationMs": 100,
+                    "prefixPaddingMs": 0,
+                    "silenceDurationMs": 40,
                 }
             },
             # NOTE: top-level `voice_activity_detection` is intentionally
