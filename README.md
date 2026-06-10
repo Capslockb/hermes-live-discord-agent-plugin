@@ -23,7 +23,7 @@ If you prefer raw markdown, every page is also in [`docs/`](docs/).
 # 1. Install
 git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin/installer/
-./install.sh                 # full install (prompts for env)
+./install.py                 # full install (prompts for env)
 ./install.sh --from-local    # use the current working dir
 ./install.sh --uninstall     # remove
 
