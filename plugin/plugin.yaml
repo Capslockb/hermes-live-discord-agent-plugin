@@ -1,5 +1,5 @@
 name: discord-voice
-version: 0.3.5
+version: 0.3.6
 kind: standalone
 platforms: [linux]
 description: High-performance Discord Voice bridge via Gemini Multimodal Live API
@@ -8,6 +8,14 @@ python_requirements:
 provides_tools:
   - voice_live
   - voice_live_leave
+  - voice_live_status
+  - voice_live_frame
+  - voice_live_video_status
+  - voice_live_notes
+  - sora_bridge_preflight
+  - sora_live_grill
+  - sora_goal_synth
+  - sora_redact
 requirements_env:
   - name: DISCORD_BOT_TOKEN
     prompt: "Discord bot token"
@@ -26,5 +34,14 @@ optional_env:
     prompt: "Local HTTP control port (default: 18943)"
     password: false
   - name: DISCORD_VOICE_LIVE_VOICE
-    prompt: "TTS voice (default: en-US-JennyNeural — high-pitched female)"
+    prompt: "Gemini Live voice name (default: Kore)"
+    password: false
+  - name: VOICE_LIVE_HONCHO_CONTEXT
+    prompt: "Enable Honcho memory context injection (default: true)"
+    password: false
+  - name: VOICE_LIVE_HONCHO_PEER
+    prompt: "Optional Honcho peer override"
+    password: false
+  - name: DISCORD_VOICE_LIVE_SAFE_MODE
+    prompt: "Future safe-mode flag for minimal tools during diagnostics"
     password: false
