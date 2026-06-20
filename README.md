@@ -1,182 +1,228 @@
-# Hermes Live — Discord Voice Agent
+# Hermes Live — Gemini Discord Voice Bridge
 
 ![Hermes Live Banner](docs/banner.png)
 
-> **Drop a real-time multimodal AI into any Discord voice channel.**
-> Full-duplex audio · vision · function calling · multi-CLI delegation · proactive notifications · post-call transcripts.
-> Built on **Google Gemini Multimodal Live**, packaged as a self-hostable **Hermes Agent** plugin.
-> Open source. MIT. Yours.
+> **A self-hosted Discord voice agent powered by Google Gemini Live.**
+> Real-time voice · manual image/frame input · function calling · sidecar control API · SORA bridge diagnostics · transcript-to-goal tooling.
+
+[![Docs](https://img.shields.io/badge/docs-docs--site-blue)](docs-site/index.html)
+[![Quickstart](https://img.shields.io/badge/start-quickstart-success)](docs/quickstart.md)
+[![Architecture](https://img.shields.io/badge/diagram-architecture-purple)](docs/architecture.md)
+[![SORA bridge](https://img.shields.io/badge/SORA-bridge%20elements-orange)](docs/sora-bridge-elements.md)
+[![Release truth table](https://img.shields.io/badge/release-truth%20table-critical)](docs/release-readiness.md)
+[![MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
 ---
 
-## 📖 [Documentation →](docs-site/index.html)
+## What this release is
 
-A proper website is now available in [`docs-site/`](docs-site/index.html) — built from the source markdown in `docs/`. Open `docs-site/index.html` in a browser, or serve it with any static host (`python3 -m http.server` works). 13 pages covering architecture, personality, fallback chain, notifications, email brief, SFX library, webhooks, video feeder, env vars, troubleshooting, and the changelog.
+Hermes Live is the **Gemini transport** for Hermes Discord voice. It joins a Discord voice channel, streams user audio to the Gemini Live API over WebSocket, plays Gemini audio back into Discord, exposes a local sidecar API on `127.0.0.1:18943`, and registers Hermes tools for voice control, frames, notes, diagnostics, and SORA-style goal synthesis.
 
-If you prefer raw markdown, every page is also in [`docs/`](docs/).
+This README was cross-examined against the current repository state. Claims below are intentionally split into **working**, **partial**, and **research / not bundled** so the public page does not pretend Vapi, Dograh, or MCP support is inside this repo unless the code proves it.
+
+---
+
+## Status map
+
+| Area | Status | Truthful scope |
+|---|---:|---|
+| Gemini Live Discord voice bridge | **Working** | `voice_live`, `/voice-live`, `/voice-live-leave`, Discord audio RX/TX, Gemini Live WSS |
+| Sidecar control API | **Working** | Local `127.0.0.1:18943` routes for health, frames, text injection, notes, notify, stop/leave |
+| Manual vision / frame feed | **Working with constraint** | Gemini can receive pushed frames. Discord bots do **not** automatically receive screenshare/camera video; use screenshots or the feeder. |
+| Function calling | **Working / backend-dependent** | Voice tools register in Hermes; individual backends such as mail, GitHub, Spotify, Home Assistant, and CLIs depend on local auth/install. |
+| SORA bridge elements | **Included** | `sora_bridge_preflight`, `sora_live_grill`, `sora_goal_synth`, `sora_redact` live in `plugin/sora_bridge_elements.py`; run the idempotent patcher if your checkout has not wired them into `plugin/__init__.py`. |
+| Docs site | **Updated in this pass** | `docs-site/` mirrors the public story; raw docs remain in `docs/`. |
+| Vapi bridge | **Sibling / not bundled here** | This repo may advertise a sibling transport when installed, but the Vapi bridge implementation is not shipped in this repository. |
+| MCP server/client mode | **Research target** | No first-class MCP server is bundled here yet. MCP belongs in the roadmap/adapter layer until code and tests exist. |
+| Dograh | **Research target** | Treat as an external Vapi-style/MCP-native comparison target, not a shipped integration in this repo. |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U[User in Discord voice] --> D[Discord Voice UDP]
+    D --> RX[Opus decode / discord-ext-voice-recv]
+    RX --> P48[48 kHz PCM]
+    P48 --> P16[16 kHz mono PCM]
+    P16 --> GWS[Gemini Live WebSocket]
+    GWS --> MODEL[Gemini Live model]
+    MODEL --> A24[24 kHz PCM audio]
+    A24 --> A48[48 kHz stereo]
+    A48 --> TX[Discord AudioSource]
+    TX --> D
+
+    FRAME[Manual screenshot / video-frame-feeder.py] --> API[Local sidecar 127.0.0.1:18943]
+    API --> GWS
+    TOOLS[Hermes tools + function calls] <--> GWS
+    SORA[SORA bridge elements\npreflight · grill · goal synth · redact] --> TOOLS
+```
+
+Raw audio path:
+
+```text
+Discord Voice → Opus Decode → 48 kHz PCM → 16 kHz mono → Gemini Live WSS
+Gemini Live WSS → 24 kHz PCM → 48 kHz stereo → Discord AudioSource
+```
+
+Full architecture: [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
 ## Quick start
 
 ```bash
-# 1. Install
-git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-cd hermes-live-discord-agent-plugin/installer/
-./install.py                 # full install (prompts for env)
-./install.sh --from-local    # use the current working dir
-./install.sh --uninstall     # remove
+# 1. Clone
+ git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+ cd hermes-live-discord-agent-plugin
 
-# 2. Restart the gateway
-systemctl --user restart hermes-gateway
+# 2. Install
+ cd installer
+ ./install.py                 # full install, prompts for env
+ # or
+ ./install.sh --from-local    # use current working tree
 
-# 3. From Discord, run:
-/voice-live          # join your current voice channel
-/voice-live-leave    # leave
+# 3. Wire SORA bridge tools if your checkout is not already patched
+ cd ..
+ python3 installer/enable_sora_bridge_elements.py
+ python3 -m py_compile plugin/sora_bridge_elements.py plugin/__init__.py
+
+# 4. Restart Hermes gateway
+ systemctl --user restart hermes-gateway
+
+# 5. From Discord
+ /voice-live          # join your current voice channel
+ /voice-live-leave    # leave
 ```
 
-The installer handles venv, symlinks, env prompts, and SFX directory creation. See `install.sh` for details.
+Verify locally:
+
+```bash
+curl -s http://127.0.0.1:18943/health | python3 -m json.tool
+```
+
+If the bridge is not running yet, the health request may fail; that is expected until `/voice-live` has started a session.
 
 ---
 
-## What's in the box
+## SORA bridge elements
 
-| | |
+The second-release work pulls proven SORA-style operator helpers into the Gemini bridge layer:
+
+| Tool | Purpose |
 |---|---|
-| 🎙️ **Full-duplex voice** | Sub-second latency, Discord UDP → Opus → 16 kHz mono → Gemini WSS |
-| 👁️ **Vision + frame feed** | Send images or stream 1 fps screenshare — the model sees what you see |
-| 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
-| 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
-| 📣 **Proactive notifications** | Voice, DM, channel, webhook, or auto — fires on long-task completion, AFK pings, scheduled alerts |
-| 📧 **Email brief** | Scheduled Gmail digest, 3-bucket importance scoring, AFK delivery |
-| 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
-| 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
-| 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
-| 🪶 **Self-hostable** | No SaaS, no third-party relay. Runs in your existing Hermes gateway's asyncio loop |
-| 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/frame`, `/say`, `/leave` |
+| `sora_bridge_preflight` | Local diagnostics for Gemini env/model, Honcho config paths, sidecar health, notes dir, and active bridge registry |
+| `sora_live_grill` | Cross-examines a transcript/call and extracts missing objective, constraints, owner, risk, next command, and verification test |
+| `sora_goal_synth` | Produces Discord-safe `/goal` and ranked `/subgoal` blocks for weaker autonomous models |
+| `sora_redact` | Redacts bearer tokens, API keys, JWTs, Pocket keys, Discord webhooks, and GitHub tokens before text enters Gemini/Discord/logs |
+
+SORA docs: [`docs/sora-bridge-elements.md`](docs/sora-bridge-elements.md).
 
 ---
 
-## Architecture
+## Feature matrix
 
-```
-Discord Voice → Opus Decode → 48kHz PCM → 16kHz Mono → Gemini WSS → Model
-     ↑                                                              │
-     │                                                              ▼
-     └──────────── 24kHz PCM ← Gemini WSS ← 48kHz Stereo ← Discord AudioSource
-```
-
-Lies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WSS). The bridge runs **in-process** inside the Hermes gateway — no separate services, no queues, no message buses. Full architecture doc: [`docs/architecture.md`](docs/architecture.md).
-
----
-
-## Features in depth
-
-| Feature | Doc | What it does |
+| Feature | Doc | Notes |
 |---|---|---|
-| **Voice I/O** | [`docs/architecture.md`](docs/architecture.md) | Opus in/out, Gemini Live streaming, sidecar HTTP API on 18943 |
-| **Personality system** | [`docs/personality.md`](docs/personality.md) | 14-section system prompt, ping-pong rhythm, boredom switch, vocal expression cap |
-| **Multi-CLI delegation** | [`docs/fallback-chain.md`](docs/fallback-chain.md) | opencode / codex / gemini / numasec / hermes-api with health registry + automatic fallback |
-| **Proactive notifications** | [`docs/notification.md`](docs/notification.md) | `local_notify` tool, scheduler, sidecar `/notify`, AFK DM pings |
-| **Email brief** | [`docs/email-brief.md`](docs/email-brief.md) | Scheduled inbox digest, important/fyi/auto buckets, AFK delivery |
-| **SFX library** | [`docs/sfx-library.md`](docs/sfx-library.md) | 4 slots, env-driven paths, `local_sfx_test` tool |
-| **Webhooks** | [`docs/webhooks.md`](docs/webhooks.md) | 9 event classes, throttle keys, per-class env-var config |
-| **Video awareness** | [`docs/architecture.md`](docs/architecture.md) | `/frame` HTTP endpoint, auto-react to video enable/disable |
-| **Onboarding** | — | First-run Q&A for new users, persisted to `~/.hermes/voice-users/<id>.yaml` |
-| **Honcho context** | — | Per-user peer memory injected into the system prompt |
-| **GitHub tools** | — | 6 voice tools to manage repos / issues / PRs via the `gh` CLI |
-| **Home Assistant** | — | Voice-driven HA control |
-| **Spotify** | — | Play/pause/skip/search/volume via voice |
+| Voice I/O | [`docs/architecture.md`](docs/architecture.md) | Discord audio in/out through Gemini Live WSS |
+| Personality system | [`docs/personality.md`](docs/personality.md) | Long system prompt with conversation rhythm and visual-claim guardrails |
+| Multi-CLI delegation | [`docs/fallback-chain.md`](docs/fallback-chain.md) | `opencode / codex / gemini / numasec / hermes-api`; depends on local CLIs/auth |
+| Proactive notifications | [`docs/notification.md`](docs/notification.md) | `local_notify`, scheduler, sidecar `/notify`, AFK delivery |
+| Email brief | [`docs/email-brief.md`](docs/email-brief.md) | Scheduled inbox digest; backend-dependent |
+| SFX library | [`docs/sfx-library.md`](docs/sfx-library.md) | Slot-based sound effects with env-driven paths |
+| Webhooks | [`docs/webhooks.md`](docs/webhooks.md) | Event fanout and throttle configuration |
+| Video/frame input | [`docs/video.md`](docs/video.md) | Manual frame feeder; no automatic Discord screenshare ingestion |
+| SORA bridge helpers | [`docs/sora-bridge-elements.md`](docs/sora-bridge-elements.md) | Preflight, grill, goal synthesis, redaction |
+| Release truth table | [`docs/release-readiness.md`](docs/release-readiness.md) | What is working, partial, planned, or not bundled |
 
 ---
 
-## Why this release matters
-
-Hermes can now **hold a real conversation with you in voice**. Not a 30-second demo — sub-second latency, hour-long sessions, remembers what you talked about last time via Honcho memory.
-
-Mid-conversation, it can:
-
-- 🔍 Search the web and read the answer aloud
-- 📁 Open your files, review code, suggest fixes
-- 📬 Check your email and summarize
-- 🎵 Queue Spotify, dim the lights (Home Assistant)
-- 🧠 Delegate and track **Codex / OpenCode / NumaSec / Hermes (API)** sessions
-- 👁️ See your screenshare and walk you through a bug
-
-**Built in one session. One developer. Shipped.**
-
----
-
-## Environment variables
-
-The minimum required:
+## Required environment
 
 ```bash
 DISCORD_BOT_TOKEN=***
-GEMINI_API_KEY=***
-DISCORD_VOICE_LIVE_USER_ID=1474100257762578597   # your Discord snowflake
+GEMINI_API_KEY=***        # or GOOGLE_API_KEY
+DISCORD_VOICE_LIVE_USER_ID=1474100257762578597
 ```
 
-Full list of every `DISCORD_VOICE_LIVE_*` env var: [`docs/env-vars.md`](docs/env-vars.md).
+Useful optional variables:
+
+```bash
+DISCORD_VOICE_LIVE_PORT=18943
+DISCORD_VOICE_LIVE_VOICE=Kore
+GEMINI_MODEL=gemini-3.1-flash-live-preview
+GEMINI_LIVE_MODEL_FALLBACKS=gemini-3.1-flash-live-preview,gemini-2.5-flash-native-audio-preview-12-2025,gemini-2.5-flash-native-audio-preview-09-2025
+VOICE_LIVE_HONCHO_CONTEXT=true
+VOICE_LIVE_HONCHO_PEER=<peer-name>
+```
+
+Full env reference: [`docs/env-vars.md`](docs/env-vars.md).
 
 ---
 
 ## Sidecar HTTP control API
 
-Runs on `127.0.0.1:18943`:
+Runs locally on `127.0.0.1:18943` by default.
 
 | Route | Method | Description |
 |---|---|---|
 | `/health` | GET | Bridge health JSON |
-| `/frame` | POST | Send a JPEG/PNG frame (`?force=true` bypasses audio-gate) |
-| `/stop` | GET | Stop the bridge |
-| `/say` | GET | Inject text into Gemini (`?text=...`) |
-| `/notes` | GET | Recent transcript events (`?limit=50`) |
+| `/frame` | POST | Send a JPEG/PNG/WebP frame; `?force=true` bypasses audio-gate |
+| `/say` | GET | Inject text into Gemini with `?text=...` |
+| `/notes` | GET | Recent transcript/note events with `?limit=50` |
 | `/notify` | GET/POST | Proactive notification breakout |
+| `/stop` / `/leave` | GET | Stop the active bridge |
 
 ---
 
-## Personality
+## What this repo does not currently ship
 
-The system prompt is a 14-section behavioral contract, not documentation. Each section addresses a specific regression. **Do not** add hedging like "be helpful and harmless" — the model interprets that as permission to revert to assistant defaults.
+- No bundled Vapi bridge implementation.
+- No bundled Dograh bridge implementation.
+- No first-class MCP server/client adapter.
+- No automatic access to Discord screenshare/camera video streams.
+- No public sidecar exposure; sidecar calls are local-first.
+- No guarantee that optional backends work without their own local credentials and CLIs.
 
-See [`docs/personality.md`](docs/personality.md) for the section index and how to edit.
+These are valid follow-up tracks, but they should stay out of “working” claims until code and tests land.
 
 ---
 
-## Cost
+## Release verification checklist
 
-~**$0.03–0.06 / hour** of voice on Gemini's Flex tier. Calls cost tokens; a 30-min voice session runs roughly the cost of a long text chat with a generous model.
+```bash
+python3 installer/enable_sora_bridge_elements.py
+python3 -m py_compile plugin/*.py
+systemctl --user restart hermes-gateway
+journalctl --user -u hermes-gateway -n 100 --no-pager
+curl -s http://127.0.0.1:18943/health | python3 -m json.tool
+```
+
+Then from Hermes/Discord, verify:
+
+```text
+voice_live_status
+voice_live_notes limit=10
+sora_bridge_preflight
+sora_redact text="Authorization: Bearer fake.fake.fake"
+sora_live_grill text="we need to migrate SORA bridge features into Gemini bridge and verify docs"
+sora_goal_synth text="we need to migrate SORA bridge features into Gemini bridge and verify docs"
+```
 
 ---
 
 ## Documentation
 
-**📖 [Open the docs website →](docs-site/index.html)**
-
-A proper, designed docs site lives in `docs-site/`. It's a static site built from the markdown in `docs/`, so you can host it on GitHub Pages, Vercel, or just `python3 -m http.server` from the repo.
-
-Individual pages (also browseable as raw markdown):
-
-- [`docs/architecture.md`](docs/architecture.md) — end-to-end audio path, threading, lifecycle
-- [`docs/personality.md`](docs/personality.md) — system prompt shape and behavioral contracts
-- [`docs/fallback-chain.md`](docs/fallback-chain.md) — multi-CLI delegation with health registry
-- [`docs/notification.md`](docs/notification.md) — proactive notification breakout
-- [`docs/email-brief.md`](docs/email-brief.md) — scheduled inbox digest
-- [`docs/sfx-library.md`](docs/sfx-library.md) — slot-based UI sound effects
-- [`docs/webhooks.md`](docs/webhooks.md) — event-class webhook fanout
-- [`docs/video.md`](docs/video.md) — video frame feeder
-- [`docs/env-vars.md`](docs/env-vars.md) — every env var, defaults, descriptions
-- [`docs/troubleshooting.md`](docs/troubleshooting.md) — common bridge failures
-
----
-
-## CHANGELOG
-
-See `CHANGELOG.md` for the full release history.
+- [`docs/README.md`](docs/README.md) — raw docs index
+- [`docs-site/index.html`](docs-site/index.html) — static docs landing page
+- [`docs/architecture.md`](docs/architecture.md) — end-to-end audio path and lifecycle
+- [`docs/sora-bridge-elements.md`](docs/sora-bridge-elements.md) — SORA helper tools
+- [`docs/release-readiness.md`](docs/release-readiness.md) — cross-exam truth table
+- [`CHANGELOG.md`](CHANGELOG.md) — release history
 
 ---
 
 ## License
 
-MIT. See top of `bridge.py` for full text.
+MIT. See [`LICENSE`](LICENSE).
