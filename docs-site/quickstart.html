@@ -4,121 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quick start — Hermes Live</title>
-<meta name="description" content="Five commands, two minutes. Install the bridge, restart the gateway, run /voice-live in Discord.">
+<meta name="description" content="Install the Gemini Live Discord voice bridge, wire SORA helpers, restart Hermes, and run /voice-live.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="shell">
-
   <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">H</div>
-      <div>
-        <div class="brand-text">Hermes Live</div>
-        <div class="brand-sub">v0.3.5 · VOPI build</div>
-      </div>
-    </div>
-
-    <div class="search">
-      <input id="search" type="search" placeholder="Search docs…" autocomplete="off">
-    </div>
-
+    <div class="brand"><div class="brand-mark">H</div><div><div class="brand-text">Hermes Live</div><div class="brand-sub">v0.3.6 · Gemini/SORA build</div></div></div>
+    <div class="search"><input id="search" type="search" placeholder="Search docs…" autocomplete="off"></div>
     <nav class="nav">
       <div class="nav-section">Getting started</div>
-      <a href="index.html">Overview</a>
-      <a href="quickstart.html" class="active">Quick start</a>
-      <a href="architecture.html">Architecture</a>
+      <a href="index.html">Overview</a><a href="quickstart.html" class="active">Quick start</a><a href="architecture.html">Architecture</a>
+      <div class="nav-section">SORA release</div>
+      <a href="sora-bridge-elements.html">SORA bridge elements</a><a href="release-readiness.html">Release truth table</a>
       <div class="nav-section">Core systems</div>
-      <a href="personality.html">Personality</a>
-      <a href="fallback-chain.html">Fallback chain</a>
-      <a href="notification.html">Notifications</a>
-      <a href="email-brief.html">Email brief</a>
-      <a href="sfx-library.html">SFX library</a>
-      <a href="sfx-credits.html">SFX credits</a>
-      <a href="webhooks.html">Webhooks</a>
-      <a href="video.html">Video feeder</a>
+      <a href="personality.html">Personality</a><a href="fallback-chain.html">Fallback chain</a><a href="notification.html">Notifications</a><a href="email-brief.html">Email brief</a><a href="sfx-library.html">SFX library</a><a href="sfx-credits.html">SFX credits</a><a href="webhooks.html">Webhooks</a><a href="video.html">Video feeder</a>
       <div class="nav-section">Reference</div>
-      <a href="env-vars.html">Environment variables</a>
-      <a href="troubleshooting.html">Troubleshooting</a>
-      <a href="changelog.html">Changelog</a>
+      <a href="env-vars.html">Environment variables</a><a href="troubleshooting.html">Troubleshooting</a><a href="changelog.html">Changelog</a>
     </nav>
-
-    <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
-      MIT licensed · Hermes Agent plugin
-    </div>
+    <div class="sidebar-foot"><a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>MIT licensed · Hermes Agent plugin</div>
   </aside>
-
   <main class="main">
-    <div class="topbar">
-      <span class="crumb">Quickstart</span>
-      <span class="sep">/</span>
-      <span>docs-site/</span>
-      <div class="right">
-        <span class="pill good">v0.3.5</span>
-        <span class="pill warn">VOPI build</span>
-      </div>
-    </div>
-
+    <div class="topbar"><span class="crumb">Quick Start</span><span class="sep">/</span><span>docs-site/</span><div class="right"><span class="pill good">v0.3.6</span><span class="pill warn">Gemini/SORA</span></div></div>
     <article class="content">
-<h1>Quick start</h1>
+      <h1>Quick start</h1>
+      <p>Install the Gemini Live Discord voice bridge, wire SORA bridge elements if needed, restart Hermes, then start <code>/voice-live</code> from Discord.</p>
 
-<p>Five commands, two minutes.</p>
-
-<h2>Install</h2>
-
-<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash"># 1. Clone
-git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+      <h2>Install</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin
+cd installer
+./install.py
+# or, from the repo checkout:
+./install.sh --from-local
 
-# 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
-./install.sh
-
-# 3. Restart the gateway so the plugin loads
+cd ..
+python3 installer/enable_sora_bridge_elements.py
+python3 -m py_compile plugin/sora_bridge_elements.py plugin/__init__.py
 systemctl --user restart hermes-gateway</code></pre></div>
 
-<h2>First session</h2>
-
-<p>From Discord, join a voice channel, then in any text channel:</p>
-
-<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-">/voice-live          # join
+      <h2>First session</h2>
+      <p>From Discord, join a voice channel, then run:</p>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-text">/voice-live          # join
 /voice-live-leave    # leave</code></pre></div>
 
-<p>That's it. The bridge will:</p>
+      <h2>Verify</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre></div>
+      <p>You should see bridge health after <code>/voice-live</code> has started a session. If the bridge is not running yet, the sidecar health request can fail normally.</p>
 
-<ol><li>Connect to your voice channel (Discord CDN quirk: first attempt takes ~27s — this is normal, do not restart the gateway)</li><li>Handshake with Gemini Live</li><li>Play the <code>transition</code> sfx</li><li>Wait for you to speak — first turn is muted by design</li></ol>
+      <h2>Verify SORA bridge elements</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-text">sora_bridge_preflight
+sora_redact text="Authorization: Bearer fake.fake.fake"
+sora_live_grill text="migrate SORA bridge features into Gemini bridge"
+sora_goal_synth text="migrate SORA bridge features into Gemini bridge"</code></pre></div>
 
-<h2>Verify</h2>
+      <h2>Common pitfalls</h2>
+      <ul>
+        <li><strong><code>/voice-live</code> cannot infer your channel</strong> — join a voice channel first with the configured Discord user.</li>
+        <li><strong><code>/health</code> fails</strong> — start a session first or check <code>DISCORD_VOICE_LIVE_PORT</code>.</li>
+        <li><strong>SORA tools missing</strong> — run <code>installer/enable_sora_bridge_elements.py</code> and restart Hermes.</li>
+        <li><strong>The model cannot see screenshare</strong> — use a screenshot, <code>voice_live_frame</code>, or the frame feeder.</li>
+        <li><strong>Optional tools fail</strong> — mail, GitHub, Spotify, Home Assistant, and CLI delegation require their own credentials/install.</li>
+      </ul>
 
-<div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre></div>
-
-<p>You should see <code>&quot;voice_connected&quot;: true</code>, <code>&quot;running&quot;: true</code>, and a non-zero <code>audio_in_chunks</code> after you speak.</p>
-
-<h2>Common pitfalls</h2>
-
-<ul><li><strong>"Bridge failed to start"</strong> — wait ~30s. The first 5 voice WebSocket handshakes are rejected by the Discord CDN; the bridge retries.</li><li><strong>First-turn hallucination</strong> ("I see you're sharing your screen") — the system prompt has the guard, but if you see this, the audioStreamEnd mute is missing. Check <code>bridge.py</code> for <code>await self._gemini._ws.send(json.dumps({&quot;realtimeInput&quot;: {&quot;audioStreamEnd&quot;: True}}))</code> right after <code>connect()</code>.</li><li><strong>No audio in voice</strong> — check <code>~/.hermes/voice-users/sfx/</code> exists and the four WAV files are present.</li></ul>
-
-<h2>Next</h2>
-
-<ul><li><a href="architecture.html">Architecture</a> — understand the audio path and threading model.</li><li><a href="env-vars.html">Environment variables</a> — every <code>DISCORD_VOICE_LIVE_*</code> env var.</li><li><a href="troubleshooting.html">Troubleshooting</a> — what to do when it doesn't work.</li></ul>
-
-<div class="pager"><a class="prev" href="index.html">
-          <span class="label">Prev ←</span>
-          <span class="title">Overview</span>
-        </a><a class="next" href="architecture.html">
-          <span class="label">Next →</span>
-          <span class="title">Architecture — Hermes Live</span>
-        </a></div>
-
-      <div class="foot">
-        Hermes Live v0.3.5 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
-      </div>
-
+      <div class="pager"><a class="prev" href="index.html"><span class="label">Prev ←</span><span class="title">Overview</span></a><a class="next" href="architecture.html"><span class="label">Next →</span><span class="title">Architecture</span></a></div>
+      <div class="foot">Hermes Live v0.3.6 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a></div>
     </article>
-
     <aside class="toc" id="toc" aria-label="On this page"></aside>
   </main>
-
 </div>
 <script src="nav.js"></script>
 </body>
