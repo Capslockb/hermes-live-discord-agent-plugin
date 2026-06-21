@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Release truth table — Hermes Live</title>
+<meta name="description" content="Cross-exam truth table for Hermes Live Gemini/SORA release readiness.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">H</div><div><div class="brand-text">Hermes Live</div><div class="brand-sub">v0.3.6 · Gemini/SORA build</div></div></div>
+    <div class="search"><input id="search" type="search" placeholder="Search docs…" autocomplete="off"></div>
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a><a href="quickstart.html">Quick start</a><a href="architecture.html">Architecture</a>
+      <div class="nav-section">SORA release</div>
+      <a href="sora-bridge-elements.html">SORA bridge elements</a><a href="release-readiness.html" class="active">Release truth table</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a><a href="fallback-chain.html">Fallback chain</a><a href="notification.html">Notifications</a><a href="email-brief.html">Email brief</a><a href="sfx-library.html">SFX library</a><a href="sfx-credits.html">SFX credits</a><a href="webhooks.html">Webhooks</a><a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a><a href="troubleshooting.html">Troubleshooting</a><a href="changelog.html">Changelog</a>
+    </nav>
+    <div class="sidebar-foot"><a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>MIT licensed · Hermes Agent plugin</div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><span class="crumb">Release Truth Table</span><span class="sep">/</span><span>docs-site/</span><div class="right"><span class="pill good">v0.3.6</span><span class="pill warn">truth map</span></div></div>
+    <article class="content">
+      <h1>Release readiness truth table</h1>
+      <p>This page separates code that is present in this repository from sibling systems, roadmap items, and integration research.</p>
+
+      <h2>Status legend</h2>
+      <table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>
+        <tr><td><strong>WORKING</strong></td><td>Code exists in this repository and has an executable verification path.</td></tr>
+        <tr><td><strong>PARTIAL</strong></td><td>Code exists, but depends on local services, credentials, CLIs, or a manual feeder.</td></tr>
+        <tr><td><strong>INCLUDED / VERIFY WIRING</strong></td><td>Code exists, but install/runtime registration must be checked.</td></tr>
+        <tr><td><strong>SIBLING / NOT BUNDLED</strong></td><td>A separate plugin/service may exist, but it is not shipped in this repository.</td></tr>
+        <tr><td><strong>RESEARCH</strong></td><td>Mention only as an integration target until code and tests land.</td></tr>
+      </tbody></table>
+
+      <h2>Current truth table</h2>
+      <table><thead><tr><th>Feature / claim</th><th>Status</th><th>Release wording</th></tr></thead><tbody>
+        <tr><td>Gemini Live Discord voice bridge</td><td><strong>WORKING</strong></td><td>Gemini Live Discord voice bridge.</td></tr>
+        <tr><td>Discord slash commands</td><td><strong>WORKING</strong></td><td>Discord slash commands for join/leave.</td></tr>
+        <tr><td>Sidecar API</td><td><strong>WORKING</strong></td><td>Local control API on 127.0.0.1.</td></tr>
+        <tr><td>Manual image/frame input</td><td><strong>PARTIAL</strong></td><td>Manual frame feed; not automatic Discord screenshare capture.</td></tr>
+        <tr><td>Function calling</td><td><strong>PARTIAL</strong></td><td>Function calling; backend tools depend on local auth/install.</td></tr>
+        <tr><td>Multi-CLI fallback</td><td><strong>PARTIAL</strong></td><td>Multi-CLI delegation when CLIs are installed.</td></tr>
+        <tr><td>Notifications</td><td><strong>PARTIAL</strong></td><td>Proactive notifications, backend-dependent.</td></tr>
+        <tr><td>Email brief</td><td><strong>PARTIAL</strong></td><td>Email brief when Gmail backend is configured.</td></tr>
+        <tr><td>Honcho context</td><td><strong>PARTIAL</strong></td><td>Honcho context if configured; fail loud when missing.</td></tr>
+        <tr><td>SORA tools</td><td><strong>INCLUDED / VERIFY WIRING</strong></td><td>SORA bridge elements are included; run the patcher if not wired.</td></tr>
+        <tr><td>Vapi bridge</td><td><strong>SIBLING / NOT BUNDLED</strong></td><td>Sibling Vapi transport, not bundled in this repo.</td></tr>
+        <tr><td>MCP mode</td><td><strong>RESEARCH</strong></td><td>MCP adapter target.</td></tr>
+        <tr><td>Dograh</td><td><strong>RESEARCH</strong></td><td>Dograh comparison target, not shipped.</td></tr>
+      </tbody></table>
+
+      <h2>Hard release rules</h2>
+      <ol>
+        <li>Do not call Vapi, Dograh, or MCP “supported” unless this repository contains working code and a test command.</li>
+        <li>Do not say the model can see Discord screenshare automatically.</li>
+        <li>Do not claim optional backends work without checking credentials and local binaries.</li>
+        <li>Do not leak secrets in preflight, transcripts, goals, Discord messages, GitHub issues, or docs.</li>
+        <li>README, docs-site, and raw docs must use the same status labels.</li>
+      </ol>
+
+      <h2>Smoke checklist</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">python3 installer/enable_sora_bridge_elements.py
+python3 -m py_compile plugin/*.py installer/enable_sora_bridge_elements.py
+systemctl --user restart hermes-gateway
+journalctl --user -u hermes-gateway -n 100 --no-pager
+curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre></div>
+
+      <h2>Hermes tool checks</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-text">voice_live_status
+voice_live_notes limit=10
+sora_bridge_preflight
+sora_redact text="Authorization: Bearer fake.fake.fake"
+sora_live_grill text="Migrate SORA bridge features into Gemini bridge and verify docs/code accuracy."
+sora_goal_synth text="Migrate SORA bridge features into Gemini bridge and verify docs/code accuracy."</code></pre></div>
+
+      <div class="pager"><a class="prev" href="sora-bridge-elements.html"><span class="label">Prev ←</span><span class="title">SORA bridge elements</span></a><a class="next" href="personality.html"><span class="label">Next →</span><span class="title">Personality</span></a></div>
+      <div class="foot">Hermes Live v0.3.6 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a></div>
+    </article>
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+</div>
+<script src="nav.js"></script>
+</body>
+</html>
