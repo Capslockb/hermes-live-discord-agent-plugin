@@ -33,6 +33,7 @@
   <aside class="toc" aria-label="On this page">
     <h2>Versions</h2>
     <ul>
+      <li><a href="#v0-4-0">0.4.0 — 2026-06-21</a></li>
       <li><a href="#v0-3-0">0.3.0 — 2026-06-07</a></li>
       <li><a href="#v0-2-7">0.2.7 — 2026-06-05</a></li>
       <li><a href="#v0-2-6">0.2.6 — 2026-06-05</a></li>
@@ -55,6 +56,34 @@
       <h1>Changelog</h1>
       <p class="dek">Release history of <code>hermes-live-discord-agent-plugin</code>. Newest first.</p>
     </div>
+
+    <article class="release reveal" id="v0-4-0" data-version="0.4.0">
+      <span class="date">2026-06-21</span>
+      <h3>Second release + SORA bridge elements <a class="anchor" href="#v0-4-0" aria-label="Anchor link">#</a></h3>
+      <h4>Features</h4>
+      <ul>
+        <li><strong>Imported safe SORA bridge helpers</strong> into the Gemini Live Discord bridge:
+          <ul>
+            <li><code>sora_bridge_preflight</code> — local diagnostics for Gemini env/model, Honcho config paths, sidecar health, notes dir, active bridge registry.</li>
+            <li><code>sora_live_grill</code> — Live Grill Mode transcript analysis that forces objective, constraints, owner, deadline, risk, next command, and verification test.</li>
+            <li><code>sora_goal_synth</code> — deterministic <code>/goal</code> + ranked <code>/subgoal</code> generation for weaker autonomous models.</li>
+            <li><code>sora_redact</code> — redaction of API keys, tokens, JWTs, webhooks, GitHub tokens before Gemini/Discord/logs.</li>
+          </ul>
+        </li>
+        <li><strong>Docs honesty pass:</strong> README rewritten to tag every feature as WORKING / PARTIAL / PLANNED / RESEARCH. New <code>VALIDATION_MATRIX.md</code> covers Gemini Live, Discord voice, sidecar API, SORA elements, Vapi, MCP, and Dograh. New <code>docs/SORA_MIGRATION.md</code> and <code>docs/diagrams/sora-bridge-elements.txt</code>.</li>
+      </ul>
+      <h4>Implementation</h4>
+      <ul>
+        <li>New <code>plugin/sora_bridge_elements.py</code>, wired automatically from <code>plugin/__init__.py</code> with a safe try/except so a registration failure cannot break <code>voice_live</code>.</li>
+        <li>New <code>installer/enable_sora_bridge_elements.py</code> idempotent wiring checker.</li>
+        <li>New <code>scripts/regression_test_sora_elements.py</code> — 19 checks.</li>
+        <li>Updated <code>plugin/plugin.yaml</code> to list all registered tools and relevant optional env vars.</li>
+      </ul>
+      <h4>Status notes</h4>
+      <ul>
+        <li>Vapi bridge federation, MCP orchestration server, Dograh agent, and SORA video production pipeline are documented as PLANNED / RESEARCH.</li>
+      </ul>
+    </article>
 
     <article class="release reveal" id="v0-3-0" data-version="0.3.0">
       <span class="date">2026-06-07</span>

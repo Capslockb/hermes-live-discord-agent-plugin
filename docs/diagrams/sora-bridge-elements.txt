@@ -1,0 +1,48 @@
+# SORA bridge elements (v2)
+# In-process helper tools that run inside the Hermes gateway
+
+        ╔════════════════════════════════════════════╗
+        ║      SORA bridge elements (v2)             ║
+        ║      In-process helper tools              ║
+        ╚════════════════════════════════════════════╝
+
+  ┌───────────────────────────────────────────────────────────────┐
+  │                  Hermes gateway process                       │
+  │                                                               │
+  │   ┌──────────────────────────┐   ┌──────────────────────┐   │
+  │   │ plugin/bridge.py          │   │ plugin/sora_bridge_  │   │
+  │   │ Gemini Live audio + tools │   │ elements.py          │   │
+  │   │                           │   │                      │   │
+  │   │ ┌──────────────────────┐ │   │ ┌────────────────┐   │   │
+  │   │ │ /health              │ │◄──┼─┤ preflight      │   │   │
+  │   │ │ local sidecar         │ │   │ └────────────────┘   │   │
+  │   │ └──────────────────────┘ │   │ ┌────────────────┐   │   │
+  │   └──────────────────────────┘   │ │ live_grill     │   │   │
+  │                  │               │ └────────────────┘   │   │
+  │                  │ function calls│ ┌────────────────┐   │   │
+  │                  ▼               │ │ goal_synth     │   │   │
+  │   ┌──────────────────────────┐   │ └────────────────┘   │   │
+  │   │ Gemini Live WSS          │   │ ┌────────────────┐   │   │
+  │   │ (serverContent,         │   │ │ redact         │   │   │
+  │   │  functionCalls)         │   │ └────────────────┘   │   │
+  │   └──────────────────────────┘   └──────────────────────┘   │
+  │                                                               │
+  └───────────────────────────────────────────────────────────────┘
+
+Inputs read by SORA helpers:
+  • ~/.hermes/.env                 (env vars, redacted in output)
+  • ~/.hermes/config.yaml          (optional Hermes settings)
+  • ~/.hermes/honcho.json          (Honcho self-hosted config)
+  • ~/.hermes/voice-live-notes/    (notes dir + transcripts)
+  • local bridge sidecar /health   (no external network)
+
+Outputs:
+  • Diagnostic JSON   → Gemini / operator
+  • Grill questions   → operator chat
+  • /goal + /subgoals → Discord command suggestions
+  • Redacted text     → Discord / logs / Gemini
+
+Safety rules:
+  • No public ports opened.
+  • No persistent HTTP listener added.
+  • Import failures are caught in plugin/__init__.py so voice-live keeps working.

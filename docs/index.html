@@ -3,30 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hermes Live Discord Agent Plugin</title>
-<meta name="description" content="Drop a real-time multimodal AI into any Discord voice channel. Full-duplex audio, vision, function calling, idle hangup, transcripts. Open source, self-hostable, free.">
-<meta name="keywords" content="discord voice bot, gemini live, multimodal ai, realtime voice, hermes agent, self-hosted, plugin, open source">
+<title>Hermes Live Discord Agent Plugin — v2</title>
+<meta name="description" content="Talk to Google's Gemini Live AI in any Discord voice channel. Self-hosted, open source, and honest about what works today.">
 <meta name="theme-color" content="#0b1020">
-<meta property="og:title" content="Hermes Live Discord Agent Plugin">
-<meta property="og:description" content="Full-duplex Discord voice ↔ Google Gemini Multimodal Live. Open source. Open for collaboration.">
+<meta property="og:title" content="Hermes Live Discord Agent Plugin — v2">
+<meta property="og:description" content="Real-time voice + vision AI for Discord. Built on Gemini Live. Self-hostable. Features tagged WORKING / PARTIAL / PLANNED / RESEARCH.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://capslockb.github.io/hermes-live-discord-agent-plugin/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #0b1020;
-    --bg-2: #0f1530;
-    --panel: #11183a;
-    --line: #1f2a55;
-    --text: #e6ecff;
-    --muted: #8a96c2;
-    --accent: #00d4ff;
-    --accent-2: #7af0c8;
-    --warn: #ffb347;
-    --hot: #ff6e9c;
+    --bg: #0b1020; --bg-2: #0f1530; --panel: #11183a; --line: #1f2a55;
+    --text: #e6ecff; --muted: #8a96c2; --accent: #00d4ff; --accent-2: #7af0c8;
+    --warn: #ffb347; --hot: #ff6e9c; --green: #4ade80; --code-bg: #050811;
+    --tag-working: rgba(74, 222, 128, 0.12); --tag-working-border: rgba(74, 222, 128, 0.35);
+    --tag-partial: rgba(255, 179, 71, 0.12); --tag-partial-border: rgba(255, 179, 71, 0.35);
+    --tag-planned: rgba(255, 110, 156, 0.12); --tag-planned-border: rgba(255, 110, 156, 0.30);
+    --tag-research: rgba(138, 150, 194, 0.12); --tag-research-border: rgba(138, 150, 194, 0.35);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
   body {
     overflow-x: hidden;
     background:
@@ -38,467 +35,182 @@
     -webkit-font-smoothing: antialiased;
     position: relative;
   }
-
-  /* Grain / noise texture overlay — adds depth from the flat gradients.
-     Inline SVG noise so there are no extra HTTP requests, no PNG/SVG asset
-     404s on Pages. pointer-events: none so taps pass through to the page.
-     Very low opacity — you feel the texture, you don't see it. */
   body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.04;
-    mix-blend-mode: overlay;
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    opacity: 0.04; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0.6  0 0 0 0 0.85  0 0 0 0 1  0 0 0 0.85 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
     background-size: 240px 240px;
   }
-  /* On mobile, kill the grain entirely — it eats GPU on phones for almost
-     no visual benefit at small viewports. */
-  @media (max-width: 768px) {
-    body::before { display: none; }
-  }
-  /* Push all real content above the grain layer. */
+  @media (max-width: 768px) { body::before { display: none; } }
   body > * { position: relative; z-index: 1; }
   code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
-  header.nav {
-    position: sticky; top: 0; z-index: 50;
-    backdrop-filter: blur(10px);
-    background: rgba(11,16,32,0.7);
-    border-bottom: 1px solid var(--line);
-  }
+  header.nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(10px); background: rgba(11,16,32,0.7); border-bottom: 1px solid var(--line); }
   .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
-  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; }
+  .brand-link { display: inline-flex; align-items: center; gap: 10px; color: var(--text); padding: 4px 8px; border-radius: 8px; transition: background 0.18s ease, transform 0.18s ease; }
+  .brand-link:hover { background: var(--panel); text-decoration: none; transform: translateY(-1px); }
+  .brand-mark { width: 22px; height: 22px; color: var(--accent); transition: transform 0.5s cubic-bezier(.34,1.56,.64,1), color 0.2s ease; flex: none; }
+  .brand-link:hover .brand-mark { transform: rotate(-12deg) scale(1.08); color: var(--accent-2); }
+  .brand-accent { color: var(--accent); }
   .nav .links a { color: var(--muted); margin-left: 6px; padding: 8px 12px; font-size: 14px; border-radius: 6px; }
-  .nav .links a:hover { color: var(--text); background: var(--panel); }
+  .nav .links a:hover { color: var(--text); background: var(--panel); text-decoration: none; }
 
-  .hero { padding: 88px 0 64px; }
+  .hero { padding: 72px 0 56px; }
   .pill {
     display: inline-block; padding: 4px 10px; border-radius: 999px;
     border: 1px solid var(--line); color: var(--accent-2);
-    background: rgba(122,240,200,0.06);
-    font-size: 12px; letter-spacing: 0.3px;
+    background: rgba(122,240,200,0.06); font-size: 12px; letter-spacing: 0.3px;
   }
-  h1 {
-    font-size: clamp(34px, 5.4vw, 60px); line-height: 1.05;
-    margin: 18px 0 14px; letter-spacing: -0.5px;
-  }
+  h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; margin: 18px 0 14px; letter-spacing: -0.5px; }
   h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .sub { color: var(--muted); max-width: 720px; font-size: 18px; }
   .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 12px 18px; border-radius: 10px; font-weight: 600;
-    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 10px;
+    font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--text);
     transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), border-color 0.15s ease, background 0.15s ease, box-shadow 0.18s ease;
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
   }
   .btn:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 255, 0.18); }
-  .btn:active { transform: translateY(0); }
-  .btn .arrow {
-    display: inline-block;
-    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
-  }
-  .btn:hover .arrow { transform: translateX(4px); }
-  .btn .arrow.down { transform: rotate(90deg); }
-  .btn:hover .arrow.down { transform: rotate(90deg) translateX(4px); }
   .btn-primary { background: linear-gradient(180deg, #00d4ff, #0bb1d6); color: #001621; border-color: transparent; }
   .btn-primary:hover { filter: brightness(1.06); }
   .btn-ghost { background: transparent; }
-  /* Sweep highlight on hover for primary CTA */
-  .btn::after {
-    content: "";
-    position: absolute; inset: 0;
-    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
-    transform: translateX(-100%);
-    transition: transform 0.6s ease;
-    pointer-events: none;
-  }
-  .btn:hover::after { transform: translateX(100%); }
+  .btn .arrow { display: inline-block; transition: transform 0.22s cubic-bezier(.34,1.56,.64,1); }
+  .btn:hover .arrow { transform: translateX(4px); }
+  .btn:hover .arrow.down { transform: rotate(90deg) translateX(4px); }
 
-  /* Hero download CTA — big, prominent, shows detected OS */
-  .dl-hero {
-    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    margin-top: 30px;
-  }
-  .dl-hero .big {
-    display: inline-flex; align-items: center; gap: 12px;
-    padding: 16px 26px;
-    font-size: 17px; font-weight: 700;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #00d4ff, #0bb1d6);
-    color: #001621;
-    border: 1px solid transparent;
-    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.25);
-    transition: transform 0.05s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  }
-  .dl-hero .big:hover {
-    filter: brightness(1.06);
-    box-shadow: 0 6px 28px rgba(0, 212, 255, 0.4);
-    text-decoration: none;
-    transform: translateY(-1px);
-  }
-  .dl-hero .big .icon { display: inline-flex; }
-  .dl-hero .detected {
+  .tag {
     display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; padding: 5px 10px;
-    border-radius: 999px;
-    background: rgba(122, 240, 200, 0.1);
-    color: var(--accent-2);
-    font-weight: 600; letter-spacing: 0.3px;
+    padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase;
   }
-  .dl-hero .detected .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--accent-2);
-    box-shadow: 0 0 8px var(--accent-2);
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
+  .tag.working  { background: var(--tag-working);  border: 1px solid var(--tag-working-border);  color: var(--green); }
+  .tag.partial  { background: var(--tag-partial);  border: 1px solid var(--tag-partial-border);  color: var(--warn); }
+  .tag.planned  { background: var(--tag-planned);  border: 1px solid var(--tag-planned-border);  color: var(--hot); }
+  .tag.research { background: var(--tag-research); border: 1px solid var(--tag-research-border); color: var(--muted); }
 
-  /* ============================================================
-     Brand mark — official Hermes Agent mark from lobehub/lobe-icons
-     ============================================================ */
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; }
-  .brand-link {
-    display: inline-flex; align-items: center; gap: 10px;
-    color: var(--text);
-    padding: 4px 8px;
-    border-radius: 8px;
-    transition: background 0.18s ease, transform 0.18s ease;
+  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; margin-top: 36px; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-copy { min-width: 0; }
+  .hero-card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line);
+    border-radius: 16px; padding: 20px; min-width: 0;
   }
-  .brand-link:hover { background: var(--panel); text-decoration: none; transform: translateY(-1px); }
-  .brand-mark {
-    width: 22px; height: 22px;
-    color: var(--accent);
-    transition: transform 0.5s cubic-bezier(.34,1.56,.64,1), color 0.2s ease;
-    flex: none;
+  .hero-card h3 { margin: 0 0 10px; font-size: 16px; }
+  .hero-card pre {
+    margin: 0; padding: 14px; border-radius: 10px; background: var(--code-bg); border: 1px solid var(--line);
+    font-size: 13px; line-height: 1.5; overflow-x: auto; color: var(--accent-2);
   }
-  .brand-link:hover .brand-mark { transform: rotate(-12deg) scale(1.08); color: var(--accent-2); }
-  .brand-text { font-size: 15px; letter-spacing: -0.1px; }
-  .brand-accent { color: var(--accent); }
-  .brand .dot { display: none; } /* replaced by the official mark */
-  .dl-hero .other {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    background: var(--bg-2);
-    border: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 13px; font-weight: 500;
-    transition: border-color 0.15s ease, color 0.15s ease;
-  }
-  .dl-hero .other:hover { border-color: var(--accent); color: var(--text); text-decoration: none; }
+  .hero-card pre .p { color: var(--accent); }
+  .hero-card pre .c { color: var(--muted); }
+  .hero-card .copybar { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+  .hero-card .copybar button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font-weight: 600; font-size: 12px; cursor: pointer; }
+  .hero-card .copybar button:hover { border-color: var(--accent); color: var(--text); }
+  .hero-card .copybar button.copied { border-color: var(--accent-2); color: var(--accent-2); }
+  .hero-card .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
 
-  /* OS picker — 3 cards, detected one glows */
-  .ospicker {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-top: 22px;
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: clamp(26px, 3.6vw, 34px); margin: 0 0 10px; }
+  section .lede { color: var(--muted); margin: 0 0 28px; max-width: 720px; font-size: 17px; }
+
+  .audience { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .audience { grid-template-columns: 1fr; } }
+  .audience .card { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .audience .card h3 { margin: 0 0 8px; font-size: 17px; }
+  .audience .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .audience .card .icon { width: 36px; height: 36px; border-radius: 8px; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25); display: inline-flex; align-items: center; justify-content: center; color: var(--accent); margin-bottom: 12px; font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .card .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .card h3 { margin: 0; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .card .icon { width: 36px; height: 36px; border-radius: 8px; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25); display: inline-flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; }
+
+  .diagram {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 24px;
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 14px; line-height: 1.6;
+    overflow-x: auto; color: var(--text);
   }
+  .diagram .box { color: var(--accent); font-weight: 700; }
+  .diagram .arrow { color: var(--muted); }
+  .diagram .label { color: var(--accent-2); font-size: 12px; }
+
+  .ospicker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
   @media (max-width: 760px) { .ospicker { grid-template-columns: 1fr; } }
-  .os {
-    position: relative;
-    background: linear-gradient(180deg, var(--panel), var(--bg-2));
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 18px 20px 16px;
-    transition: border-color 0.2s ease, transform 0.15s ease;
-  }
-  .os.detected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 8px 30px rgba(0, 212, 255, 0.18);
-  }
-  .os.detected::after {
-    content: "✓ Detected";
-    position: absolute; top: 12px; right: 12px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
-    text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: #001621;
-  }
+  .os { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 16px; transition: border-color 0.2s ease; }
+  .os.detected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 30px rgba(0,212,255,0.18); }
   .os-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .os-head .osicon {
-    width: 28px; height: 28px;
-    display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 6px;
-    background: rgba(0, 212, 255, 0.08);
-    border: 1px solid rgba(0, 212, 255, 0.2);
-    color: var(--accent);
-  }
-  .os h3 { margin: 0; font-size: 16px; }
-  .os p.tag { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
-  .os ul { margin: 0 0 12px; padding-left: 18px; color: var(--muted); font-size: 13px; }
-  .os ul li { margin: 3px 0; }
-  .os ul li::marker { color: var(--accent); }
-
+  .os-head h3 { margin: 0; font-size: 16px; }
+  .os .tagline { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
   .os .cmdpick {
-    background: var(--code-bg);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12.5px;
-    line-height: 1.5;
-    overflow-x: auto;
-    color: var(--text);
-    margin: 0 0 8px;
-    white-space: pre;
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px;
+    line-height: 1.5; overflow-x: auto; color: var(--text); margin: 0 0 8px; white-space: pre;
   }
   .os .cmdpick .p { color: var(--accent); }
   .os .cmdpick .c { color: var(--muted); }
   .os .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .os .copy {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 10px;
-    font-size: 12px; font-weight: 600;
-    border-radius: 6px;
-    background: var(--bg-2);
-    border: 1px solid var(--line);
-    color: var(--muted);
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-    font-family: inherit;
-  }
+  .os .copy { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--muted); cursor: pointer; transition: color 0.15s, border-color 0.15s; font-family: inherit; }
   .os .copy:hover { color: var(--text); border-color: var(--accent); }
   .os .copy.copied { color: var(--accent-2); border-color: var(--accent-2); }
   .os .size { margin-left: auto; color: var(--muted); font-size: 12px; }
 
-  /* ============================================================
-     "See it in action" — responsive platform preview cards
-     Uses the CSS aspect-ratio technique from the research report
-     (zero JS, zero library, works on every viewport).
-     ============================================================ */
-  .demo-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-  }
-  @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; gap: 14px; } }
-  .demo-card {
-    display: flex; flex-direction: column;
-    background: linear-gradient(180deg, var(--panel), var(--bg-2));
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    overflow: hidden;                  /* clip the inner terminal to the card */
-    transition: border-color 0.2s ease, transform 0.2s ease;
-  }
-  .demo-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-  .demo-card .demo-head {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.25);
-    border-bottom: 1px solid var(--line);
-    font: 600 12px "JetBrains Mono", ui-monospace, monospace;
-    color: var(--muted);
-  }
-  .demo-card .demo-head .dots {
-    display: inline-flex; gap: 5px;
-  }
-  .demo-card .demo-head .dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--line);
-  }
-  .demo-card .demo-head .dot.r { background: #ff5d6c; }
-  .demo-card .demo-head .dot.y { background: #ffb347; }
-  .demo-card .demo-head .dot.g { background: #4ade80; }
-  .demo-card .demo-head .label { margin-left: 6px; }
-  .demo-card .demo-frame {
-    /* The CSS aspect-ratio technique: container has fixed aspect,
-       inner content scales to fill it. Works on every viewport. */
-    aspect-ratio: 16 / 10;
-    padding: 16px 18px;
-    font: 13px/1.55 "JetBrains Mono", ui-monospace, monospace;
-    color: var(--accent-2);
-    background: #050811;
-    overflow: hidden;
-  }
-  .demo-card .demo-frame .prompt { color: var(--accent); }
-  .demo-card .demo-frame .muted { color: var(--muted); }
-  .demo-card .demo-frame .ok    { color: var(--accent-2); }
-  .demo-card .demo-frame .err   { color: var(--hot); }
-  /* iPhone-size: keep readable */
-  @media (max-width: 600px) {
-    .demo-card .demo-frame { font-size: 12px; padding: 12px 14px; }
-  }
-  .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 22px; }
-  .meta b { color: var(--text); }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; counter-reset: step; }
+  @media (max-width: 900px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; position: relative; }
+  .step::before { counter-increment: step; content: counter(step); position: absolute; top: 12px; right: 14px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #001621; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .step h4 { margin: 0 0 6px; font-size: 15px; }
+  .step p { margin: 0; color: var(--muted); font-size: 13px; }
 
-  pre.terminal {
-    margin: 36px 0 0; padding: 16px 18px; border-radius: 12px;
-    background: #050811; border: 1px solid var(--line);
-    overflow-x: auto; font-size: 14px;
+  .verify-box {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
   }
-  pre.terminal .p { color: var(--accent); }
-  pre.terminal .c { color: var(--muted); }
+  @media (max-width: 760px) { .verify-box { grid-template-columns: 1fr; } }
+  .verify-box h4 { margin: 0 0 8px; font-size: 15px; }
+  .verify-box p { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+  .verify-box code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
 
-  section { padding: 56px 0; border-top: 1px solid var(--line); }
-  section h2 { font-size: 28px; margin: 0 0 8px; }
-  section .lede { color: var(--muted); margin: 0 0 28px; max-width: 720px; }
-
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .card {
-    background: linear-gradient(180deg, var(--panel), var(--bg-2));
-    border: 1px solid var(--line);
-    border-radius: 14px; padding: 18px 18px 16px;
-  }
-  .card h3 { margin: 0 0 6px; font-size: 17px; }
-  .card p { margin: 0; color: var(--muted); font-size: 14px; }
-  .card .icon {
-    width: 36px; height: 36px; border-radius: 8px;
-    background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25);
-    display: inline-flex; align-items: center; justify-content: center;
-    color: var(--accent); margin-bottom: 12px; font-weight: 700;
-  }
+  .trouble { display: grid; gap: 12px; }
+  .trouble .row { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .trouble .row h4 { margin: 0 0 6px; font-size: 15px; }
+  .trouble .row p { margin: 0; color: var(--muted); font-size: 14px; }
 
   .roadmap { display: grid; gap: 10px; }
   .rm {
-    display: grid; grid-template-columns: 80px 1fr auto; gap: 14px; align-items: center;
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 12px; padding: 14px 16px;
+    display: grid; grid-template-columns: 90px 1fr auto; gap: 14px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
   }
-  .rm .tag { font-size: 11px; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; text-align: center; }
-  .rm.now .tag  { background: rgba(0,212,255,0.12); color: var(--accent); border: 1px solid rgba(0,212,255,0.35); }
-  .rm.next .tag { background: rgba(255,179,71,0.12); color: var(--warn); border: 1px solid rgba(255,179,71,0.35); }
-  .rm.later .tag{ background: rgba(255,110,156,0.10); color: var(--hot);  border: 1px solid rgba(255,110,156,0.30); }
   .rm .name { font-weight: 600; }
   .rm .desc { color: var(--muted); font-size: 14px; margin-top: 2px; }
   .rm .meta { color: var(--muted); font-size: 12px; }
+  @media (max-width: 720px) { .rm { grid-template-columns: 1fr; gap: 6px; } .rm .tag { justify-self: start; } }
 
-  .arch {
-    background: #050811; border: 1px solid var(--line); border-radius: 14px;
-    padding: 18px; overflow-x: auto;
-    font-size: 13.5px; line-height: 1.55;
-  }
-  .arch .box { color: var(--accent); font-weight: 600; }
+  .docgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .doclink { display: block; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); }
+  .doclink:hover { border-color: var(--accent); text-decoration: none; }
+  .doclink b { display: block; margin-bottom: 2px; }
+  .doclink span { color: var(--muted); font-size: 13px; }
 
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  /* ============================================================
-     RESPONSIVE OVERRIDES — keep every page usable on mobile
-     ============================================================ */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .panel h3 { margin-top: 0; }
+  .panel ul, .panel ol { padding-left: 18px; color: var(--muted); }
+  .panel li { margin: 6px 0; }
 
-  /* The single biggest mobile gotcha: any element inside a flex or
-     grid container defaults to min-width: auto, which means long
-     text or fixed-width children blow out the viewport. Force 0
-     everywhere inside our responsive grids. */
-  .ospicker, .ospicker > *,
-  .cols, .cols > *,
-  .grid, .grid > *,
-  .card, .docgrid, .docgrid > *,
-  .panel, .dl-hero, .dl-hero > * {
-    min-width: 0;
-  }
-  table, thead, tbody, tr, th, td { min-width: 0; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--muted); font-size: 13px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+  footer a { color: var(--muted); margin-left: 12px; }
+  footer a:hover { color: var(--text); }
 
-  /* Tables: make them scrollable on mobile instead of blowing out the layout.
-     The page itself doesn't horizontal-scroll, the table does. */
-  .tablewrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin: 1.4em 0;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-  }
-  .tablewrap > table { margin: 0; border: none; border-radius: 0; }
-  .tablewrap::-webkit-scrollbar { height: 6px; }
-  .tablewrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .warn-box { margin: 16px 0 0; padding: 12px 14px; border-radius: 10px; background: rgba(255,179,71,0.08); border: 1px solid rgba(255,179,71,0.3); color: #ffd9a0; font-size: 14px; }
+  .kbd { background: var(--code-bg); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font-size: 12px; color: var(--accent); }
 
-  /* Long inline code: allow it to wrap, instead of forcing horizontal scroll. */
-  :not(pre) > code {
-    white-space: normal;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-  }
-
-  /* Inline code inside bug dl-grids needs to look the same — same rule. */
-  .dl-grid code, .bug code { word-break: break-all; }
-
-  /* Pre blocks: ensure they scroll within themselves, never push the body.
-     min-width: 0 lets them shrink; overflow-x: auto scrolls the content. */
-  pre {
-    min-width: 0;
-    max-width: 100%;
-    white-space: pre;
-  }
-
-  /* The hero download block: stack on small screens, full width, bigger tap target. */
-  @media (max-width: 900px) {
-    .dl-hero { flex-direction: column; align-items: stretch; }
-    .dl-hero .big, .dl-hero .other, .dl-hero .detected {
-      width: 100%;
-      justify-content: center;
-    }
-    .dl-hero .big { font-size: 16px; padding: 18px 20px; min-height: 56px; }
-    .dl-hero .other { padding: 14px 18px; min-height: 48px; }
-  }
-
-  /* OS picker: stack to 1 column earlier and tighten padding on mobile. */
-  @media (max-width: 900px) {
-    .ospicker { grid-template-columns: 1fr; gap: 12px; }
-    .os { padding: 16px 18px 14px; }
-  }
-  /* The original 760px rule still applies for 760-900px (tablet portrait). */
-
-  /* Feature grid + doc grid + cols: already collapse via their own rules,
-     but on phones the gap can be tighter. */
-  @media (max-width: 600px) {
-    .grid { gap: 12px; }
-    .docgrid { grid-template-columns: 1fr; }
-    .card { padding: 16px 18px 14px; }
-  }
-
-  /* Nav: hide the secondary links on tiny screens, keep brand + the most
-     important CTA. The full nav scrolls horizontally already. */
-  @media (max-width: 480px) {
-    .nav .wrap { padding: 8px 14px; }
-    .nav .brand { font-size: 14px; }
-    .nav .links { width: 100%; overflow-x: auto; }
-    .nav .links a { padding: 9px 10px; font-size: 13px; min-height: 32px; }
-  }
-
-  /* Code blocks in OS cards: slightly larger font on mobile for thumb-readability. */
-  @media (max-width: 600px) {
-    .os .cmdpick { font-size: 13px; padding: 12px 14px; }
-  }
-
-  /* Tables in bug cards + dl-grids: same tablewrap treatment via JS-less trick.
-     We add a CSS-only horizontal scroll by allowing table to overflow its card. */
-  .bug, .release, .panel { overflow-x: auto; }
-
-  /* docnav: stack vertically on phones so prev/next cards take full width. */
-  @media (max-width: 600px) {
-    .docnav { flex-direction: column; }
-    .docnav a { max-width: 100%; }
-    .docnav a.next { text-align: left; margin-left: 0; }
-  }
-
-  /* Roadmap items: keep the 3-col grid but stack on very small screens. */
-  @media (max-width: 600px) {
-    .rm { grid-template-columns: 1fr; gap: 6px; }
-    .rm .tag { justify-self: start; }
-  }
-
-  /* Pre-existing breakpoint for cols (kept for compatibility). */
-  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
-
-  /* ============================================================
-     Scroll-reveal animations — fade + slide on enter viewport
-     Vanilla IntersectionObserver, respects prefers-reduced-motion.
-     ============================================================ */
   .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.7s cubic-bezier(.2,.7,.2,1), transform 0.7s cubic-bezier(.2,.7,.2,1); }
   .reveal.in { opacity: 1; transform: translateY(0); }
-  /* Stagger children */
   .reveal-stagger > * { opacity: 0; transform: translateY(12px); transition: opacity 0.6s cubic-bezier(.2,.7,.2,1), transform 0.6s cubic-bezier(.2,.7,.2,1); }
   .reveal-stagger.in > * { opacity: 1; transform: translateY(0); }
   .reveal-stagger.in > *:nth-child(1) { transition-delay: 0.05s; }
@@ -507,56 +219,20 @@
   .reveal-stagger.in > *:nth-child(4) { transition-delay: 0.20s; }
   .reveal-stagger.in > *:nth-child(5) { transition-delay: 0.25s; }
   .reveal-stagger.in > *:nth-child(6) { transition-delay: 0.30s; }
-  .reveal-stagger.in > *:nth-child(7) { transition-delay: 0.35s; }
-  .reveal-stagger.in > *:nth-child(8) { transition-delay: 0.40s; }
-  .reveal-stagger.in > *:nth-child(9) { transition-delay: 0.45s; }
-  .reveal-stagger.in > *:nth-child(10) { transition-delay: 0.50s; }
-  .reveal-stagger.in > *:nth-child(11) { transition-delay: 0.55s; }
-  .reveal-stagger.in > *:nth-child(12) { transition-delay: 0.60s; }
-  /* Variant: slide in from side */
-  .reveal-left { opacity: 0; transform: translateX(-18px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.7,.2,1); }
-  .reveal-left.in { opacity: 1; transform: translateX(0); }
-  .reveal-right { opacity: 0; transform: translateX(18px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.7,.2,1); }
-  .reveal-right.in { opacity: 1; transform: translateX(0); }
-  /* Disable entirely if user prefers reduced motion */
   @media (prefers-reduced-motion: reduce) {
-    .reveal, .reveal-stagger > *, .reveal-left, .reveal-right {
-      opacity: 1 !important;
-      transform: none !important;
-      transition: none !important;
-    }
-    .brand-link:hover .brand-mark { transform: none; }
-    .btn:hover { transform: none; }
-    .btn .arrow, .btn:hover .arrow { transform: none; }
+    .reveal, .reveal-stagger > * { opacity: 1 !important; transform: none !important; transition: none !important; }
   }
-  .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
-  }
-  .panel h3 { margin-top: 0; }
-  .panel ul { padding-left: 18px; color: var(--muted); }
-  .panel ul li { margin: 6px 0; }
 
-  .docgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-  .doclink {
-    display: block; padding: 14px 16px; border-radius: 12px;
-    border: 1px solid var(--line); background: var(--bg-2);
-    color: var(--text);
+  /* Mobile nav */
+  @media (max-width: 480px) {
+    .nav .wrap { padding: 8px 14px; }
+    .nav .brand { font-size: 14px; }
+    .nav .links { width: 100%; overflow-x: auto; }
+    .nav .links a { padding: 9px 10px; font-size: 13px; min-height: 32px; white-space: nowrap; }
   }
-  .doclink:hover { border-color: var(--accent); text-decoration: none; }
-  .doclink b { display: block; margin-bottom: 2px; }
-  .doclink span { color: var(--muted); font-size: 13px; }
-
-  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--muted); font-size: 13px; }
-  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
-  footer a { color: var(--muted); margin-left: 12px; }
-  footer a:hover { color: var(--text); }
-
-  .kbd { background: #050811; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font-size: 12px; color: var(--accent); }
-  .warn-box {
-    margin: 16px 0 0; padding: 12px 14px; border-radius: 10px;
-    background: rgba(255,179,71,0.08); border: 1px solid rgba(255,179,71,0.3);
-    color: #ffd9a0; font-size: 14px;
-  }
+  table, thead, tbody, tr, th, td { min-width: 0; }
+  .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1.4em 0; border-radius: 10px; border: 1px solid var(--line); }
+  .tablewrap > table { margin: 0; border: none; border-radius: 0; }
 </style>
 </head>
 <body>
@@ -565,16 +241,16 @@
   <div class="wrap">
     <div class="brand">
       <a href="index.html" class="brand-link" aria-label="Hermes Live home">
-        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
       </a>
     </div>
     <div class="links">
-      <a href="#features">Features</a>
-      <a href="#roadmap">Roadmap</a>
+      <a href="#what">What</a>
+      <a href="#works">Works today</a>
       <a href="#install">Install</a>
-      <a href="architecture.html">Docs</a>
-      <a href="#contact">Contact</a>
+      <a href="#verify">Verify</a>
+      <a href="#docs">Docs</a>
       <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
     </div>
   </div>
@@ -582,197 +258,121 @@
 
 <section class="hero">
   <div class="wrap">
-    <span class="pill">NEW — first public release · v0.3.0 · 2026-06-07</span>
-    <h1>Drop a real-time <span class="grad">multimodal AI</span> into any Discord voice channel.</h1>
+    <span class="pill">v2 second-release · honest status tags · SORA helpers imported</span>
+    <h1>Talk to <span class="grad">Gemini Live</span> in your Discord voice channel.</h1>
     <p class="sub reveal">
-      Full-duplex audio, vision, function calling, idle hangup, post-call transcripts.
-      Built on Google Gemini Multimodal Live, packaged as a self-hostable plugin for Hermes Agent.
-      Open source, MIT, and actively under development.
+      A self-hosted plugin that drops a real-time, multimodal AI assistant into Discord.
+      It hears you, speaks back, sees images you share, and can use tools like Spotify, email, or Home Assistant — all while you stay in voice.
+      Open source (MIT). Features are tagged <span class="mono">WORKING</span>, <span class="mono">PARTIAL</span>, <span class="mono">PLANNED</span>, or <span class="mono">RESEARCH</span> so you know what is real today.
     </p>
 
-    <div class="dl-hero reveal-left" data-os-block>
-      <a class="big" data-dl-primary href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip">
-        <span class="icon" data-os-icon></span>
-        <span data-dl-label>Download for Linux</span>
-      </a>
-      <span class="detected" data-detected-pill>
-        <span class="dot"></span>
-        <span data-detected-text>Detecting your OS…</span>
-      </span>
-      <a class="other" data-dl-other="macos" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip" title="Download for macOS">macOS</a>
-      <a class="other" data-dl-other="windows" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/archive/refs/heads/main.zip" title="Download for Windows">Windows</a>
-    </div>
-
-    <p style="margin-top: 14px; color: var(--muted); font-size: 13px;">
-      Or pick your platform below to get the exact install command. <strong style="color:var(--text)">Auto-detected</strong> via your browser — no tracking, no fingerprinting, just <code style="background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12px;">navigator.userAgent</code>.
-    </p>
-
-    <div class="ospicker reveal-stagger" data-os-picker>
-
-      <div class="os" data-os="linux">
-        <div class="os-head">
-          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-2 0-3 1.5-3 3.5 0 1 .5 1.8 1 2.5C9 9 8 10 8 12c0 1 .5 2 1 2.5C7.5 15 6 16.5 6 19c0 1.5 1 3 3 3 1 0 2-.5 3-.5s2 .5 3 .5c2 0 3-1.5 3-3 0-2.5-1.5-4-3-4.5.5-.5 1-1.5 1-2.5 0-2-1-3-2-4 .5-.7 1-1.5 1-2.5C15 3.5 14 2 12 2z"/></svg></span>
-          <h3>Linux</h3>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <div class="cta-row reveal">
+          <a class="btn btn-primary" href="#install">Install in 3 minutes <span class="arrow down">→</span></a>
+          <a class="btn btn-ghost" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub <span class="arrow">→</span></a>
         </div>
-        <p class="tag">Tested on Ubuntu 22.04+, Debian 12, Fedora 39+. Any distro with Python 3.10+ and <code>git</code>.</p>
-        <ul>
-          <li>Uses <code>git</code> + <code>python3</code> — already on most distros</li>
-          <li>Auto-installs <code>discord.py</code>, <code>numpy</code>, <code>rich</code> into the Hermes venv</li>
-          <li>Runs as a systemd user service</li>
-        </ul>
-<pre class="cmdpick mono" data-cmd-linux><span class="c"># one-line install</span>
-<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-<span class="p">$</span> cd hermes-live-discord-agent-plugin
-<span class="p">$</span> python3 installer/install.py</pre>
-        <div class="row">
-          <button type="button" class="copy" data-copy="linux">📋 Copy</button>
-          <span class="size">~ 0.5 MB · MIT</span>
+        <div class="meta" style="margin-top:22px; display:flex; gap:18px; flex-wrap:wrap; color:var(--muted); font-size:13px;">
+          <div><b>Status</b> · <span style="color:var(--green)">early but running</span></div>
+          <div><b>Cost</b> · usage-based estimate, see below</div>
+          <div><b>Stack</b> · Python · Hermes Agent · Gemini Live</div>
         </div>
       </div>
 
-      <div class="os" data-os="macos">
-        <div class="os-head">
-          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg></span>
-          <h3>macOS</h3>
-        </div>
-        <p class="tag">Tested on macOS 13+ (Ventura) on Apple Silicon and Intel. Requires Homebrew for <code>python3</code>.</p>
-        <ul>
-          <li>Same <code>git</code> + <code>python3</code> flow as Linux</li>
-          <li>Hermes venv lives at <code>~/.hermes/hermes-agent/venv/</code> as usual</li>
-          <li>Apple Silicon works out of the box (PyPI wheels available)</li>
-        </ul>
-<pre class="cmdpick mono" data-cmd-macos><span class="c"># one-line install (Homebrew already installed)</span>
+      <div class="hero-card reveal" id="try-it">
+        <h3>Try it</h3>
+        <pre class="mono"><span class="c"># 1. Clone</span>
 <span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 <span class="p">$</span> cd hermes-live-discord-agent-plugin
-<span class="p">$</span> python3 installer/install.py</pre>
-        <div class="row">
-          <button type="button" class="copy" data-copy="macos">📋 Copy</button>
-          <span class="size">~ 0.5 MB · MIT</span>
-        </div>
-      </div>
 
-      <div class="os" data-os="windows">
-        <div class="os-head">
-          <span class="osicon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.4 10.5 4.5v7.4H3V5.4zM11.5 4.3 21 3v9h-9.5V4.3zM3 12.6h7.5V20L3 19.1v-6.5zM11.5 12.6H21V21l-9.5-1.3v-7.1z"/></svg></span>
-          <h3>Windows</h3>
-        </div>
-        <p class="tag">Tested on Windows 11 + PowerShell 7. WSL2 also works — the Linux instructions apply.</p>
-        <ul>
-          <li>Needs Python 3.10+ from <a href="https://python.org/downloads" target="_blank" rel="noopener">python.org</a> (tick "Add to PATH")</li>
-          <li>Needs Git from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a></li>
-          <li>PowerShell-friendly — paste the block below as one unit</li>
-        </ul>
-<pre class="cmdpick mono" data-cmd-windows><span class="c"># PowerShell — run as your normal user (no admin needed)</span>
-<span class="p">PS&gt;</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-<span class="p">PS&gt;</span> cd hermes-live-discord-agent-plugin
-<span class="p">PS&gt;</span> py installer\install.py</pre>
-        <div class="row">
-          <button type="button" class="copy" data-copy="windows">📋 Copy</button>
-          <span class="size">~ 0.5 MB · MIT</span>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="cta-row" style="margin-top: 28px;">
-      <a class="btn btn-primary" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">★ Star on GitHub <span class="arrow">→</span></a>
-      <a class="btn btn-ghost" href="#roadmap">🛣️ See the roadmap <span class="arrow down">→</span></a>
-    </div>
-
-    <div class="meta">
-      <div><b>License</b> · MIT</div>
-      <div><b>Status</b> · <span style="color:var(--accent-2)">early but running</span></div>
-      <div><b>Cost</b> · ~$0.03–0.06 / hour of voice</div>
-      <div><b>Stack</b> · Python 3.10+ · discord.py · Gemini Live WSS</div>
-    </div>
-
-<pre class="terminal mono"><span class="c"># install in 3 minutes</span>
-<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
-<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="c"># 2. Install (interactive, validates your tokens live)</span>
 <span class="p">$</span> python3 installer/install.py
-<span class="c">#   → walks you through Discord token + Gemini key with live validation</span>
-<span class="c">#   → deploys the plugin into ~/.hermes/plugins/ and writes .env (chmod 600)</span>
 
-<span class="c"># in Discord, join a voice channel and run</span>
-/voice-live
-<span class="c">#   → the bot joins you, listens, talks back. done.</span></pre>
+<span class="c"># 3. In Discord, join a voice channel and run</span>
+<span class="p">$</span> /voice-live</pre>
+        <div class="copybar">
+          <button type="button" class="copy" data-copy="hero">📋 Copy install</button>
+          <span class="note">~0.5 MB · MIT · Linux / macOS / Windows</span>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
+
+<section id="what">
+  <div class="wrap">
+    <h2 class="reveal">What this is</h2>
+    <p class="lede reveal">
+      Hermes Live is a bridge: it connects a Discord voice channel to Google's Gemini Multimodal Live API.
+      You talk in Discord, Gemini hears you and replies through the same bot, and you can ask it to do things like play a song, check your email, or turn off the lights.
+    </p>
+
+    <div class="audience reveal-stagger">
+      <div class="card"><div class="icon">🎙️</div><h3>Discord communities</h3><p>Add a hands-free AI co-host to a server. Great for study groups, gaming lobbies, or any channel where people already hang out in voice.</p></div>
+      <div class="card"><div class="icon">🧑‍💻</div><h3>Developers & operators</h3><p>Self-host the bridge inside your existing Hermes Agent gateway. Extend it with your own tools, webhooks, and per-user profiles.</p></div>
+      <div class="card"><div class="icon">🔬</div><h3>AI experimenters</h3><p>Test real-time multimodal voice + vision in a familiar chat app, with transcripts and a local diagnostics helper.</p></div>
+    </div>
+  </div>
 </section>
 
-<section id="features">
+<section id="works">
   <div class="wrap">
-    <h2 class="reveal">See it in action</h2>
-    <p class="lede reveal">The one-line install works the same on every platform. The terminal snapshots below are <span class="kbd">16:10</span> aspect-ratio previews — they scale fluidly to your viewport, no iframe, no JS, no library. Based on the technique from <a href="research.html">the research note</a>.</p>
-
-    <div class="demo-grid reveal-stagger">
-
-      <div class="demo-card">
-        <div class="demo-head">
-          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
-          <span class="label">Linux · bash</span>
-        </div>
-<pre class="demo-frame mono"><span class="prompt">$</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
-<span class="prompt">$</span> cd hermes-live-discord-agent-plugin
-<span class="prompt">$</span> python3 installer/install.py
-<span class="muted">  ↳ preflight: python3.11, git, rich</span>
-<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
-<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
-<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
-<span class="ok">  ✓ Gemini API OK — 50 models</span>
-<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
-<span class="ok">  ✓ done. /voice-live to start.</span></pre>
-      </div>
-
-      <div class="demo-card">
-        <div class="demo-head">
-          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
-          <span class="label">macOS · zsh</span>
-        </div>
-<pre class="demo-frame mono"><span class="prompt">%</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
-<span class="prompt">%</span> cd hermes-live-discord-agent-plugin
-<span class="prompt">%</span> python3 installer/install.py
-<span class="muted">  ↳ preflight: python3.11, git, rich</span>
-<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
-<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
-<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
-<span class="ok">  ✓ Gemini API OK — 50 models</span>
-<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
-<span class="ok">  ✓ done. /voice-live to start.</span></pre>
-      </div>
-
-      <div class="demo-card">
-        <div class="demo-head">
-          <span class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
-          <span class="label">Windows · PowerShell</span>
-        </div>
-<pre class="demo-frame mono"><span class="prompt">PS&gt;</span> git clone https://github.com/Capslockb/<br>    hermes-live-discord-agent-plugin.git
-<span class="prompt">PS&gt;</span> cd hermes-live-discord-agent-plugin
-<span class="prompt">PS&gt;</span> py installer\install.py
-<span class="muted">  ↳ preflight: python3.11, git, rich</span>
-<span class="muted">  ↳ collecting: DISCORD_BOT_TOKEN</span>
-<span class="muted">  ↳ collecting: GEMINI_API_KEY</span>
-<span class="ok">  ✓ Discord @me OK — HermesLive (1474…)</span>
-<span class="ok">  ✓ Gemini API OK — 50 models</span>
-<span class="muted">  ↳ installing to ~/.hermes/plugins/</span>
-<span class="ok">  ✓ done. /voice-live to start.</span></pre>
-      </div>
-
-    </div>
-
-    <h2 class="reveal">What's in the box</h2>
-    <p class="lede reveal">Everything you need to put a real-time multimodal agent in a Discord voice channel. No external services to babysit.</p>
+    <h2 class="reveal">What works today</h2>
+    <p class="lede reveal">
+      Every feature below is tagged honestly. <span class="tag working">Working</span> means shipped and exercised.
+      <span class="tag partial">Partial</span> works but has known gaps or needs extra setup.
+      <span class="tag planned">Planned</span> and <span class="tag research">Research</span> are not ready yet.
+    </p>
 
     <div class="grid reveal-stagger">
-      <div class="card"><div class="icon">🎙️</div><h3>Full-duplex voice</h3><p>Discord UDP → NaCl → Opus → 16 kHz mono → Gemini WSS. Real two-way conversation with sub-second latency.</p></div>
-      <div class="card"><div class="icon">👁️</div><h3>Vision + frame feed</h3><p>Send images or stream a 1 fps feed — the model sees what you see. Audio-gated, 512 KB cap, &lt;$0.05/hr on Flex.</p></div>
-      <div class="card"><div class="icon">🛠️</div><h3>Function calling</h3><p>Synchronous tool dispatch from inside the live session. Wire any Hermes tool — calendar, mail, home assistant, your own.</p></div>
-      <div class="card"><div class="icon">😴</div><h3>Idle hangup</h3><p>Two-phase: prompt the user after N seconds of silence, then auto-leave. No more silent ghost calls.</p></div>
-      <div class="card"><div class="icon">📝</div><h3>JSONL transcripts</h3><p>Every call writes a word-level transcript with tool calls, turns, and idle events. Post-call summary CLI included.</p></div>
-      <div class="card"><div class="icon">⚡</div><h3>3-minute installer</h3><p>Pure stdlib + rich. Live network validation of your Discord token and Gemini key. Symlink, copy, or local.</p></div>
-      <div class="card"><div class="icon">🩺</div><h3>Health + control API</h3><p>Local HTTP on <span class="mono">127.0.0.1:18943</span> — <span class="mono">/health</span>, <span class="mono">/say?text=…</span>, <span class="mono">/leave</span>. Curl-friendly.</p></div>
-      <div class="card"><div class="icon">🎵</div><h3>Spotify, mail, HA, delegation</h3><p>Bundled integrations: Spotify playback control, email, Home Assistant, OpenCode/Codex/Gemini-CLI delegation. Per-user profiles.</p></div>
-      <div class="card"><div class="icon">🪶</div><h3>Self-hostable</h3><p>No SaaS, no third-party relay. Runs in your existing Hermes gateway's asyncio loop. Tailscale-friendly.</p></div>
+      <div class="card">
+        <div class="top"><h3>Real-time voice</h3><span class="tag working">Working</span></div>
+        <p>Full-duplex audio: you speak in Discord, Gemini replies through the bot with low latency. No push-to-talk.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Vision & screen shares</h3><span class="tag working">Working</span></div>
+        <p>Push an image or a single frame to the model while you are in voice. The bot cannot see Discord's video stream directly; you share frames via a simple command or local helper.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Tool use from voice</h3><span class="tag working">Working</span></div>
+        <p>Gemini can call tools during the call: Spotify, email, GitHub, weather, Home Assistant, web search, and more. Some need you to authenticate first.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Idle hangup</h3><span class="tag working">Working</span></div>
+        <p>If the channel goes quiet, the bot asks if anyone is still there, then leaves gracefully. No ghost calls.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Transcripts & call notes</h3><span class="tag working">Working</span></div>
+        <p>Each call writes a timestamped transcript. A helper script can summarize it afterward. Your data stays local.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Local control API</h3><span class="tag working">Working</span></div>
+        <p>A small local-only HTTP surface lets you check health, push frames, or inject text. Details are in the architecture docs.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Per-user profiles</h3><span class="tag partial">Partial</span></div>
+        <p>Profiles are auto-created per Discord user, with owner detection and onboarding Q&A. Strict tool allowlists are implemented but should be reviewed before exposing the bot to untrusted users.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Multi-CLI delegation</h3><span class="tag partial">Partial</span></div>
+        <p>The framework can suggest and spawn OpenCode or Codex tasks from voice. OpenCode and Codex must be installed separately; some declared platforms are not verified day-to-day.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>SORA bridge helpers</h3><span class="tag working">Working</span></div>
+        <p>Four safe helpers imported from the SORA runtime: preflight diagnostics, Live Grill transcript questions, goal/subgoal synthesis, and secret redaction. They run locally and cannot break voice calls.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Webhook events</h3><span class="tag working">Working</span></div>
+        <p>Optional Discord webhooks for transcripts, tool calls, email reminders, OpenCode status, and bridge status.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Cost controls</h3><span class="tag partial">Partial</span></div>
+        <p>Frame size, frame rate, and audio gating caps are enforced. Dollar-cost figures are rough estimates based on early Flex usage; your mileage will vary.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Vapi, MCP, Dograh</h3><span class="tag planned">Planned</span></div>
+        <p>Vapi bridge federation, an MCP server surface, and the Dograh autonomous agent loop are planned or in research. They are not imported into v2.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -780,199 +380,191 @@
 <section id="architecture">
   <div class="wrap">
     <h2 class="reveal">How it fits together</h2>
-    <p class="lede reveal">The bridge lives in-process inside the Hermes gateway. Audio is decrypted and resampled in a worker thread, and the WSS session with Gemini runs as an async task. No separate services, no queues, no message buses.</p>
-<pre class="arch mono reveal">  <span class="box">Discord voice channel</span>  (UDP, Opus 48 kHz, NaCl-encrypted)
-        │
-        ▼
-  <span class="box">VoiceListener</span>            (rx thread: decode → 16 kHz mono)
-        │
-        ▼
-  <span class="box">GeminiLiveBridge</span>        (async: WSS session, function calls, vision)
-        │
-        ▼
-  <span class="box">Gemini Multimodal Live API</span>  (Google AI Studio)
-        ▲
-        │  base64 PCM 24 kHz mono
-  <span class="box">LiveAudioSource</span>         (queue, played by VoiceClient)
-        ▲
-        │
-  <span class="box">Discord voice channel</span></pre>
-    <p style="color:var(--muted); font-size:14px; margin-top:14px;">
-      Full breakdown in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">docs/ARCHITECTURE.md</a> ·
-      all knobs in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/CONFIGURATION.md" target="_blank" rel="noopener">docs/CONFIGURATION.md</a> ·
-      warts in <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/KNOWN_BUGS.md" target="_blank" rel="noopener">docs/KNOWN_BUGS.md</a>.
+    <p class="lede reveal">
+      Three simple boxes. Discord carries the audio. The bridge converts and routes it. Gemini Live does the thinking and speaking.
+      The deep architecture (code classes, threading, security rules) lives in <a href="architecture.html">Architecture</a>.
+    </p>
+
+    <div class="diagram reveal">
+<span class="box">Discord voice channel</span>
+   <span class="arrow">│</span>  your voice goes up
+   <span class="arrow">▼</span>
+<span class="box">Hermes Live bridge</span>     <span class="label">inside your Hermes Agent gateway</span>
+   <span class="arrow">│</span>  audio is decoded, resampled, and sent to Gemini
+   <span class="arrow">▼</span>
+<span class="box">Gemini Multimodal Live API</span>
+   <span class="arrow">│</span>  Gemini replies as audio + decides which tools to call
+   <span class="arrow">▼</span>
+<span class="box">Your tools & data</span>      <span class="label">Spotify, email, Home Assistant, GitHub, custom tools</span>
+    </div>
+
+    <p style="color:var(--muted); font-size:14px; margin-top:16px;">
+      Everything runs on your own machine or server. No third-party relay. No SaaS account required beyond the APIs you choose to connect.
     </p>
   </div>
 </section>
 
-<section id="roadmap">
+<section id="sora">
   <div class="wrap">
-    <h2 class="reveal">What's coming next</h2>
-    <p class="lede reveal">This is an early public release — the bones are solid, and there's a lot of "extremely awesome" on the way. PRs welcome on any of these.</p>
-
-    <div class="roadmap reveal-stagger">
-
-      <div class="rm now">
-        <span class="tag">SHIPPED</span>
-        <div>
-          <div class="name">v0.3.0 — public release + rebrand</div>
-          <div class="desc">Promo site, public visibility, new name. Full-duplex bridge, idle hangup, JSONL transcripts, health API, multi-CLI delegation, per-user profiles, video awareness, new-user onboarding.</div>
-        </div>
-        <span class="meta">2026-06-07</span>
-      </div>
-
-      <div class="rm next">
-        <span class="tag">NEXT</span>
-        <div>
-          <div class="name">Multi-channel party mode</div>
-          <div class="desc">One bot instance serves several voice channels simultaneously with per-channel context and turn-taking. Currently the bot is one-call-at-a-time per guild.</div>
-        </div>
-        <span class="meta">v0.4</span>
-      </div>
-
-      <div class="rm next">
-        <span class="tag">NEXT</span>
-        <div>
-          <div class="name">Group conversation turn-taking</div>
-          <div class="desc">When multiple humans talk in the same channel, the agent waits for natural pauses and addresses the right person. Voice Activity Detection + diarization lite.</div>
-        </div>
-        <span class="meta">v0.4</span>
-      </div>
-
-      <div class="rm next">
-        <span class="tag">NEXT</span>
-        <div>
-          <div class="name">Per-user voice cloning</div>
-          <div class="desc">Optional ElevenLabs / OpenAI TTS voice override so the agent can sound like a chosen persona. Plug in any HTTP TTS endpoint.</div>
-        </div>
-        <span class="meta">v0.4</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">SOON</span>
-        <div>
-          <div class="name">Persistent conversation memory</div>
-          <div class="desc">Cross-call memory backed by Honcho (or any vector store). The agent remembers previous calls with the same people and can recall context.</div>
-        </div>
-        <span class="meta">v0.5</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">SOON</span>
-        <div>
-          <div class="name">Live web dashboard</div>
-          <div class="desc">A small web UI (Tailscale-friendly) for transcript search, live call metrics, call recording playback, model picker.</div>
-        </div>
-        <span class="meta">v0.5</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">SOON</span>
-        <div>
-          <div class="name">Plugin marketplace one-click install</div>
-          <div class="desc"><span class="mono">hermes plugins install hermes-live</span> from a registry, with dependency resolution. No more cloning + running the installer manually.</div>
-        </div>
-        <span class="meta">v0.5</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">PLANNED</span>
-        <div>
-          <div class="name">Screen-share + multi-frame vision</div>
-          <div class="desc">Stream your screen at 1 fps and have the agent narrate, answer questions about what's on screen, or run UI tasks.</div>
-        </div>
-        <span class="meta">v0.6</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">PLANNED</span>
-        <div>
-          <div class="name">Outbound agent calls</div>
-          <div class="desc">The agent dials into a voice channel unprompted — scheduled standups, "remind the team in 5 minutes", alert broadcasts.</div>
-        </div>
-        <span class="meta">v0.6</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">PLANNED</span>
-        <div>
-          <div class="name">Multi-provider support</div>
-          <div class="desc">Pluggable realtime backends: OpenAI Realtime, Mistral Voxtral, local Whisper + Ollama, anything WSS-shaped. Today: Gemini Live only.</div>
-        </div>
-        <span class="meta">v0.7</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">IDEAS</span>
-        <div>
-          <div class="name">Voice rooms with bot guests</div>
-          <div class="desc">Spawn a temporary voice channel for a focused 1:1 / small-group session. Auto-archive the transcript on room close.</div>
-        </div>
-        <span class="meta">v0.7+</span>
-      </div>
-
-      <div class="rm later">
-        <span class="tag">IDEAS</span>
-        <div>
-          <div class="name">Cross-server federation</div>
-          <div class="desc">The same agent identity across multiple Discord guilds with shared memory (opt-in). Useful for communities and small orgs.</div>
-        </div>
-        <span class="meta">later</span>
-      </div>
-
-    </div>
-
-    <p style="margin-top:18px; color:var(--muted); font-size:14px;">
-      Have an idea? <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/new" target="_blank" rel="noopener">Open an issue</a> or <a href="#contact">drop a note</a>.
+    <h2 class="reveal">What is SORA?</h2>
+    <p class="lede reveal">
+      SORA is a broader agent runtime: video production pipelines, autonomous goal orchestration, multi-bridge federation, and agents like Dograh.
+      This repo is <strong>not</strong> SORA. It is the Gemini Live Discord bridge, and v2 imports only the small, safe SORA pieces that help operators run it.
     </p>
+
+    <div class="grid reveal-stagger">
+      <div class="card">
+        <div class="top"><h3>Imported from SORA</h3><span class="tag working">Working</span></div>
+        <p>Preflight diagnostics, Live Grill transcript analysis, goal/subgoal synthesis, and secret redaction. Local-only, no public ports.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Not imported</h3><span class="tag planned">Planned / Research</span></div>
+        <p>Vapi federation, MCP server, Dograh agent, and SORA's video production pipeline. Those stay in the SORA project until they are stable enough to bring over.</p>
+      </div>
+      <div class="card">
+        <div class="top"><h3>Where to read more</h3><span class="tag working">Docs</span></div>
+        <p>See <a href="sora-migration.html">SORA migration</a> for the full boundary, and the <a href="validation-matrix.html">validation matrix</a> for a component-by-component status table.</p>
+      </div>
+    </div>
   </div>
 </section>
 
 <section id="install">
   <div class="wrap">
     <h2 class="reveal">Install it</h2>
-    <p class="lede reveal">Three minutes from <span class="kbd">git clone</span> to a working voice agent.</p>
+    <p class="lede reveal">Three minutes from clone to a talking bot. Pick your platform below.</p>
 
-    <div class="cols reveal-stagger">
-      <div class="panel">
-        <h3>Prereqs</h3>
-        <ul>
-          <li>Python 3.10+</li>
-          <li>A Discord bot token (free) — <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">create one</a></li>
-          <li>A Google Gemini API key (free tier is plenty) — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one</a></li>
-          <li>Bot needs intents: <span class="mono">Server Members</span>, <span class="mono">Message Content</span>, <span class="mono">Voice States</span></li>
-          <li>Invite URL needs scope <span class="mono">bot</span> + perms <span class="mono">connect</span>, <span class="mono">speak</span>, <span class="mono">use_voice_activity</span></li>
-          <li>(Recommended) Hermes Agent: <span class="mono">pip install hermes-agent</span></li>
-        </ul>
+    <div class="ospicker reveal-stagger" data-os-picker>
+      <div class="os" data-os="linux">
+        <div class="os-head"><h3>Linux</h3></div>
+        <p class="tagline">Any distro with Python 3.10+ and git.</p>
+<pre class="cmdpick mono"><span class="c"># one-line install</span>
+<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="p">$</span> python3 installer/install.py</pre>
+        <div class="row"><button type="button" class="copy" data-copy="linux">📋 Copy</button><span class="size">~ 0.5 MB · MIT</span></div>
       </div>
-      <div class="panel">
-        <h3>Steps</h3>
-<ol style="padding-left:18px; color:var(--muted);">
-  <li><span class="mono">git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git</span></li>
-  <li><span class="mono">cd hermes-live-discord-agent-plugin</span></li>
-  <li><span class="mono">python3 installer/install.py</span></li>
-  <li>Pick install mode (copy / symlink / local)</li>
-  <li>Drop your tokens — the installer pings Discord + Gemini to validate them in real time</li>
-  <li>Restart the Hermes gateway (or pick "autostart" so it joins a voice channel on boot)</li>
-  <li>In Discord: join a voice channel → <span class="mono">/voice-live</span></li>
-</ol>
-        <div class="warn-box">⚠️ Heads up: on first join, Discord's CDN rejects the first ~5 voice handshakes (code 4006). It self-heals in ~27s. Don't restart the gateway — wait it out.</div>
+      <div class="os" data-os="macos">
+        <div class="os-head"><h3>macOS</h3></div>
+        <p class="tagline">macOS 13+ with Homebrew for python3.</p>
+<pre class="cmdpick mono"><span class="c"># one-line install</span>
+<span class="p">$</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">$</span> cd hermes-live-discord-agent-plugin
+<span class="p">$</span> python3 installer/install.py</pre>
+        <div class="row"><button type="button" class="copy" data-copy="macos">📋 Copy</button><span class="size">~ 0.5 MB · MIT</span></div>
       </div>
+      <div class="os" data-os="windows">
+        <div class="os-head"><h3>Windows</h3></div>
+        <p class="tagline">Windows 11 + PowerShell 7. WSL2 also works.</p>
+<pre class="cmdpick mono"><span class="c"># PowerShell — no admin needed</span>
+<span class="p">PS&gt;</span> git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+<span class="p">PS&gt;</span> cd hermes-live-discord-agent-plugin
+<span class="p">PS&gt;</span> py installer\install.py</pre>
+        <div class="row"><button type="button" class="copy" data-copy="windows">📋 Copy</button><span class="size">~ 0.5 MB · MIT</span></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:28px;">
+      <h3>What you need before running the installer</h3>
+      <ul>
+        <li>Python 3.10+</li>
+        <li>A Discord bot token — <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">create a free bot</a></li>
+        <li>A Google Gemini API key — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one free</a></li>
+        <li>Your bot invited with <span class="mono">connect</span>, <span class="mono">speak</span>, and <span class="mono">use voice activity</span> permissions</li>
+        <li>(Recommended) Hermes Agent installed</li>
+      </ul>
+      <p style="color:var(--muted); font-size:14px; margin-bottom:0;">The installer checks both tokens live, deploys the plugin into your Hermes plugins directory, and writes your settings to a private <span class="mono">.env</span> file.</p>
+    </div>
+  </div>
+</section>
+
+<section id="first-run">
+  <div class="wrap">
+    <h2 class="reveal">First run</h2>
+    <p class="lede reveal">Once the installer finishes, restart the Hermes gateway and start a call from Discord.</p>
+
+    <div class="steps reveal-stagger">
+      <div class="step"><h4>Restart the gateway</h4><p>So the new plugin is loaded. The installer can do this automatically if you choose autostart.</p></div>
+      <div class="step"><h4>Join a voice channel</h4><p>In Discord, enter any voice channel the bot has permission to join.</p></div>
+      <div class="step"><h4>Run <span class="mono">/voice-live</span></h4><p>The slash command tells the bot to join you and start the bridge. Wait a moment on first connect.</p></div>
+      <div class="step"><h4>Talk normally</h4><p>Ask a question, share a frame, or request a tool. The bot replies in voice.</p></div>
+    </div>
+
+    <div class="warn-box" style="margin-top:20px;">
+      ⚠️ <strong>First connect can take ~30 seconds.</strong> Discord's voice CDN sometimes rejects the first few handshake attempts before accepting. Do not keep restarting the gateway — that resets the retry clock. Just wait.
+    </div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2 class="reveal">Verify it is healthy</h2>
+    <p class="lede reveal">Two quick checks after the gateway is running.</p>
+
+    <div class="verify-box reveal">
+      <div>
+        <h4>1. Sidecar health</h4>
+        <p>The bridge exposes a local-only status endpoint you can curl from the same machine.</p>
+        <code>curl -s http://127.0.0.1:18943/health</code>
+        <p style="margin-top:8px; font-size:13px;">Look for <span class="mono">voice_connected: true</span> and <span class="mono">running: true</span>.</p>
+      </div>
+      <div>
+        <h4>2. SORA preflight</h4>
+        <p>Run the local diagnostics helper to confirm env, model, and sidecar wiring.</p>
+        <code>python3 installer/enable_sora_bridge_elements.py</code>
+        <p style="margin-top:8px; font-size:13px;">Or ask Hermes to call <span class="mono">sora_bridge_preflight</span>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="troubleshoot">
+  <div class="wrap">
+    <h2 class="reveal">Troubleshooting</h2>
+    <p class="lede reveal">Common first-run issues and what to do.</p>
+
+    <div class="trouble reveal-stagger">
+      <div class="row"><h4>Bot takes a long time to join voice</h4><p>Normal on first connect. Discord's voice network can reject the first handful of handshakes. Wait 20–40 seconds. Do not restart repeatedly.</p></div>
+      <div class="row"><h4>Bot joins but I do not hear anything</h4><p>Check the gateway logs and sidecar health. Make sure your Gemini API key is valid and the chosen model supports native audio. Try the fallback models listed in the config docs.</p></div>
+      <div class="row"><h4>Tool returns an auth error</h4><p>That tool needs external authentication (Spotify, Gmail, Home Assistant, GitHub). Either configure it or stick to tools that do not need auth, like weather or web search.</p></div>
+      <div class="row"><h4>Sidecar health check fails</h4><p>The bridge may not have started, or the gateway is not running. Check the gateway status and recent logs, then re-run <span class="mono">/voice-live</span>.</p></div>
+      <div class="row"><h4>SORA tools are missing</h4><p>Run the wiring checker and restart the gateway: <span class="mono">python3 installer/enable_sora_bridge_elements.py</span>.</p></div>
+    </div>
+
+    <p style="margin-top:18px; color:var(--muted); font-size:14px;">Full edge-case list in <a href="known-bugs.html">Known bugs & quirks</a>.</p>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <h2 class="reveal">What's coming next</h2>
+    <p class="lede reveal">This release is solid for single-channel voice calls. The next milestones move outward: more bridges, more agents, and a control surface other tools can talk to.</p>
+
+    <div class="roadmap reveal-stagger">
+      <div class="rm"><span class="tag working">Shipped</span><div><div class="name">v2 — honest docs + SORA helpers</div><div class="desc">Imported preflight, Live Grill, goal/subgoal synthesis, and redaction. Tagged every feature clearly.</div></div><span class="meta">now</span></div>
+      <div class="rm"><span class="tag planned">Planned</span><div><div class="name">Vapi bridge federation</div><div class="desc">Bring the separate Vapi Discord bridge into the same plugin so outbound calls can share the same surface.</div></div><span class="meta">next</span></div>
+      <div class="rm"><span class="tag research">Research</span><div><div class="name">MCP server surface</div><div class="desc">Let other agents query bridge health and transcripts via the Model Context Protocol.</div></div><span class="meta">next</span></div>
+      <div class="rm"><span class="tag planned">Planned</span><div><div class="name">Multi-channel party mode</div><div class="desc">One bot serving several voice channels at once with per-channel context.</div></div><span class="meta">later</span></div>
+      <div class="rm"><span class="tag planned">Planned</span><div><div class="name">Persistent cross-call memory</div><div class="desc">Remember context across calls using Honcho or another memory store.</div></div><span class="meta">later</span></div>
+      <div class="rm"><span class="tag research">Research</span><div><div class="name">Dograh autonomous agent</div><div class="desc">A long-running agent that can start calls, follow goals, and coordinate with other agents.</div></div><span class="meta">later</span></div>
     </div>
   </div>
 </section>
 
 <section id="docs">
   <div class="wrap">
-    <h2 class="reveal">Documentation</h2>
-    <p class="lede reveal">Rich docs in the repo — every knob, every edge case.</p>
+    <h2 class="reveal">Developer docs</h2>
+    <p class="lede reveal">Everything deeper: architecture, every knob, the validation matrix, and migration notes.</p>
+
     <div class="docgrid reveal-stagger">
-      <a class="doclink" href="architecture.html"><b>Architecture</b><span>Audio pipeline, threading, lifecycle, idempotency, function calling, cost control, failure modes</span></a>
-      <a class="doclink" href="configuration.html"><b>Configuration</b><span>Every env var, defaults, ranges, and tuning tips</span></a>
-      <a class="doclink" href="known-bugs.html"><b>Known bugs &amp; quirks</b><span>Discord CDN 4006, stale rejoin, playback semantics, compatibility caveats</span></a>
+      <a class="doclink" href="architecture.html"><b>Architecture</b><span>Audio pipeline, threading, security, lifecycle, failure modes</span></a>
+      <a class="doclink" href="configuration.html"><b>Configuration</b><span>Every env var, defaults, ranges, tuning tips</span></a>
+      <a class="doclink" href="known-bugs.html"><b>Known bugs & quirks</b><span>Voice CDN behavior, stale rejoin, playback semantics</span></a>
+      <a class="doclink" href="sora-migration.html"><b>SORA migration</b><span>What is imported, what is planned, where SORA lives</span></a>
+      <a class="doclink" href="validation-matrix.html"><b>Validation matrix</b><span>Component-by-component WORKING / PARTIAL / PLANNED / RESEARCH</span></a>
       <a class="doclink" href="changelog.html"><b>Changelog</b><span>Version-by-version features, fixes, and config additions</span></a>
-      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/README.md" target="_blank" rel="noopener"><b>README</b><span>On GitHub — quick start, usage, troubleshooting</span></a>
-      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/docs/CONFIGURATION.md" target="_blank" rel="noopener"><b>Markdown source</b><span>Raw .md files in the repo, if you prefer reading offline</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/blob/main/README.md" target="_blank" rel="noopener"><b>README on GitHub</b><span>Quick reference and troubleshooting</span></a>
+      <a class="doclink" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/tree/main/docs" target="_blank" rel="noopener"><b>Markdown source</b><span>Raw docs in the repo</span></a>
     </div>
   </div>
 </section>
@@ -980,29 +572,11 @@
 <section id="contact">
   <div class="wrap">
     <h2 class="reveal">Open for collaboration</h2>
-    <p class="lede reveal">
-      This is brand new, actively developed, and shaped by what its early users want it to be.
-      If you'd like to build with it, report a bug, or pitch a feature — pick a door.
-    </p>
-    <div class="cols reveal-stagger">
-      <div class="panel">
-        <h3>🐙 GitHub</h3>
-        <p style="color:var(--muted); margin-top:0;">Issues, PRs, and discussions all live on GitHub. The cleanest place to start.</p>
-        <p>
-          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">Repository →</a>
-          &nbsp;
-          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/new" target="_blank" rel="noopener">New issue →</a>
-        </p>
-      </div>
-      <div class="panel">
-        <h3>✉️ Direct</h3>
-        <p style="color:var(--muted); margin-top:0;">For collab, press, or "I built something cool with it" — open a GitHub Discussion or open an issue tagged <span class="mono">showcase</span> and I'll see it.</p>
-        <p>
-          <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/discussions" target="_blank" rel="noopener">Discussions →</a>
-          &nbsp;
-          <a class="btn" href="https://github.com/Capslockb" target="_blank" rel="noopener">@Capslockb →</a>
-        </p>
-      </div>
+    <p class="lede reveal">Found a bug, built something cool, or want to help shape the roadmap? The project lives on GitHub.</p>
+    <div class="cta-row reveal">
+      <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">Repository →</a>
+      <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/new" target="_blank" rel="noopener">New issue →</a>
+      <a class="btn" href="https://github.com/Capslockb/hermes-live-discord-agent-plugin/discussions" target="_blank" rel="noopener">Discussions →</a>
     </div>
   </div>
 </section>
@@ -1020,166 +594,80 @@
 </footer>
 
 <script>
-  // ============================================================
-  // OS auto-detection + dynamic download button
-  // Pure client-side. Reads navigator.userAgent + navigator.platform
-  // (no fingerprinting, no network calls). Falls back gracefully.
-  // ============================================================
+  // OS detection + dynamic cards
   (function () {
-    var OS_LABELS = {
-      linux:   { label: 'Download for Linux',  short: 'Linux',   ua: ['Linux', 'X11', 'Ubuntu', 'Debian', 'Fedora', 'Arch', 'Manjaro'] },
-      macos:   { label: 'Download for macOS',  short: 'macOS',   ua: ['Mac OS', 'Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'] },
-      windows: { label: 'Download for Windows', short: 'Windows', ua: ['Windows NT', 'Win64', 'Win32', 'WOW64'] }
-    };
-
+    var OS_LABELS = { linux: 'Linux', macos: 'macOS', windows: 'Windows' };
     function detectOS() {
       var ua = (navigator.userAgent || '').toLowerCase();
       var platform = (navigator.platform || '').toLowerCase();
-      // navigator.userAgentData is the modern API (Chromium). Fall back to UA.
       var uaData = navigator.userAgentData;
       if (uaData && uaData.platform) {
         var p = uaData.platform.toLowerCase();
         if (p.indexOf('mac') === 0) return 'macos';
         if (p.indexOf('win') === 0) return 'windows';
-        if (p.indexOf('linux') === 0 || p.indexOf('chrome') === 0) return 'linux';
+        if (p.indexOf('linux') === 0) return 'linux';
       }
-      // Primary detection: substring match in UA
       if (/windows nt/.test(ua) || /win64/.test(ua) || /wow64/.test(ua)) return 'windows';
       if (/mac os x/.test(ua) || /macintosh/.test(ua) || /macintel/.test(ua)) return 'macos';
-      if (/linux|x11|ubuntu|debian|fedora|arch|manjaro/.test(ua)) return 'linux';
-      // Tertiary: platform string
+      if (/linux/.test(ua)) return 'linux';
       if (platform.indexOf('mac') === 0) return 'macos';
       if (platform.indexOf('win') === 0) return 'windows';
       if (platform.indexOf('linux') === 0) return 'linux';
-      return 'linux'; // safe default — the installer is most common on Linux
+      return 'linux';
     }
-
-    function iconSVG(name) {
-      // 16px inline SVGs matching the card icons
-      if (name === 'macos') {
-        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#001621"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>';
-      }
-      if (name === 'windows') {
-        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="color:#001621"><path d="M3 5.4 10.5 4.5v7.4H3V5.4zM11.5 4.3 21 3v9h-9.5V4.3zM3 12.6h7.5V20L3 19.1v-6.5zM11.5 12.6H21V21l-9.5-1.3v-7.1z"/></svg>';
-      }
-      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#001621"><path d="M12 2c-2 0-3 1.5-3 3.5 0 1 .5 1.8 1 2.5C9 9 8 10 8 12c0 1 .5 2 1 2.5C7.5 15 6 16.5 6 19c0 1.5 1 3 3 3 1 0 2-.5 3-.5s2 .5 3 .5c2 0 3-1.5 3-3 0-2.5-1.5-4-3-4.5.5-.5 1-1.5 1-2.5 0-2-1-3-2-4 .5-.7 1-1.5 1-2.5C15 3.5 14 2 12 2z"/></svg>';
-    }
-
     var os = detectOS();
-    var label = OS_LABELS[os].label;
+    var card = document.querySelector('.os[data-os="' + os + '"]');
+    if (card) card.classList.add('detected');
+  })();
 
-    // Update hero download button
-    var heroLabel = document.querySelector('[data-dl-label]');
-    if (heroLabel) heroLabel.textContent = label;
-    var heroIcon = document.querySelector('[data-os-icon]');
-    if (heroIcon) heroIcon.innerHTML = iconSVG(os);
-
-    // Update "Detected" pill text
-    var detectedText = document.querySelector('[data-detected-text]');
-    if (detectedText) detectedText.textContent = 'Detected: ' + OS_LABELS[os].short;
-
-    // Hide the other-OS button for the detected platform, show the other two
-    var others = document.querySelectorAll('[data-dl-other]');
-    others.forEach(function (a) {
-      if (a.getAttribute('data-dl-other') === os) {
-        a.style.display = 'none';
-      }
-    });
-
-    // Mark the matching OS card
-    var detectedCard = document.querySelector('.os[data-os="' + os + '"]');
-    if (detectedCard) detectedCard.classList.add('detected');
-
-    // Smooth-scroll the detected card into view if user lands here from a deep link
-    // and the hero button is not already focused (so we don't surprise mobile users).
-    if (location.hash === '#download' && detectedCard) {
-      setTimeout(function () { detectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200);
-    }
-
-    // ============================================================
-    // Copy-to-clipboard for the per-OS command blocks
-    // Uses the modern Clipboard API where available, falls back to
-    // a hidden textarea + execCommand for older browsers.
-    // ============================================================
+  // Copy-to-clipboard
+  (function () {
     var PLAIN_COMMANDS = {
-      linux:   'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
-      macos:   'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
-      windows: 'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npy installer\\install.py'
+      hero:   'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
+      linux:  'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
+      macos:  'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npython3 installer/install.py',
+      windows:'git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git\ncd hermes-live-discord-agent-plugin\npy installer\\install.py'
     };
-
-    function copyToClipboard(text) {
-      if (navigator.clipboard && window.isSecureContext) {
-        return navigator.clipboard.writeText(text);
-      }
-      // Fallback: hidden textarea + execCommand
+    function copy(text) {
+      if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
       return new Promise(function (resolve, reject) {
         var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus(); ta.select();
-        try {
-          var ok = document.execCommand('copy');
-          document.body.removeChild(ta);
-          ok ? resolve() : reject(new Error('copy failed'));
-        } catch (e) { document.body.removeChild(ta); reject(e); }
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try { var ok = document.execCommand('copy'); document.body.removeChild(ta); ok ? resolve() : reject(); }
+        catch (e) { document.body.removeChild(ta); reject(e); }
       });
     }
-
-    document.querySelectorAll('.os .copy').forEach(function (btn) {
+    document.querySelectorAll('.copy').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.getAttribute('data-copy');
-        var text = PLAIN_COMMANDS[key] || '';
-        copyToClipboard(text).then(function () {
+        copy(PLAIN_COMMANDS[key] || '').then(function () {
           var prev = btn.textContent;
-          btn.textContent = '✓ Copied!';
-          btn.classList.add('copied');
-          setTimeout(function () {
-            btn.textContent = prev;
-            btn.classList.remove('copied');
-          }, 1500);
+          btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = prev; btn.classList.remove('copied'); }, 1500);
         }).catch(function () {
-          btn.textContent = '✗ Failed — select & copy manually';
+          btn.textContent = '✗ Failed — select & copy';
           setTimeout(function () { btn.textContent = '📋 Copy'; }, 2500);
         });
       });
     });
   })();
 
-  // ============================================================
-  // Scroll-reveal observer — fade + slide on enter viewport
-  // Vanilla IntersectionObserver, no library, no deps. Respects
-  // prefers-reduced-motion (CSS handles the actual disabling).
-  // Falls back to .in immediately if the API is missing.
-  // ============================================================
+  // Scroll reveal
   (function () {
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
-    if (!nodes.length) return;
-
-    // Fallback: no IntersectionObserver support → show everything now.
-    if (!('IntersectionObserver' in window) || reduce) {
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger');
+    if (!nodes.length || reduce) {
       nodes.forEach(function (n) { n.classList.add('in'); });
       return;
     }
-
+    if (!('IntersectionObserver' in window)) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) {
-          e.target.classList.add('in');
-          io.unobserve(e.target); // one-shot reveal, then stop watching
-        }
-      });
-    }, {
-      // Trigger when 12% of the element is in the viewport.
-      // Slightly negative bottom margin so the reveal fires a hair
-      // before the element is fully on-screen — feels more responsive.
-      threshold: 0.12,
-      rootMargin: '0px 0px -8% 0px',
-    });
-
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
     nodes.forEach(function (n) { io.observe(n); });
   })();
 </script>

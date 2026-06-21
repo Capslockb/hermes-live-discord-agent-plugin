@@ -8,6 +8,13 @@ python_requirements:
 provides_tools:
   - voice_live
   - voice_live_leave
+  - voice_live_status
+  - voice_live_frame
+  - voice_live_notes
+  - sora_bridge_preflight
+  - sora_live_grill
+  - sora_goal_synth
+  - sora_redact
 requirements_env:
   - name: DISCORD_BOT_TOKEN
     prompt: "Discord bot token"
@@ -24,4 +31,16 @@ optional_env:
     password: false
   - name: DISCORD_VOICE_LIVE_PORT
     prompt: "Local HTTP control port (default: 18943)"
+    password: false
+  - name: DISCORD_VOICE_LIVE_VOICE
+    prompt: "Gemini Live voice name (default: Aoede)"
+    password: false
+  - name: DISCORD_VOICE_LIVE_NOTES_DIR
+    prompt: "Directory for voice-live notes/transcripts"
+    password: false
+  - name: VOICE_LIVE_HONCHO_CONTEXT
+    prompt: "Enable Honcho memory context for live sessions (true/false)"
+    password: false
+  - name: VOICE_LIVE_HONCHO_PEER
+    prompt: "Honcho peer alias for live session memory"
     password: false

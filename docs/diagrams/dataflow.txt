@@ -30,5 +30,5 @@
 
 
   HOT PATH (audio):       VoiceListener ─► Gemini WSS ─► LiveAudioSource
-  COLD PATH (control):    HTTP /health, /say, /leave on 127.0.0.1:18943
+  COLD PATH (control):    HTTP /health, /say, /leave on local port (127.0.0.1:18943 default)
   OBSERVABILITY:          bridge.py → BRIDGE.health() → JSON dict

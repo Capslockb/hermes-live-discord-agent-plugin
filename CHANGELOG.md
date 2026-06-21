@@ -1,5 +1,27 @@
 # CHANGELOG — hermes-live-discord-agent-plugin
 
+## 0.4.0 — second-release branch — 2026-06-21
+
+### SORA bridge elements (v2)
+- **Imported safe, proven SORA bridge helpers** into the Gemini Live Discord bridge:
+  - `sora_bridge_preflight` — local diagnostics for Gemini env/model, Honcho config paths, sidecar health, notes dir, active bridge registry.
+  - `sora_live_grill` — Live Grill Mode transcript analysis that forces objective, constraints, owner, deadline, risk, next command, and verification test.
+  - `sora_goal_synth` — deterministic `/goal` + ranked `/subgoal` generation for weaker autonomous models.
+  - `sora_redact` — redaction of API keys, tokens, JWTs, webhooks, GitHub tokens before Gemini/Discord/logs.
+- New `plugin/sora_bridge_elements.py`, wired automatically from `plugin/__init__.py` with a safe try/except so failures cannot break voice-live.
+- New `installer/enable_sora_bridge_elements.py` idempotent wiring checker.
+- New `scripts/regression_test_sora_elements.py` — 19 checks covering redaction, classification, grilling, synthesis, preflight structure, and tool registration.
+
+### Docs honesty pass
+- Rewrote `README.md` to tag every feature as **WORKING / PARTIAL / PLANNED / RESEARCH** instead of claiming everything is fully shipped.
+- Added `VALIDATION_MATRIX.md` with component-by-component status (Gemini Live, Discord voice, sidecar API, SORA elements, Vapi, MCP, Dograh).
+- Updated `docs/ARCHITECTURE.md`, `docs/CONFIGURATION.md`, and `docs/KNOWN_BUGS.md` to match current code.
+- Added `docs/SORA_MIGRATION.md` explaining what is imported, what is planned, and what points users toward SORA.
+- Updated `plugin/plugin.yaml` to list all registered tools and relevant optional env vars.
+
+### Not in this release
+- Vapi bridge federation, MCP orchestration server, Dograh agent, and SORA video production pipeline are documented as **PLANNED / RESEARCH**.
+
 ## 0.3.0 — 2026-06-07
 
 ### Brand + public release

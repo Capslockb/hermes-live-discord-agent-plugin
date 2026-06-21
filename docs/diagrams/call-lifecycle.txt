@@ -1,0 +1,55 @@
+# Hermes Live Discord Agent Plugin — call lifecycle
+
+    User runs /voice-live
+            │
+            ▼
+    ┌───────────────┐
+    │  Bot joins    │
+    │  voice channel│
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Build profile │  (owner check, onboarding Q&A if new user)
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Connect to    │
+    │ Gemini Live   │
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐     ┌───────────────┐
+    │ Full-duplex   │◄───►│ User speaks   │
+    │ voice loop    │     │ / shares frame│
+    └───────┬───────┘     └───────────────┘
+            │
+            ▼ (function call)
+    ┌───────────────┐
+    │ Execute tool  │  (Spotify, web, GitHub, etc.)
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Continue call │
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Idle prompt   │  (after IDLE_PROMPT_SECONDS of silence)
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Auto-leave    │  (after grace period or AUTO_LEAVE_QUIET_SECONDS)
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Write JSONL   │
+    │ transcript    │
+    └───────────────┘
+
+All blocking tool work is run off the asyncio loop. Transcripts are written to
+the local notes directory configured by DISCORD_VOICE_LIVE_NOTES_DIR.

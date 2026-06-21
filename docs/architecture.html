@@ -47,6 +47,7 @@
       <li><a href="#control-api">Control API (HTTP)</a></li>
       <li><a href="#function-calling">Function calling</a></li>
       <li><a href="#cost-control">Cost control</a></li>
+      <li><a href="#sora-bridge-elements">SORA bridge elements</a></li>
       <li><a href="#failure-modes">Failure modes</a></li>
     </ul>
   </aside>
@@ -212,6 +213,31 @@ return success         bridge runs until:
       <span class="title">Heads up</span>
       <p>The earlier <code>"mediaResolution": "LOW"</code> optimization was removed in v0.2.6 — the current Gemini Live model lineup rejects the field at session setup. Cost is still controlled at the bridge level (1 fps cap + 512 KB max, audio-gated, 350ms SFX cap).</p>
     </div>
+
+    <h2 id="sora-bridge-elements">SORA bridge elements (v2) <a class="anchor" href="#sora-bridge-elements" aria-label="Anchor link">#</a></h2>
+    <p>In v0.4.0 the bridge imports four proven SORA helpers into the same Hermes gateway process. They do not add audio pipelines or HTTP listeners; they are text/diagnostic tools that make operating the bridge safer and more consistent.</p>
+
+<pre><code>  Hermes gateway process
+   ├─ plugin/bridge.py          (Gemini Live audio, function calling, sidecar)
+   └─ plugin/sora_bridge_elements.py
+        ├─ sora_bridge_preflight  → local diagnostics
+        ├─ sora_live_grill        → transcript → objective/constraints/owner/deadline/risk/next/verification
+        ├─ sora_goal_synth        → /goal + ranked /subgoals
+        └─ sora_redact            → strip secrets before Gemini/Discord/logs
+
+  Inputs:
+    • ~/.hermes/.env (secrets redacted in output)
+    • ~/.hermes/config.yaml
+    • ~/.hermes/honcho.json
+    • ~/.hermes/voice-live-notes/
+    • 127.0.0.1:18943/health
+
+  Safety:
+    • No public ports.
+    • No persistent HTTP listener.
+    • Import failure is caught; voice-live keeps working.</code></pre>
+
+    <p>See <a href="sora-migration.html">SORA migration</a> for the full import boundary and what is still planned.</p>
 
     <h2 id="failure-modes">Failure modes <a class="anchor" href="#failure-modes" aria-label="Anchor link">#</a></h2>
 
