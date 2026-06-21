@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#020617;font-family:-apple-system,system-ui,sans-serif}
+.banner{width:1200px;height:630px;position:relative;overflow:hidden;background:linear-gradient(135deg,#020617 0%,#0b1220 50%,#0f172a 100%)}
+.banner::before{content:'';position:absolute;top:-200px;left:-200px;width:800px;height:800px;background:radial-gradient(circle,rgba(34,211,238,0.12) 0%,transparent 70%)}
+.banner::after{content:'';position:absolute;bottom:-200px;right:-200px;width:800px;height:800px;background:radial-gradient(circle,rgba(167,139,250,0.10) 0%,transparent 70%)}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);background-size:40px 40px}
+
+.content{position:relative;z-index:1;padding:80px 80px 60px;display:flex;flex-direction:column;height:100%}
+.top-row{display:flex;align-items:center;gap:12px}
+.logo-dot{width:12px;height:12px;background:#22d3ee;border-radius:50%;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 8px #22d3ee}50%{opacity:0.5;box-shadow:0 0 2px #22d3ee}}
+.logo-text{color:#e2e8f0;font-size:18px;font-weight:700;letter-spacing:0.5px}
+.version{color:#22d3ee;font-size:14px;font-weight:600;background:rgba(34,211,238,0.08);padding:4px 12px;border-radius:6px;margin-left:auto}
+
+.hero{margin-top:50px;max-width:750px}
+.hero h1{color:#f1f5f9;font-size:64px;font-weight:800;letter-spacing:-2px;line-height:1.1}
+.hero h1 span{background:linear-gradient(90deg,#22d3ee,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:#94a3b8;font-size:20px;line-height:1.5;margin-top:16px;max-width:620px}
+
+.tags{margin-top:32px;display:flex;gap:10px;flex-wrap:wrap}
+.tag{color:#cbd5e1;font-size:13px;font-weight:600;padding:8px 16px;background:rgba(15,23,42,0.8);border:1px solid #1e293b;border-radius:20px;font-family:'SF Mono','JetBrains Mono',monospace}
+.tag.cyan{border-color:rgba(34,211,238,0.35);color:#22d3ee}
+.tag.violet{border-color:rgba(167,139,250,0.35);color:#a78bfa}
+.tag.green{border-color:rgba(52,211,153,0.35);color:#34d399}
+.tag.amber{border-color:rgba(251,191,36,0.35);color:#fbbf24}
+
+.rings{position:absolute;right:60px;top:50%;transform:translateY(-50%)}
+.rings circle{fill:none;stroke:#1e293b;stroke-width:1}
+.rings .accent{stroke:#22d3ee;stroke-width:2;opacity:0.5}
+.rings .glow{stroke:#a78bfa;stroke-width:1;opacity:0.2}
+
+.status{position:absolute;bottom:60px;left:80px;display:flex;align-items:center;gap:8px}
+.status-dot{width:8px;height:8px;background:#34d399;border-radius:50%;box-shadow:0 0 6px #34d399}
+.status-text{color:#34d399;font-size:14px;font-weight:600}
+.status-text span{color:#94a3b8;font-weight:400;margin-left:6px}
+
+.github{position:absolute;bottom:60px;right:80px;color:#64748b;font-size:13px;font-family:'SF Mono','JetBrains Mono',monospace}
+.github a{color:#94a3b8;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="banner">
+  <div class="grid"></div>
+  <div class="content">
+    <div class="top-row">
+      <div class="logo-dot"></div>
+      <div class="logo-text">Hermes Live</div>
+      <div class="version">v2</div>
+    </div>
+    <div class="hero">
+      <h1>Talk to Gemini Live<br>in <span>your Discord.</span></h1>
+      <p>Full-duplex voice bridge · SORA diagnostics · honest status tags · self-hosted, open source.</p>
+    </div>
+    <div class="tags">
+      <span class="tag cyan">Gemini Live</span>
+      <span class="tag violet">Discord Voice</span>
+      <span class="tag green">SORA Helpers</span>
+      <span class="tag amber">MIT</span>
+      <span class="tag">Python · Hermes Agent</span>
+    </div>
+    <div class="status">
+      <div class="status-dot"></div>
+      <div class="status-text">WORKING · PARTIAL · PLANNED · RESEARCH<span> tagged honestly</span></div>
+    </div>
+    <div class="github">
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
+    </div>
+  </div>
+  <svg class="rings" width="440" height="440" viewBox="0 0 440 440">
+    <circle cx="220" cy="220" r="200"/>
+    <circle cx="220" cy="220" r="160"/>
+    <circle cx="220" cy="220" r="120" class="accent"/>
+    <circle cx="220" cy="220" r="80" class="glow"/>
+    <circle cx="220" cy="220" r="8" fill="#22d3ee" opacity="0.8"/>
+  </svg>
+</div>
+</body>
+</html>
