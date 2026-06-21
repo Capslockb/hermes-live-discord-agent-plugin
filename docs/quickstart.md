@@ -1,6 +1,6 @@
 # Quick start
 
-Five commands, two minutes.
+Install the Gemini Live Discord voice bridge, wire SORA bridge elements if needed, restart Hermes, then start `/voice-live` from Discord.
 
 ## Install
 
@@ -10,9 +10,17 @@ git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin
 
 # 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
-./install.sh
+cd installer
+./install.py
+# or, from the repo checkout:
+./install.sh --from-local
 
-# 3. Restart the gateway so the plugin loads
+# 3. Wire SORA helper tools if the deployed entrypoint is not already patched
+cd ..
+python3 installer/enable_sora_bridge_elements.py
+python3 -m py_compile plugin/sora_bridge_elements.py plugin/__init__.py
+
+# 4. Restart the gateway so the plugin loads
 systemctl --user restart hermes-gateway
 ```
 
@@ -20,17 +28,17 @@ systemctl --user restart hermes-gateway
 
 From Discord, join a voice channel, then in any text channel:
 
-```
+```text
 /voice-live          # join
 /voice-live-leave    # leave
 ```
 
-That's it. The bridge will:
+The bridge will:
 
-1. Connect to your voice channel (Discord CDN quirk: first attempt takes ~27s — this is normal, do not restart the gateway)
-2. Handshake with Gemini Live
-3. Play the `transition` sfx
-4. Wait for you to speak — first turn is muted by design
+1. Connect to your voice channel.
+2. Handshake with Gemini Live.
+3. Stream Discord audio to Gemini and Gemini audio back to Discord.
+4. Wait for you to speak; first-turn silence is intentional.
 
 ## Verify
 
@@ -38,16 +46,37 @@ That's it. The bridge will:
 curl -s http://127.0.0.1:18943/health | python3 -m json.tool
 ```
 
-You should see `"voice_connected": true`, `"running": true`, and a non-zero `audio_in_chunks` after you speak.
+You should see bridge health after `/voice-live` has started a session. If the bridge is not running yet, the sidecar health request can fail normally.
+
+## Verify SORA bridge elements
+
+```text
+sora_bridge_preflight
+sora_redact text="Authorization: Bearer fake.fake.fake"
+sora_live_grill text="migrate SORA bridge features into Gemini bridge"
+sora_goal_synth text="migrate SORA bridge features into Gemini bridge"
+```
+
+If those tools are unavailable, run the patcher again in the deployed plugin directory and restart Hermes:
+
+```bash
+python3 installer/enable_sora_bridge_elements.py
+grep -n "SORA bridge elements" plugin/__init__.py
+systemctl --user restart hermes-gateway
+```
 
 ## Common pitfalls
 
-- **"Bridge failed to start"** — wait ~30s. The first 5 voice WebSocket handshakes are rejected by the Discord CDN; the bridge retries.
-- **First-turn hallucination** ("I see you're sharing your screen") — the system prompt has the guard, but if you see this, the audioStreamEnd mute is missing. Check `bridge.py` for `await self._gemini._ws.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))` right after `connect()`.
-- **No audio in voice** — check `~/.hermes/voice-users/sfx/` exists and the four WAV files are present.
+- **`/voice-live` cannot infer your channel** — join a voice channel first with the configured `DISCORD_VOICE_LIVE_USER_ID` account.
+- **`/health` fails** — start a session first or check `DISCORD_VOICE_LIVE_PORT`.
+- **SORA tools missing** — the SORA module exists, but the runtime entrypoint may not be patched. Run `installer/enable_sora_bridge_elements.py`.
+- **The model cannot see screenshare** — Discord bots do not automatically receive screenshare/camera video. Use a screenshot, `voice_live_frame`, or the frame feeder.
+- **Optional tools fail** — mail, GitHub, Spotify, Home Assistant, and CLI delegation require their own local credentials/install.
 
 ## Next
 
-- [Architecture](architecture.html) — understand the audio path and threading model.
-- [Environment variables](env-vars.html) — every `DISCORD_VOICE_LIVE_*` env var.
-- [Troubleshooting](troubleshooting.html) — what to do when it doesn't work.
+- [Architecture](architecture.md) — understand the audio path and SORA helper layer.
+- [SORA bridge elements](sora-bridge-elements.md) — preflight, grill, goal synthesis, redaction.
+- [Release truth table](release-readiness.md) — working vs partial vs research claims.
+- [Environment variables](env-vars.md) — every `DISCORD_VOICE_LIVE_*` env var.
+- [Troubleshooting](troubleshooting.md) — what to do when it does not work.
