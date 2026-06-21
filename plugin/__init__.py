@@ -173,7 +173,7 @@ def register(ctx):
     # Imported late and wrapped so a failure here never breaks voice-live.
     try:
         from sora_bridge_elements import register_sora_bridge_tools
-        register_sora_bridge_tools(ctx, bridge_mod=None, active_bridges=_active_bridges)
+        register_sora_bridge_tools(ctx, _bridge_mod, _active_bridges)
     except Exception as exc:
         logger.warning("SORA bridge elements failed to register: %s", exc)
 
