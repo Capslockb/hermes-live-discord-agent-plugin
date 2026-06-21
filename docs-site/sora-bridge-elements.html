@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SORA bridge elements — Hermes Live</title>
+<meta name="description" content="SORA bridge helper tools for Hermes Live: preflight, transcript grilling, goal synthesis, and redaction.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">H</div><div><div class="brand-text">Hermes Live</div><div class="brand-sub">v0.3.6 · Gemini/SORA build</div></div></div>
+    <div class="search"><input id="search" type="search" placeholder="Search docs…" autocomplete="off"></div>
+    <nav class="nav">
+      <div class="nav-section">Getting started</div>
+      <a href="index.html">Overview</a><a href="quickstart.html">Quick start</a><a href="architecture.html">Architecture</a>
+      <div class="nav-section">SORA release</div>
+      <a href="sora-bridge-elements.html" class="active">SORA bridge elements</a><a href="release-readiness.html">Release truth table</a>
+      <div class="nav-section">Core systems</div>
+      <a href="personality.html">Personality</a><a href="fallback-chain.html">Fallback chain</a><a href="notification.html">Notifications</a><a href="email-brief.html">Email brief</a><a href="sfx-library.html">SFX library</a><a href="sfx-credits.html">SFX credits</a><a href="webhooks.html">Webhooks</a><a href="video.html">Video feeder</a>
+      <div class="nav-section">Reference</div>
+      <a href="env-vars.html">Environment variables</a><a href="troubleshooting.html">Troubleshooting</a><a href="changelog.html">Changelog</a>
+    </nav>
+    <div class="sidebar-foot"><a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>MIT licensed · Hermes Agent plugin</div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><span class="crumb">SORA Bridge Elements</span><span class="sep">/</span><span>docs-site/</span><div class="right"><span class="pill good">v0.3.6</span><span class="pill warn">SORA</span></div></div>
+    <article class="content">
+      <h1>SORA bridge elements</h1>
+      <p>SORA bridge elements are the operator-safety and planning helpers imported into the Gemini Live Discord bridge. They do <strong>not</strong> replace the Gemini transport. They add diagnostics, transcript cross-examination, goal/subgoal generation, and secret redaction around the existing bridge.</p>
+
+      <h2>Current status</h2>
+      <table><thead><tr><th>Item</th><th>Status</th><th>Notes</th></tr></thead><tbody>
+        <tr><td><code>plugin/sora_bridge_elements.py</code></td><td><strong>Included</strong></td><td>Implements all four tools.</td></tr>
+        <tr><td><code>plugin/plugin.yaml</code></td><td><strong>Advertised</strong></td><td>Lists the four SORA tools under <code>provides_tools</code>.</td></tr>
+        <tr><td><code>installer/enable_sora_bridge_elements.py</code></td><td><strong>Included</strong></td><td>Idempotent patcher for <code>plugin/__init__.py</code>.</td></tr>
+        <tr><td>Runtime registration</td><td><strong>Verify after install</strong></td><td>If the deployed entrypoint lacks the marker, run the patcher and restart Hermes.</td></tr>
+      </tbody></table>
+
+      <h2>Tools</h2>
+      <table><thead><tr><th>Tool</th><th>Purpose</th></tr></thead><tbody>
+        <tr><td><code>sora_bridge_preflight</code></td><td>Local diagnostic report for Gemini env/model, Honcho config paths, sidecar health, notes dir, and active bridge registry.</td></tr>
+        <tr><td><code>sora_live_grill</code></td><td>Cross-examines a transcript/call for objective, constraints, owner, deadline, risk, next command, and verification test.</td></tr>
+        <tr><td><code>sora_goal_synth</code></td><td>Turns transcript text into a Discord-safe <code>/goal</code> plus ranked <code>/subgoal</code> items.</td></tr>
+        <tr><td><code>sora_redact</code></td><td>Redacts API keys, bearer tokens, JWTs, Pocket keys, Discord webhooks, and GitHub tokens.</td></tr>
+      </tbody></table>
+
+      <h2>Wire into the plugin</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-bash">python3 installer/enable_sora_bridge_elements.py
+python3 -m py_compile plugin/sora_bridge_elements.py plugin/__init__.py
+systemctl --user restart hermes-gateway
+grep -n "SORA bridge elements" plugin/__init__.py</code></pre></div>
+
+      <h2>Example use</h2>
+      <div class="pre-wrap"><button type="button" class="copy-btn" aria-label="Copy code" data-copy-btn>copy</button><pre><code class="lang-text">sora_bridge_preflight
+sora_redact text="Authorization: Bearer fake.fake.fake"
+sora_live_grill text="long call transcript here"
+sora_goal_synth text="long call transcript here"</code></pre></div>
+
+      <h2>What this is not</h2>
+      <ul><li>Not a Vapi bridge.</li><li>Not a Dograh bridge.</li><li>Not an MCP server.</li><li>Not a public diagnostics endpoint.</li><li>Not automatic Discord screenshare capture.</li></ul>
+
+      <div class="pager"><a class="prev" href="architecture.html"><span class="label">Prev ←</span><span class="title">Architecture</span></a><a class="next" href="release-readiness.html"><span class="label">Next →</span><span class="title">Release truth table</span></a></div>
+      <div class="foot">Hermes Live v0.3.6 · MIT · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a></div>
+    </article>
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </main>
+</div>
+<script src="nav.js"></script>
+</body>
+</html>
