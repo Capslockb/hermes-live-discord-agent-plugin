@@ -297,9 +297,10 @@ async def _build_honcho_context(peer_name_override: Optional[str] = None) -> str
             # Fetch representation
             repr_text = ""
             try:
-                repr_resp = await client.get(
+                repr_resp = await client.post(
                     f"/v3/workspaces/{ws_id}/peers/{peer_id}/representation",
                     headers=headers,
+                    json={},
                 )
                 if repr_resp.status_code == 200:
                     repr_data = repr_resp.json()
@@ -307,11 +308,11 @@ async def _build_honcho_context(peer_name_override: Optional[str] = None) -> str
             except Exception:
                 pass
 
-            # Fetch card (conclusions)
+            # Fetch card
             card = []
             try:
                 card_resp = await client.get(
-                    f"/v3/workspaces/{ws_id}/peers/{peer_id}/conclusions",
+                    f"/v3/workspaces/{ws_id}/peers/{peer_id}/card",
                     headers=headers,
                 )
                 if card_resp.status_code == 200:
