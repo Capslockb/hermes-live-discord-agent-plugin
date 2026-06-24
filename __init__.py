@@ -117,11 +117,16 @@ def _get_discord_adapter():
 # module on every /voice-live invocation interacted badly with module-level
 # globals (BRIDGE, _OPENCODE_SESSIONS, _EMAIL_REMINDER_TASK).
 import importlib.util as _importlib_util
-_BRIDGE_SPEC = _importlib_util.spec_from_file_location(
-    "discord_voice_live_bridge", str(PLUGIN_DIR / "bridge.py")
-)
-_bridge_mod = _importlib_util.module_from_spec(_BRIDGE_SPEC)
-_BRIDGE_SPEC.loader.exec_module(_bridge_mod)
+_bridge_mod = None
+try:
+    _BRIDGE_SPEC = _importlib_util.spec_from_file_location(
+        "discord_voice_live_bridge", str(PLUGIN_DIR / "bridge.py")
+    )
+    _bridge_mod = _importlib_util.module_from_spec(_BRIDGE_SPEC)
+    _BRIDGE_SPEC.loader.exec_module(_bridge_mod)
+except Exception as exc:
+    logger.error("Failed to load bridge.py at module import: %s: %s", type(exc).__name__, exc)
+    logger.error("The discord-voice plugin will have limited functionality. Check requirements (numpy, etc.)")
 
 
 async def _safe_disconnect_vc(vc, timeout: float = 5.0) -> bool:
@@ -293,6 +298,14 @@ def register(ctx):
         check_fn=lambda: True,
         is_async=True,
     )
+
+
+    # SORA bridge elements: preflight/grill/goal synthesis/redaction
+    try:
+        from sora_bridge_elements import register_sora_bridge_tools
+        register_sora_bridge_tools(ctx, _bridge_mod, _active_bridges)
+    except Exception as exc:
+        logger.warning("SORA bridge elements failed to register: %s: %s", type(exc).__name__, exc)
 
     # Slash commands for Discord: register via `ctx.register_command()`.
     # The Discord adapter (`plugins/platforms/discord/adapter.py:3189-3216`)
@@ -866,6 +879,9 @@ async def voice_live(adapter, guild_id: str, channel_id: str, user_id: Optional[
     _set_starting(guild_id_int)
     try:
         bridge_mod = _bridge_mod  # Patch 8: module already loaded at import
+        if bridge_mod is None:
+            _clear_starting(guild_id_int)
+            return json.dumps({"status": "error", "message": "Bridge module failed to load at startup. Check requirements (numpy, etc.) and restart gateway."})
 
         # Resolve per-user profile (auto-creates a new profile on first contact)
         user_profile = None
