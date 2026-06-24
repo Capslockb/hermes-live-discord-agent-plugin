@@ -3652,16 +3652,19 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 if args.get("list"):
                     return {"result": {"scheduled": _notify_list()}}
                 if args.get("cancel_id"):
-                    removed = _notify_cancel(args.get("cancel_id"))
-                    return {"result": {"cancelled": removed, "cancel_id": args.get("cancel_id")}}
+                    cancel_id = str(args["cancel_id"])
+                    removed = _notify_cancel(cancel_id)
+                    return {"result": {"cancelled": removed, "cancel_id": cancel_id}}
                 # Schedule a new one
                 if not args.get("text"):
                     return {"error": "text is required (or pass list=true / cancel_id=...)"}
                 import time as _t
-                if args.get("fire_at_epoch") is not None:
-                    fire_at = float(args.get("fire_at_epoch"))
-                elif args.get("delay_seconds") is not None:
-                    fire_at = _t.time() + float(args.get("delay_seconds"))
+                fire_at_epoch = args.get("fire_at_epoch")
+                delay_seconds = args.get("delay_seconds")
+                if fire_at_epoch is not None:
+                    fire_at = float(fire_at_epoch)
+                elif delay_seconds is not None:
+                    fire_at = _t.time() + float(delay_seconds)
                 else:
                     return {"error": "either delay_seconds or fire_at_epoch is required"}
                 # Pull the live bridge so the scheduled deliver() can use it later
