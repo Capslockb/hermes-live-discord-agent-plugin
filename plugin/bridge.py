@@ -68,8 +68,7 @@ GEMINI_MODEL_FALLBACKS = [
     for model in os.getenv(
         "GEMINI_LIVE_MODEL_FALLBACKS",
         "gemini-3.1-flash-live-preview,"
-        "gemini-2.5-flash-native-audio-preview-12-2025,"
-        "gemini-2.5-flash-native-audio-preview-09-2025",
+        "gemini-live-2.5-flash-native-audio",
     ).split(",")
     if model.strip()
 ]
@@ -527,7 +526,7 @@ def _run_github_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if name == "local_github_issues":
         repo = args.get("repo", "").strip()
         if not repo:
-            return {"error": "repo is required (e.g. 'Capslockb/hermes-live-discord-agent-plugin')"}
+            return {"error": "repo is required (e.g. 'Capslockb/gemini-live-discord-bridge')"}
         state = args.get("state", "open").strip() or "open"
         try:
             limit = min(max(int(args.get("limit", 15)), 1), 50)
@@ -743,7 +742,7 @@ _GITHUB_FUNCTION_DECLARATIONS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "repo": {"type": "string", "description": "Repo in 'owner/name' format, e.g. 'Capslockb/hermes-live-discord-agent-plugin'"},
+                "repo": {"type": "string", "description": "Repo in 'owner/name' format, e.g. 'Capslockb/gemini-live-discord-bridge'"},
                 "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Issue state filter (default: open)"},
                 "limit": {"type": "integer", "description": "Max issues (default 15, max 50)"},
             },
