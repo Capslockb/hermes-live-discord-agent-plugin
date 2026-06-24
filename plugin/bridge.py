@@ -4635,65 +4635,68 @@ class GeminiLiveBridge:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            # Session resumption handle update
-            sru = msg.get("sessionResumptionUpdate")
-            if sru:
-                if sru.get("resumable") and sru.get("newHandle"):
-                    self._session_handle = sru["newHandle"]
-                self.metrics["gemini_resumption_updates"] = self.metrics.get("gemini_resumption_updates", 0) + 1
-            # GoAway detection
-            go_away = msg.get("goAway")
-            if go_away is not None:
-                time_left = go_away.get("timeLeft", "unknown")
-                logger.warning("Gemini Live: GoAway received (%s remaining)", time_left)
-                if not self._reconnecting:
-                    asyncio.get_running_loop().create_task(self._restart())
-                break
-            sc = msg.get("serverContent", {})
-            if sc:
-                self._log_server_content_shape(sc)
-                self._record_transcript("input", sc.get("inputTranscription", {}))
-                self._record_transcript("output", sc.get("outputTranscription", {}))
-                mt = sc.get("modelTurn", {})
-                parts = mt.get("parts", [])
-                for part in parts:
-                    idata = part.get("inlineData", {})
-                    if idata.get("mimeType", "").startswith("audio/pcm"):
-                        pcm_bytes = base64.b64decode(idata["data"])
-                        if pcm_bytes:
-                            self._record_output_chunk(len(pcm_bytes))
-                            if not self._output_turn_open:
-                                self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_PREROLL_MS))
-                                pcm_bytes = _fade_in_pcm_24k_mono(pcm_bytes, OUTPUT_FADE_IN_MS)
-                                self._output_turn_open = True
-                                self.metrics["audio_preroll_events"] += 1
-                            if self._output_source.wake():
-                                self._output_source.feed(pcm_bytes)
-                                if self._on_wake:
-                                    try:
-                                        self._on_wake()
-                                    except Exception:
-                                        pass
-                            else:
-                                self._output_source.feed(pcm_bytes)
-                if sc.get("interrupted"):
-                    if OUTPUT_CLEAR_ON_INTERRUPT:
-                        self._output_source.clear()
-                    self._output_turn_open = False
-                if sc.get("turnComplete") or sc.get("generationComplete"):
-                    if self._output_turn_open and OUTPUT_TAIL_PAD_MS > 0:
-                        self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_TAIL_PAD_MS))
-                    self._output_turn_open = False
-            # ── Handle tool calls from Gemini ──────────────────────────────────────
-            tool_call = msg.get("toolCall")
-            if tool_call:
-                try:
-                    await self._handle_tool_call(tool_call)
-                except Exception as tc_exc:
-                    logger.exception("Gemini Live: tool call handler crashed (recv loop continues): %s", tc_exc)
-            tool_call_cancel = msg.get("toolCallCancellation")
-            if tool_call_cancel:
-                logger.info("Gemini toolCallCancellation received (ignored): %s", tool_call_cancel)
+            try:
+                # Session resumption handle update
+                sru = msg.get("sessionResumptionUpdate")
+                if sru:
+                    if sru.get("resumable") and sru.get("newHandle"):
+                        self._session_handle = sru["newHandle"]
+                    self.metrics["gemini_resumption_updates"] = self.metrics.get("gemini_resumption_updates", 0) + 1
+                # GoAway detection
+                go_away = msg.get("goAway")
+                if go_away is not None:
+                    time_left = go_away.get("timeLeft", "unknown")
+                    logger.warning("Gemini Live: GoAway received (%s remaining)", time_left)
+                    if not self._reconnecting:
+                        asyncio.get_running_loop().create_task(self._restart())
+                    break
+                sc = msg.get("serverContent", {})
+                if sc:
+                    self._log_server_content_shape(sc)
+                    self._record_transcript("input", sc.get("inputTranscription", {}))
+                    self._record_transcript("output", sc.get("outputTranscription", {}))
+                    mt = sc.get("modelTurn", {})
+                    parts = mt.get("parts", [])
+                    for part in parts:
+                        idata = part.get("inlineData", {})
+                        if idata.get("mimeType", "").startswith("audio/pcm"):
+                            pcm_bytes = base64.b64decode(idata["data"])
+                            if pcm_bytes:
+                                self._record_output_chunk(len(pcm_bytes))
+                                if not self._output_turn_open:
+                                    self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_PREROLL_MS))
+                                    pcm_bytes = _fade_in_pcm_24k_mono(pcm_bytes, OUTPUT_FADE_IN_MS)
+                                    self._output_turn_open = True
+                                    self.metrics["audio_preroll_events"] += 1
+                                if self._output_source.wake():
+                                    self._output_source.feed(pcm_bytes)
+                                    if self._on_wake:
+                                        try:
+                                            self._on_wake()
+                                        except Exception:
+                                            pass
+                                else:
+                                    self._output_source.feed(pcm_bytes)
+                    if sc.get("interrupted"):
+                        if OUTPUT_CLEAR_ON_INTERRUPT:
+                            self._output_source.clear()
+                        self._output_turn_open = False
+                    if sc.get("turnComplete") or sc.get("generationComplete"):
+                        if self._output_turn_open and OUTPUT_TAIL_PAD_MS > 0:
+                            self._output_source.feed(_silence_pcm(GEMINI_OUT_SR, GEMINI_OUT_CH, OUTPUT_TAIL_PAD_MS))
+                        self._output_turn_open = False
+                # ── Handle tool calls from Gemini ──────────────────────────────────────
+                tool_call = msg.get("toolCall")
+                if tool_call:
+                    try:
+                        await self._handle_tool_call(tool_call)
+                    except Exception as tc_exc:
+                        logger.exception("Gemini Live: tool call handler crashed (recv loop continues): %s", tc_exc)
+                tool_call_cancel = msg.get("toolCallCancellation")
+                if tool_call_cancel:
+                    logger.info("Gemini toolCallCancellation received (ignored): %s", tool_call_cancel)
+            except Exception as proc_exc:
+                logger.error("Gemini Live: receive loop processing crashed: %s", proc_exc)
 
     def _log_server_content_shape(self, server_content: Dict[str, Any]) -> None:
         keys = tuple(sorted(server_content.keys()))

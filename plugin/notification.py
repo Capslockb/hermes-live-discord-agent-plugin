@@ -98,7 +98,7 @@ def _send_voice(bridge: Any, text: str) -> Dict[str, Any]:
         return {"status": "error", "channel": "voice", "message": str(exc)}
 
 
-def _send_dm(adapter: Any, user_id: str, text: str) -> Dict[str, Any]:
+def _send_dm(adapter: Any, user_id: Optional[str], text: str) -> Dict[str, Any]:
     """Send a DM via the discord bot adapter. Best-effort."""
     if adapter is None or user_id is None:
         return {"status": "error", "channel": "dm", "message": "no adapter/user_id"}
@@ -157,7 +157,7 @@ def _send_dm(adapter: Any, user_id: str, text: str) -> Dict[str, Any]:
         return {"status": "error", "channel": "dm", "message": str(exc)}
 
 
-def _send_channel(adapter: Any, channel_id: str, text: str) -> Dict[str, Any]:
+def _send_channel(adapter: Any, channel_id: Optional[str], text: str) -> Dict[str, Any]:
     """Post a message in a Discord text channel via the bot adapter."""
     if adapter is None or channel_id is None:
         return {"status": "error", "channel": "channel", "message": "no adapter/channel_id"}
