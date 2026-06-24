@@ -1,0 +1,33 @@
+# Hermes Live Discord Agent Plugin — architecture overview
+
+              ┌──────────────────┐
+              │  Discord server   │
+              │  voice channel    │
+              └────────┬─────────┘
+                       │
+           voice in    │    voice out
+           (Opus 48kHz)│    (Opus 48kHz)
+                       ▼
+              ┌──────────────────┐
+              │  Hermes gateway  │
+              │                  │
+              │  ┌────────────┐  │      ┌─────────────────┐
+              │  │ discord.py  │  │◄────►│ Gemini Live WSS  │
+              │  │ voice recv  │  │      │ 16k in / 24k out │
+              │  └────────────┘  │      └─────────────────┘
+              │        │         │              │
+              │   ┌────▼────┐    │      ┌───────▼───────┐
+              │   │ tool    │    │      │ function calls │
+              │   │ executor│    │      └───────────────┘
+              │   └─────────┘    │
+              └──────────────────┘
+                       │
+                       ▼
+              ┌──────────────────┐
+              │ Local tools +    │
+              │ integrations     │
+              └──────────────────┘
+
+The bridge lives inside the Hermes gateway process. Discord audio is decoded,
+resampled, and forwarded to Gemini; Gemini's reply and tool requests come
+back through the same path. All HTTP control endpoints bind to 127.0.0.1 only.

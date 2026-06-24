@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SORA migration · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="What SORA bridge elements are imported into the Gemini Live Discord bridge, what is planned, and where to find the full SORA project.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>
+      <li><a href="#what-this-repo-is">What this repo is</a></li>
+      <li><a href="#what-sora-is">What SORA is</a></li>
+      <li><a href="#imported">Imported (v2)</a></li>
+      <li><a href="#not-imported">Not imported</a></li>
+      <li><a href="#usage">How to use</a></li>
+      <li><a href="#safety">Safety rules</a></li>
+      <li><a href="#when-to-look-at-sora">When to look at SORA</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <section class="hero-page viewport tilt-target">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="index.html#features">Docs</a><span class="sep">/</span> SORA migration</div>
+      <span class="eyebrow">Documentation</span>
+      <h1 class="display">SORA <span class="accent">migration.</span></h1>
+      <p class="dek">What is imported from SORA, what is planned, and where to find the full SORA project.</p>
+    </section>
+
+    <h2 id="what-this-repo-is">What this repo is <a class="anchor" href="#what-this-repo-is" aria-label="Anchor link">#</a></h2>
+    <p>This is the <strong>Hermes Live Discord Agent Plugin</strong> — a full-duplex Discord voice bridge to Google Gemini Multimodal Live. That identity has not changed in v2.</p>
+
+    <h2 id="what-sora-is">What SORA is <a class="anchor" href="#what-sora-is" aria-label="Anchor link">#</a></h2>
+    <p>SORA is a broader agent runtime built around:</p>
+    <ul>
+      <li>voice/video production pipelines,</li>
+      <li>autonomous goal/subgoal orchestration,</li>
+      <li>multi-bridge federation (Gemini + Vapi),</li>
+      <li>MCP tooling,</li>
+      <li>Discord-native progress emitters,</li>
+      <li>and agents like Dograh.</li>
+    </ul>
+    <p>SORA is a separate project. This repo selectively imports the pieces that make the Gemini bridge safer and more operator-friendly <strong>without</strong> turning it into SORA.</p>
+
+    <h2 id="imported">Imported in v2 <a class="anchor" href="#imported" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>SORA element</th><th>Gemini bridge form</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>sora_bridge_preflight</code></td><td><code>plugin/sora_bridge_elements.py</code></td><td><span class="tag" style="background:#143a25;color:#4ade80;border:1px solid #22c55e">WORKING</span></td></tr>
+        <tr><td><code>sora_live_grill</code></td><td><code>plugin/sora_bridge_elements.py</code></td><td><span class="tag" style="background:#143a25;color:#4ade80;border:1px solid #22c55e">WORKING</span></td></tr>
+        <tr><td><code>sora_goal_synth</code></td><td><code>plugin/sora_bridge_elements.py</code></td><td><span class="tag" style="background:#143a25;color:#4ade80;border:1px solid #22c55e">WORKING</span></td></tr>
+        <tr><td><code>sora_redact</code></td><td><code>plugin/sora_bridge_elements.py</code></td><td><span class="tag" style="background:#143a25;color:#4ade80;border:1px solid #22c55e">WORKING</span></td></tr>
+        <tr><td>Installer patcher</td><td><code>installer/enable_sora_bridge_elements.py</code></td><td><span class="tag" style="background:#143a25;color:#4ade80;border:1px solid #22c55e">WORKING</span></td></tr>
+      </tbody>
+    </table></div>
+    <p>These tools register automatically when the gateway loads the plugin. They only read local env/config files and call the local sidecar <code>/health</code> endpoint.</p>
+
+    <h3>What each helper does</h3>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Tool</th><th>Purpose</th><th>Input</th></tr></thead>
+      <tbody>
+        <tr><td><code>sora_bridge_preflight</code></td><td>Verify env, model, Honcho config, sidecar health, and notes dir before trusting a voice session.</td><td>none (reads env)</td></tr>
+        <tr><td><code>sora_live_grill</code></td><td>Analyze a transcript and ask hard questions: objective, constraints, owner, deadline, risk, next command, verification test.</td><td>transcript text</td></tr>
+        <tr><td><code>sora_goal_synth</code></td><td>Generate a Discord-safe <code>/goal</code> plus ranked <code>/subgoal</code> items for weaker models.</td><td>transcript text</td></tr>
+        <tr><td><code>sora_redact</code></td><td>Strip API keys, bearer tokens, JWTs, webhooks, and Discord secrets from text before logs/Discord/Gemini.</td><td>text</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="not-imported">Not imported <a class="anchor" href="#not-imported" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>SORA element</th><th>Status in this repo</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Vapi bridge federation</td><td><span class="tag" style="background:#3b2613;color:#fbbf24;border:1px solid #f59e0b">PLANNED</span></td><td>Separate repo exists; needs API and lifecycle stabilization.</td></tr>
+        <tr><td>MCP orchestration server</td><td><span class="tag" style="background:#2a1a3a;color:#c084fc;border:1px solid #a855f7">RESEARCH</span></td><td>Hermes already has a native MCP client; evaluating whether this plugin should ship its own server.</td></tr>
+        <tr><td>Dograh autonomous agent</td><td><span class="tag" style="background:#3b2613;color:#fbbf24;border:1px solid #f59e0b">PLANNED</span></td><td>No runtime loop in this repo yet.</td></tr>
+        <tr><td>SORA progress sidecar (Discord edit-in-place)</td><td><span class="tag" style="background:#3b2613;color:#fbbf24;border:1px solid #f59e0b">PLANNED</span></td><td>Would require new Discord-message editing surface.</td></tr>
+        <tr><td>SORA video production pipeline</td><td><span class="tag" style="background:#3b2613;color:#fbbf24;border:1px solid #f59e0b">PLANNED</span></td><td>Out of scope for a voice bridge.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="usage">How to use the imported tools <a class="anchor" href="#usage" aria-label="Anchor link">#</a></h2>
+    <p>In Hermes chat:</p>
+<pre><code>sora_bridge_preflight
+sora_live_grill text="long call transcript here"
+sora_goal_synth text="long call transcript here"
+sora_redact text="paste text with secrets here"</code></pre>
+    <p>Or directly in Python:</p>
+<pre><code>import asyncio, sys
+sys.path.insert(0, "plugin")
+from sora_bridge_elements import build_preflight_report
+print(asyncio.run(build_preflight_report()))</code></pre>
+
+    <h2 id="safety">Safety rules <a class="anchor" href="#safety" aria-label="Anchor link">#</a></h2>
+    <ul>
+      <li>No public ports are opened by SORA elements.</li>
+      <li>No HTTP listener is added.</li>
+      <li>Secrets are redacted before Discord/Gemini/log usage.</li>
+      <li>Honcho is only inspected via existing local config paths.</li>
+      <li>A failure in <code>register_sora_bridge_tools()</code> is caught and logged; it cannot break <code>voice_live</code>.</li>
+    </ul>
+
+    <h2 id="when-to-look-at-sora">When to look at SORA instead <a class="anchor" href="#when-to-look-at-sora" aria-label="Anchor link">#</a></h2>
+    <p>If you need autonomous agent loops beyond a single voice session, Vapi outbound-call federation, SORA video generation or editing, or MCP-first orchestration, you want the SORA project — not this plugin. This plugin will continue to point users toward SORA for those use cases.</p>
+
+    <nav class="docnav viewport" aria-label="Doc navigation">
+      <a class="prev" href="architecture.html">
+        <span class="label">← Architecture</span>
+        <span class="title">Audio pipeline &amp; components</span>
+      </a>
+      <a class="next" href="validation-matrix.html">
+        <span class="label">Next →</span>
+        <span class="title">Validation matrix</span>
+      </a>
+    </nav>
+
+    <section class="reveal viewport" aria-label="Continue exploring">
+      <h2 style="margin-top: 0.5em;">Continue exploring</h2>
+      <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
+      <div class="continue reveal-stagger">
+        <a class="continue-card" href="architecture.html">
+          <span class="eyebrow">Next read</span>
+          <h4>Architecture</h4>
+          <p>Audio pipeline, threading, lifecycle, idempotency, function calling, cost control, failure modes.</p>
+          <span class="arrow">Continue →</span>
+        </a>
+        <a class="continue-card" href="validation-matrix.html">
+          <span class="eyebrow">Next read</span>
+          <h4>Validation matrix</h4>
+          <p>Component-by-component WORKING / PARTIAL / PLANNED / RESEARCH status.</p>
+          <span class="arrow">Continue →</span>
+        </a>
+        <a class="continue-card" href="known-bugs.html">
+          <span class="eyebrow">Next read</span>
+          <h4>Known bugs</h4>
+          <p>Discord CDN 4006, stale rejoin, playback semantics, compatibility caveats.</p>
+          <span class="arrow">Continue →</span>
+        </a>
+      </div>
+    </section>
+
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+</script>
+</body>
+</html>

@@ -12,6 +12,12 @@ expects around a live voice bridge:
 
 It does not open any HTTP server and does not expose ports. It only reads local
 env/config files and, when asked, calls the existing localhost sidecar.
+
+Status tags used by this module:
+  WORKING   — implemented and wired
+  PARTIAL   — implemented with known gaps
+  PLANNED   — on the roadmap but not yet shipped
+  RESEARCH  — being evaluated, no production code yet
 """
 
 from __future__ import annotations
@@ -32,6 +38,8 @@ _SECRET_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9._\-]+"), "[REDACTED_DISCORD_WEBHOOK]"),
     (re.compile(r"\bpk_[A-Za-z0-9._\-]{10,}\b"), "pk_[REDACTED]"),
     (re.compile(r"\b(sk|key|ghp|github_pat)_[A-Za-z0-9._\-]{12,}\b"), "[REDACTED_TOKEN]"),
+    # Caution: this last pattern is broad and will redact any three-dot word group.
+    # It is intentionally last so more specific patterns run first.
     (re.compile(r"\b[A-Za-z0-9_\-.]+\.[A-Za-z0-9_\-.]+\.[A-Za-z0-9_\-.]+\b"), "[REDACTED_JWT]"),
 )
 
@@ -69,14 +77,24 @@ def _env_present(name: str) -> bool:
     return bool(os.getenv(name, "").strip())
 
 
+def _display_path(path: Path) -> str:
+    """Return a public-safe path label without leaking host usernames."""
+    try:
+        home = Path.home()
+        return "~/" + str(path.relative_to(home))
+    except Exception:
+        return path.name
+
+
 def _read_json(path: Path) -> Dict[str, Any]:
+    safe_path = _display_path(path)
     try:
         if not path.exists():
-            return {"exists": False, "path": str(path)}
+            return {"exists": False, "path": safe_path}
         data = json.loads(path.read_text(errors="replace"))
-        return {"exists": True, "path": str(path), "keys": sorted(data.keys()) if isinstance(data, dict) else []}
+        return {"exists": True, "path": safe_path, "keys": sorted(data.keys()) if isinstance(data, dict) else []}
     except Exception as exc:
-        return {"exists": True, "path": str(path), "error": f"{type(exc).__name__}: {exc}"}
+        return {"exists": True, "path": safe_path, "error": f"{type(exc).__name__}: {exc}"}
 
 
 async def _sidecar_get(port: int, path: str = "/health", timeout: float = 2.0) -> Dict[str, Any]:
@@ -98,7 +116,7 @@ async def _sidecar_get(port: int, path: str = "/health", timeout: float = 2.0) -
             parsed = {"raw": redact_secrets(body, 2000)}
         return {"reachable": True, "path": path, "body": parsed}
     except Exception as exc:
-        return {"reachable": False, "path": path, "error": f"{type(exc).__name__}: {exc}"}
+        return {"reachable": False, "path": path, "error": type(exc).__name__}
 
 
 async def build_preflight_report(bridge_mod: Any = None, active_bridges: Optional[Dict[int, Any]] = None) -> Dict[str, Any]:
@@ -106,8 +124,8 @@ async def build_preflight_report(bridge_mod: Any = None, active_bridges: Optiona
     home = Path.home()
     notes_dir = Path(os.getenv("DISCORD_VOICE_LIVE_NOTES_DIR", str(home / ".hermes" / "voice-live-notes")))
     port = int(os.getenv("DISCORD_VOICE_LIVE_PORT", "18943"))
-    model = os.getenv("GEMINI_MODEL", getattr(bridge_mod, "GEMINI_MODEL", "")) if bridge_mod else os.getenv("GEMINI_MODEL", "")
-    fallbacks = os.getenv("GEMINI_LIVE_MODEL_FALLBACKS", getattr(bridge_mod, "GEMINI_MODEL_FALLBACKS", "")) if bridge_mod else os.getenv("GEMINI_LIVE_MODEL_FALLBACKS", "")
+    model = os.getenv("GEMINI_MODEL", getattr(bridge_mod, "GEMINI_MODEL", "") if bridge_mod else os.getenv("GEMINI_MODEL", ""))
+    fallbacks = os.getenv("GEMINI_LIVE_MODEL_FALLBACKS", getattr(bridge_mod, "GEMINI_MODEL_FALLBACKS", "") if bridge_mod else os.getenv("GEMINI_LIVE_MODEL_FALLBACKS", ""))
     if isinstance(fallbacks, list):
         fallback_list = fallbacks
     else:
@@ -132,12 +150,12 @@ async def build_preflight_report(bridge_mod: Any = None, active_bridges: Optiona
 
     active = []
     if active_bridges:
-        for gid, info in active_bridges.items():
+        for index, info in enumerate(active_bridges.values(), start=1):
             vc = info.get("vc") if isinstance(info, dict) else None
             active.append({
-                "guild_id": str(gid),
+                "index": index,
                 "vc_connected": bool(vc and vc.is_connected()),
-                "channel_id": str(getattr(getattr(vc, "channel", None), "id", "")) if vc else "",
+                "channel_present": bool(getattr(vc, "channel", None)) if vc else False,
                 "task_done": bool(info.get("task") and info.get("task").done()) if isinstance(info, dict) else False,
             })
 
@@ -158,12 +176,13 @@ async def build_preflight_report(bridge_mod: Any = None, active_bridges: Optiona
         },
         "honcho": {
             "enabled": os.getenv("VOICE_LIVE_HONCHO_CONTEXT", "true"),
-            "peer": os.getenv("VOICE_LIVE_HONCHO_PEER", os.getenv("HONCHO_PEER_NAME", os.getenv("DISCORD_VOICE_LIVE_USER_ID", ""))),
+            "peer_configured": bool(os.getenv("VOICE_LIVE_HONCHO_PEER") or os.getenv("HONCHO_PEER_NAME") or os.getenv("DISCORD_VOICE_LIVE_USER_ID")),
             "configs": honcho_configs,
             "required_behavior": "fail loud on 401/missing workspace/missing peer instead of silent empty context",
         },
-        "sidecar": {"port": port, **sidecar},
-        "notes": {"dir": str(notes_dir), "exists": notes_dir.exists()},
+        "sidecar": {"loopback": True, **sidecar},
+        "notes": {"dir": _display_path(notes_dir), "exists": notes_dir.exists()},
+        "active_bridge_count": len(active),
         "active_bridges": active,
         "warnings": warnings,
     }

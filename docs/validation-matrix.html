@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validation matrix · Hermes Live Discord Agent Plugin</title>
+<meta name="description" content="Component-by-component WORKING / PARTIAL / PLANNED / RESEARCH status for the Gemini Live Discord bridge v2.">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300d4ff'/%3E%3Cpath d='M9 16h14M9 11h14M9 21h10' stroke='%230b1020' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .status-tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; letter-spacing:.4px; }
+  .status-working { background:#143a25; color:#4ade80; border:1px solid #22c55e; }
+  .status-partial { background:#3a2a13; color:#fbbf24; border:1px solid #f59e0b; }
+  .status-planned { background:#3b2613; color:#fbbf24; border:1px solid #f59e0b; }
+  .status-research { background:#2a1a3a; color:#c084fc; border:1px solid #a855f7; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand">
+      <a href="index.html" class="brand-link" aria-label="Hermes Live home">
+        <img class="brand-mark" src="assets/hermes-mark.svg" alt="" width="22" height="22">
+        <span class="brand-text">Hermes <span class="brand-accent">Live</span></span>
+      </a>
+    </div>
+    <nav class="links" aria-label="Primary">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#roadmap">Roadmap</a>
+      <a href="index.html#install">Install</a>
+      <a href="architecture.html" class="active">Docs</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <aside class="toc" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>
+      <li><a href="#gemini-live">1. Gemini Live API</a></li>
+      <li><a href="#discord">2. Discord voice</a></li>
+      <li><a href="#sidecar">3. Sidecar HTTP API</a></li>
+      <li><a href="#sora">4. SORA bridge elements</a></li>
+      <li><a href="#vapi">5. Vapi bridge</a></li>
+      <li><a href="#mcp">6. MCP</a></li>
+      <li><a href="#dograh">7. Dograh / full SORA runtime</a></li>
+      <li><a href="#tools">8. Tool families</a></li>
+      <li><a href="#profiles">9. Profiles / isolation</a></li>
+      <li><a href="#observability">10. Observability / ops</a></li>
+    </ul>
+  </aside>
+
+  <article>
+    <section class="hero-page viewport tilt-target">
+      <div class="crumbs"><a href="index.html">Home</a><span class="sep">/</span><a href="index.html#features">Docs</a><span class="sep">/</span> Validation matrix</div>
+      <span class="eyebrow">Documentation</span>
+      <h1 class="display">Validation <span class="accent">matrix.</span></h1>
+      <p class="dek">Honest status tags for every major component. WORKING means wired and exercised; PARTIAL means code exists with known gaps; PLANNED is not shipped; RESEARCH is being evaluated.</p>
+    </section>
+
+    <p>
+      <span class="status-tag status-working">WORKING</span> code exists, registered, exercised.
+      <span class="status-tag status-partial">PARTIAL</span> code exists but has gaps or external deps.
+      <span class="status-tag status-planned">PLANNED</span> not shipped.
+      <span class="status-tag status-research">RESEARCH</span> being evaluated.
+    </p>
+
+    <h2 id="gemini-live">1. Gemini Live API integration <a class="anchor" href="#gemini-live" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Evidence / notes</th></tr></thead>
+      <tbody>
+        <tr><td>Bidirectional audio WSS</td><td><span class="status-tag status-working">WORKING</span></td><td><code>plugin/bridge.py</code> <code>GeminiLiveBridge._connect()</code>, <code>_send_audio()</code>, <code>_recv_loop()</code>.</td></tr>
+        <tr><td>Opus decode / encode</td><td><span class="status-tag status-working">WORKING</span></td><td><code>VoiceListener</code>, <code>LiveAudioSource</code>; PCM resampling with numpy.</td></tr>
+        <tr><td>Function calling inside voice session</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_handle_tool_call()</code> dispatches local tools and returns <code>toolResponse</code>.</td></tr>
+        <tr><td>Vision / frame push</td><td><span class="status-tag status-working">WORKING</span></td><td><code>POST /frame</code>, <code>voice_live_frame</code>, image URL fetch.</td></tr>
+        <tr><td>Native audio models</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>Tested on current native-audio previews; <code>mediaResolution</code> omitted because models reject it.</td></tr>
+        <tr><td>Voice selection (Gemini TTS)</td><td><span class="status-tag status-working">WORKING</span></td><td><code>DISCORD_VOICE_LIVE_VOICE</code> passed in <code>voiceConfig</code>.</td></tr>
+        <tr><td>Model fallbacks</td><td><span class="status-tag status-working">WORKING</span></td><td><code>GEMINI_LIVE_MODEL_FALLBACKS</code> comma list.</td></tr>
+        <tr><td>Cost controls</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>1 fps cap, 512 KB frame cap, audio gating, idle hangup. Dollar estimates are approximations.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="discord">2. Discord voice integration <a class="anchor" href="#discord" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Evidence / notes</th></tr></thead>
+      <tbody>
+        <tr><td>Join voice channel</td><td><span class="status-tag status-working">WORKING</span></td><td><code>voice_live()</code>; slash <code>/voice-live</code>.</td></tr>
+        <tr><td>Leave voice channel</td><td><span class="status-tag status-working">WORKING</span></td><td><code>voice_live_leave()</code>; slash <code>/voice-live-leave</code>.</td></tr>
+        <tr><td>Move between channels</td><td><span class="status-tag status-working">WORKING</span></td><td><code>current_vc.move_to(target)</code> when re-triggered.</td></tr>
+        <tr><td>Stale rejoin cleanup</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_active_bridges</code> stale-entry cleanup in <code>voice_live()</code>.</td></tr>
+        <tr><td>Auto-infer user's current channel</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_infer_user_voice_channel()</code> for slash command.</td></tr>
+        <tr><td>Typing SFX</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_load_typing_sfx_pcm()</code>; env controls.</td></tr>
+        <tr><td>Idle hangup</td><td><span class="status-tag status-working">WORKING</span></td><td><code>AUTO_LEAVE_QUIET_SECONDS</code>, idle prompt, grace period.</td></tr>
+        <tr><td>Video state awareness</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_video_state_watcher()</code> polls <code>self_stream</code>/<code>self_video</code>.</td></tr>
+        <tr><td>Discord CDN 4006 quirk</td><td><span class="status-tag status-working">WORKING workaround</span></td><td>First ~5 handshakes rejected; ~27 s connect time. Patience required.</td></tr>
+        <tr><td>Multiple concurrent guild bridges</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>One per guild supported; global resource contention untested at scale.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="sidecar">3. Sidecar HTTP API (<code>127.0.0.1:18943</code>) <a class="anchor" href="#sidecar" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Endpoint</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /health</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Returns <code>voice_connected</code>, <code>running</code>, model, counters.</td></tr>
+        <tr><td><code>POST /frame</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Pushes image to Gemini; <code>force=true</code> supported.</td></tr>
+        <tr><td><code>GET /notes</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Recent call-note events from <code>NOTES_DIR</code>.</td></tr>
+        <tr><td><code>GET /say?text=…</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Injects text into the Gemini session.</td></tr>
+        <tr><td>Clean shutdown</td><td><span class="status-tag status-working">WORKING</span></td><td><code>_shutdown_watcher()</code> breaks <code>serve_forever()</code>.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="sora">4. SORA bridge elements (v2) <a class="anchor" href="#sora" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Tool</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>sora_bridge_preflight</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Local diagnostics; redacts secrets; only calls <code>127.0.0.1</code>.</td></tr>
+        <tr><td><code>sora_live_grill</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Transcript analysis → objective/constraints/owner/deadline/risk/next/verification.</td></tr>
+        <tr><td><code>sora_goal_synth</code></td><td><span class="status-tag status-working">WORKING</span></td><td><code>/goal</code> + ranked <code>/subgoal</code>.</td></tr>
+        <tr><td><code>sora_redact</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Secret redaction before Gemini/Discord/logs.</td></tr>
+        <tr><td>Auto-wiring in <code>__init__.py</code></td><td><span class="status-tag status-working">WORKING</span></td><td>Imports <code>register_sora_bridge_tools</code> inside <code>register(ctx)</code>.</td></tr>
+        <tr><td>Regression tests</td><td><span class="status-tag status-working">WORKING</span></td><td><code>scripts/regression_test_sora_elements.py</code> (19 checks).</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="vapi">5. Vapi bridge <a class="anchor" href="#vapi" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Vapi voice bridge plugin</td><td><span class="status-tag status-planned">PLANNED</span></td><td>Separate repo exists; not merged yet.</td></tr>
+        <tr><td><code>voice_vapi</code> tool</td><td><span class="status-tag status-planned">PLANNED</span></td><td>Requires porting Vapi WebSocket/audio logic.</td></tr>
+        <tr><td>Shared sidecar port (<code>18944</code>)</td><td><span class="status-tag status-planned">PLANNED</span></td><td>Env <code>DISCORD_VOICE_LIVE_PORT_VAPI=18944</code> reserved, no listener yet.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="mcp">6. MCP (Model Context Protocol) <a class="anchor" href="#mcp" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Native Hermes MCP client</td><td><span class="status-tag status-research">RESEARCH</span></td><td>Hermes supports MCP servers in <code>config.yaml</code>; no MCP server shipped by this plugin yet.</td></tr>
+        <tr><td>SORA MCP orchestration</td><td><span class="status-tag status-research">RESEARCH</span></td><td>Evaluating bridge health/transcripts as MCP resources.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="dograh">7. Dograh / full SORA runtime <a class="anchor" href="#dograh" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Dograh autonomous agent</td><td><span class="status-tag status-planned">PLANNED</span></td><td>No code in this repo yet.</td></tr>
+        <tr><td>SORA goal-stack runtime</td><td><span class="status-tag status-planned">PLANNED</span></td><td><code>sora_goal_synth</code> is a text helper; the full runtime loop is not wired.</td></tr>
+        <tr><td>SORA progress sidecar for Discord</td><td><span class="status-tag status-planned">PLANNED</span></td><td>Not imported; requires new Discord-message editing surface.</td></tr>
+        <tr><td>SORA video production pipeline</td><td><span class="status-tag status-planned">PLANNED</span></td><td>Out of scope for the Gemini bridge.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="tools">8. Tool families <a class="anchor" href="#tools" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Family</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Spotify</td><td><span class="status-tag status-working">WORKING</span></td><td>9 tools declared; needs Spotify auth.</td></tr>
+        <tr><td>Web search / extract</td><td><span class="status-tag status-working">WORKING</span></td><td>2 tools; uses Hermes web tools.</td></tr>
+        <tr><td>GitHub</td><td><span class="status-tag status-working">WORKING</span></td><td>7 tools via <code>gh</code> CLI; needs <code>gh</code> auth.</td></tr>
+        <tr><td>Email</td><td><span class="status-tag status-working">WORKING</span></td><td>list/read/send/reply; Gmail API; STT correction.</td></tr>
+        <tr><td>Local helpers</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>Declared; some depend on system commands and may fail if missing.</td></tr>
+        <tr><td>Home Assistant</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>4 tools; needs <code>HASS_TOKEN</code>.</td></tr>
+        <tr><td>OpenCode CLI</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>Requires <code>opencode</code> installed and on PATH.</td></tr>
+        <tr><td>System inspect</td><td><span class="status-tag status-working">WORKING</span></td><td>Owner-only allowlist.</td></tr>
+        <tr><td>Multi-CLI delegation</td><td><span class="status-tag status-partial">PARTIAL</span></td><td><code>local_delegate_*</code> wired; <code>numasec</code>/<code>hermes-api</code> platforms declared but not verified.</td></tr>
+        <tr><td>Onboarding</td><td><span class="status-tag status-working">WORKING</span></td><td>First-session Q&amp;A persisted to profile.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="profiles">9. Profiles / isolation <a class="anchor" href="#profiles" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Auto-create per-user profile</td><td><span class="status-tag status-working">WORKING</span></td><td><code>user_profiles.py</code>.</td></tr>
+        <tr><td>Owner detection</td><td><span class="status-tag status-working">WORKING</span></td><td><code>VOICE_OWNER_DISCORD_ID</code>.</td></tr>
+        <tr><td>Tool allowlist</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>Implemented but review before exposing to untrusted users.</td></tr>
+        <tr><td>Cross-user session isolation</td><td><span class="status-tag status-partial">PARTIAL</span></td><td>Opencode registry keyed per user; not formally audited.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="observability">10. Observability / ops <a class="anchor" href="#observability" aria-label="Anchor link">#</a></h2>
+    <div class="tablewrap reveal"><table>
+      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Webhook dispatcher</td><td><span class="status-tag status-working">WORKING</span></td><td>6 event classes; per-class URLs.</td></tr>
+        <tr><td>OpenCode watcher</td><td><span class="status-tag status-working">WORKING</span></td><td>Polls tmux log; milestone detection; voice injection.</td></tr>
+        <tr><td>Email reminder poller</td><td><span class="status-tag status-working">WORKING</span></td><td>5-min poll, spam filter, hourly cap.</td></tr>
+        <tr><td>Post-call notes / transcripts</td><td><span class="status-tag status-working">WORKING</span></td><td>JSONL notes in <code>DISCORD_VOICE_LIVE_NOTES_DIR</code>.</td></tr>
+        <tr><td>Autostart file</td><td><span class="status-tag status-working">WORKING</span></td><td><code>~/.hermes/voice-live-autostart.json</code>.</td></tr>
+        <tr><td><code>systemctl</code> service management</td><td><span class="status-tag status-working">WORKING</span></td><td>Documented in README and AGENTS.md.</td></tr>
+      </tbody>
+    </table></div>
+
+    <nav class="docnav viewport" aria-label="Doc navigation">
+      <a class="prev" href="sora-migration.html">
+        <span class="label">← SORA migration</span>
+        <span class="title">What is imported from SORA</span>
+      </a>
+      <a class="next" href="known-bugs.html">
+        <span class="label">Next →</span>
+        <span class="title">Known bugs &amp; quirks</span>
+      </a>
+    </nav>
+
+    <section class="reveal viewport" aria-label="Continue exploring">
+      <h2 style="margin-top: 0.5em;">Continue exploring</h2>
+      <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px; font-size: 14px;">Pick another doc to keep the chain going.</p>
+      <div class="continue reveal-stagger">
+        <a class="continue-card" href="sora-migration.html">
+          <span class="eyebrow">Previous read</span>
+          <h4>SORA migration</h4>
+          <p>What is imported, what is planned, and what points users toward SORA.</p>
+          <span class="arrow">← Back</span>
+        </a>
+        <a class="continue-card" href="architecture.html">
+          <span class="eyebrow">Next read</span>
+          <h4>Architecture</h4>
+          <p>Audio pipeline, threading, lifecycle, idempotency, function calling, cost control, failure modes.</p>
+          <span class="arrow">Continue →</span>
+        </a>
+        <a class="continue-card" href="known-bugs.html">
+          <span class="eyebrow">Next read</span>
+          <h4>Known bugs</h4>
+          <p>Discord CDN 4006, stale rejoin, playback semantics, compatibility caveats.</p>
+          <span class="arrow">Continue →</span>
+        </a>
+      </div>
+    </section>
+
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 Capslockb · MIT licensed</div>
+    <div>
+      <a href="index.html">Home</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="configuration.html">Configuration</a>
+      <a href="known-bugs.html">Known bugs</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('aside.toc a[href^="#"]');
+    if (!links.length) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var targets = Object.keys(map).map(function (id) {
+      return { id: id, el: document.getElementById(id), link: map[id] };
+    }).filter(function (t) { return t.el; });
+    function onScroll() {
+      var y = window.scrollY + 100;
+      var active = null;
+      targets.forEach(function (t) {
+        if (t.el.offsetTop <= y) active = t;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nodes = document.querySelectorAll('.reveal, .reveal-stagger, .reveal-left, .reveal-right');
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || reduce) {
+      nodes.forEach(function (n) { n.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    nodes.forEach(function (n) { io.observe(n); });
+  })();
+</script>
+</body>
+</html>

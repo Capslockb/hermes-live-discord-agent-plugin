@@ -1,8 +1,8 @@
 name: discord-voice
-version: 0.3.6
+version: 0.3.0
 kind: standalone
 platforms: [linux]
-description: High-performance Discord Voice bridge via Gemini Multimodal Live API
+description: Hermes Live Discord Agent Plugin — full-duplex Discord voice ↔ Google Gemini Multimodal Live (audio + vision + function calling + transcripts + multi-CLI delegation)
 python_requirements:
   - requirements.txt
 provides_tools:
@@ -10,7 +10,6 @@ provides_tools:
   - voice_live_leave
   - voice_live_status
   - voice_live_frame
-  - voice_live_video_status
   - voice_live_notes
   - sora_bridge_preflight
   - sora_live_grill
@@ -34,14 +33,14 @@ optional_env:
     prompt: "Local HTTP control port (default: 18943)"
     password: false
   - name: DISCORD_VOICE_LIVE_VOICE
-    prompt: "Gemini Live voice name (default: Kore)"
+    prompt: "Gemini Live voice name (default: Aoede)"
+    password: false
+  - name: DISCORD_VOICE_LIVE_NOTES_DIR
+    prompt: "Directory for voice-live notes/transcripts"
     password: false
   - name: VOICE_LIVE_HONCHO_CONTEXT
-    prompt: "Enable Honcho memory context injection (default: true)"
+    prompt: "Enable Honcho memory context for live sessions (true/false)"
     password: false
   - name: VOICE_LIVE_HONCHO_PEER
-    prompt: "Optional Honcho peer override"
-    password: false
-  - name: DISCORD_VOICE_LIVE_SAFE_MODE
-    prompt: "Future safe-mode flag for minimal tools during diagnostics"
+    prompt: "Honcho peer alias for live session memory"
     password: false
