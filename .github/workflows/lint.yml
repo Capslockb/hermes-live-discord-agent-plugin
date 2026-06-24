@@ -20,7 +20,7 @@ jobs:
           python3 -m py_compile plugin/bridge.py plugin/__init__.py
           python3 -m py_compile installer/install.py
           python3 -m py_compile scripts/post_call_summary.py
+      - name: install pyyaml
+        run: pip install pyyaml
       - name: yaml lint
-        run: |
-          python3 -c "import yaml; yaml.safe_load(open('plugin/plugin.yaml').read())" \
-            || (apt-get update && apt-get install -y python3-yaml && python3 -c "import yaml; yaml.safe_load(open('plugin/plugin.yaml').read())")
+        run: python3 -c "import yaml; yaml.safe_load(open('plugin/plugin.yaml').read())"
