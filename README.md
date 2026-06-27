@@ -9,6 +9,23 @@
 
 ---
 
+### Why this changes everything
+
+You've used chatbots. You've used voice assistants that feel like phone trees. **This is neither.**
+
+Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, sees your screen, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No SaaS, no relay, no vendor lock-in. Just your gateway, your keys, your hardware.
+
+**What it feels like:**
+- You join a voice channel. The agent greets you by name and recalls last week's debugging session.
+- You share your screen. It watches, understands, and talks you through the fix in real time.
+- You say "ship it" — it delegates to Codex, tracks the PR, and pings you when CI passes.
+- You go AFK. It emails you a 3-bucket digest of what happened while you were gone.
+- You come back. The conversation picks up exactly where it left off.
+
+This isn't a demo. It's the voice layer your infrastructure has been waiting for.
+
+---
+
 ## 📖 [Documentation →](docs-site/index.html)
 
 A proper website is now available in [`docs-site/`](docs-site/index.html) — built from the source markdown in `docs/`. Open `docs-site/index.html` in a browser, or serve it with any static host (`python3 -m http.server` works). 13 pages covering architecture, personality, fallback chain, notifications, email brief, SFX library, webhooks, video feeder, env vars, troubleshooting, and the changelog.
@@ -17,7 +34,7 @@ If you prefer raw markdown, every page is also in [`docs/`](docs/).
 
 ---
 
-## Quick start
+## Quick start — 3 commands, 2 minutes
 
 ```bash
 # 1. Install
@@ -39,7 +56,7 @@ The installer handles venv, symlinks, env prompts, and SFX directory creation. S
 
 ---
 
-## What's in the box
+## What's in the box — the feature set that ships today
 
 | | |
 |---|---|
