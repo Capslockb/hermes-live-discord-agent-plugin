@@ -301,9 +301,12 @@ def register(ctx):
 
 
     # SORA bridge elements: preflight/grill/goal synthesis/redaction
+    # Imported late and wrapped so a failure here never breaks voice-live.
+    # Pass bridge_mod explicitly (None if bridge.py failed to load) to avoid
+    # any ambiguity about module-level variable state.
     try:
-        from sora_bridge_elements import register_sora_bridge_tools
-        register_sora_bridge_tools(ctx, _bridge_mod, _active_bridges)
+        from .sora_bridge_elements import register_sora_bridge_tools
+        register_sora_bridge_tools(ctx, bridge_mod=_bridge_mod, active_bridges=_active_bridges)
     except Exception as exc:
         logger.warning("SORA bridge elements failed to register: %s: %s", type(exc).__name__, exc)
 
