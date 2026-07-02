@@ -32,6 +32,14 @@ A proper website is now available in [`docs-site/`](docs-site/index.html) — bu
 
 If you prefer raw markdown, every page is also in [`docs/`](docs/).
 
+## Companion X/Twitter Context
+
+For live community calls, pair Hermes Live with
+[Hermes Tweet](https://github.com/Xquik-dev/hermes-tweet). Hermes Tweet can
+bring current X/Twitter posts, account context, and trend summaries into Hermes,
+while Hermes Live turns that context into voice briefings, Discord DMs, or
+channel notifications.
+
 ---
 
 ## Quick start — 3 commands, 2 minutes
