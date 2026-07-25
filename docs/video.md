@@ -1,57 +1,72 @@
 # Video Frame Feeder
 
-The `video-frame-feeder.py` is a companion script that captures your local screen and pushes frames to the `discord-voice` bridge's `/frame` endpoint. This allows Gemini Live to "see" what you are doing in real-time.
+`video-frame-feeder.py` is intended to capture a local screen or window and send selected JPEG frames to the `discord-voice` bridge's `/frame` endpoint so Gemini Live can receive visual context.
 
-## ⚠️ Critical Constraint: How it Works
-**Discord bots cannot see user screen-shares natively.** 
+## Current status
 
-If you share your screen within the Discord app, the bot **cannot** see it. To give the bot vision, you must run this feeder on a machine that has a real display (e.g., your laptop). The feeder captures the display locally and sends the image data over HTTP to the bridge.
+> **Blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).** The checked-in feeder currently conflicts with argparse's reserved `-h/--help` option, and neither the feeder nor the in-process `voice_live_frame` client sends the `X-API-Secret` required by `/frame`. Do not treat either path as operational until the executable fix and its tests are reviewed.
 
-- **Correct Flow:** Laptop (Feeder) $\rightarrow$ HTTP POST $\rightarrow$ Bridge $\rightarrow$ Gemini Live.
-- **Wrong Flow:** Laptop $\rightarrow$ Discord Screen Share $\rightarrow$ Bot (Blind).
+The control server binds to `127.0.0.1`. A direct Tailscale or other remote URL is not a supported feeder endpoint in the current runtime.
+
+## Critical constraint: Discord screen shares are not bot video input
+
+Discord bots cannot see a user's native Discord screen share or camera stream. The bridge can only receive frames that are explicitly posted to `/frame` by a local trusted client.
+
+After Issue #9 is fixed, the supported flow should remain:
+
+- **Frame path:** local display capture → authenticated loopback HTTP POST → bridge → Gemini Live.
+- **Not a frame path:** Discord screen share → bot. The bot receives awareness state only, not the Discord video stream.
 
 ## Installation
 
 ### Automatic
-Running `install.sh` automatically copies the feeder to `~/.hermes/scripts/video-frame-feeder.py` and sets the correct permissions.
+
+`install.sh` copies the feeder to `~/.hermes/scripts/video-frame-feeder.py` and marks it executable. This copy step does **not** make frame delivery operational while Issue #9 remains unresolved.
 
 ### Manual
-If you need to install it manually:
+
 ```bash
 mkdir -p ~/.hermes/scripts/
 cp scripts/video-frame-feeder.py ~/.hermes/scripts/video-frame-feeder.py
 chmod +x ~/.hermes/scripts/video-frame-feeder.py
 ```
 
-## Usage & CLI Flags
+## Usage and CLI flags
 
-### Quick Start
-Run the feeder by pointing it to your bridge's Tailscale or local URL:
-```bash
-python3 ~/.hermes/scripts/video-frame-feeder.py --endpoint http://<your-bridge-tailscale-url>:18943/frame --source-label my-laptop
-```
+There is no supported working launch command on the current head. In particular, do not work around the parser conflict by disabling standard help, and do not expose port `18943` remotely to bypass authentication.
 
-### CLI Flags
-| Flag | Description |
+The current script declares these options:
+
+| Flag | Current behavior |
 |---|---|
-| `--endpoint` | The URL of the bridge's `/frame` endpoint (required). |
-| `--source` | Screen source (e.g., `0` for primary, `DISPLAY` env var). |
-| `--min-change` | Minimum Hamming distance (0-64) to trigger a send. Default: `4`. |
-| `--stddev-min` | Minimum standard deviation of pixels to consider "content". Default: `0`. |
-| `--no-content-filter` | Disable perceptual hashing and stddev checks. |
-| `--source-label` | Label for this feed (e.g., `my-laptop`), sent in the `X-Source-Label` header. |
-| `--once` | Capture a single frame and exit. |
+| `--endpoint` | Bridge `/frame` URL. Defaults to `http://127.0.0.1:18943/frame`. |
+| `--interval` | Seconds between capture attempts. Default `1.0`; values below `1.0` are raised to `1.0`. |
+| `--source` | Capture source. Default `screen`; a platform-specific window title or X11 window ID may also be used. |
+| `--x`, `--y` | Screen-capture offsets. Default `0`; used by the Linux screen path. |
+| `--width` | Capture width. Default `768`. |
+| `--height` | Capture height. Default `768`. The current `-h` alias conflicts with argparse help and must be removed by Issue #9. |
+| `--display` | X11 display override. Defaults to `$DISPLAY` or `:0.0`. |
+| `--force` | Bypass the bridge's recent-audio gate. It does not bypass authentication. |
+| `--once` | Attempt one capture and exit. |
+| `--min-change` | Minimum 64-bit aHash Hamming distance required to send. Default `2`. |
+| `--stddev-min` | Minimum grayscale-pixel standard deviation. Default `0`, which disables uniform-frame rejection. |
+| `--no-content-filter` | Disable aHash and standard-deviation filtering. |
+| `--source-label` | URL-encoded into the `source` query parameter; it is not sent in an `X-Source-Label` header. |
 
-## Content-Aware Filtering
-To save bandwidth and tokens, the feeder uses a perceptual hash (aHash). It generates a 64-bit grayscale thumbnail of the screen and compares it to the previous frame. If the Hamming distance is below `--min-change`, the frame is dropped. This prevents the feeder from spamming identical static images (like a code editor) while still reacting to movement.
+## Content-aware filtering
+
+The feeder first asks FFmpeg for an 8×8 raw grayscale thumbnail: 64 pixels and therefore 64 bytes. It computes an average hash and pixel standard deviation from that thumbnail. The full-resolution JPEG is captured only when the filter decides the frame should be sent, or when thumbnail capture fails and the fallback path is used.
 
 ## Troubleshooting
 
-- **Black frames / No frames sent:** The content filter might be too aggressive. Try `--stddev-min 0` or `--no-content-filter`.
-- **Too many frames / High CPU:** Increase `--min-change` (e.g., to `8` or `12`).
-- **Bridge Auth Error:** Ensure `~/.hermes/control.secret` on the feeder machine matches the one on the bridge machine (or is created by `install.sh`).
-- **"x11 not found" / "Unable to get screen":** This is a headless host. You **must** run the feeder on a machine with a physical or virtual display (X11/Wayland).
+- **Argument conflict mentioning `-h`:** this is the known startup blocker in Issue #9. It occurs before any capture or HTTP request.
+- **`401 Unauthorized`:** the current clients omit the required `X-API-Secret`. Copying `~/.hermes/control.secret` is not a valid workaround: the runtime defaults to `~/.hermes/voice-live-control-secret`, and the feeder reads neither file on the current head.
+- **Remote/Tailscale endpoint fails:** the sidecar listens only on loopback. Keep it loopback-only; any remote transport needs a separately reviewed authenticated tunnel or proxy design.
+- **Black frames or no content-selected frames after the runtime fix:** test with `--stddev-min 0` or `--no-content-filter`.
+- **Too many frames or high CPU after the runtime fix:** increase `--min-change`, for example to `8` or `12`.
+- **`x11 not found` or `Unable to get screen`:** run the feeder on a machine with a usable physical or virtual display and the appropriate FFmpeg capture backend.
 
-## See Also
-- `voice_live_frame` tool: Allows the agent to manually request a frame move from chat.
-- `voice_live_video_status` tool: Check the current count of accepted vs. dropped frames.
+## See also
+
+- `voice_live_frame`: currently blocked by the same missing-auth propagation tracked in Issue #9.
+- `voice_live_video_status`: read-only status inspection; it does not repair or authenticate frame delivery.
