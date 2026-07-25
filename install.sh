@@ -13,7 +13,7 @@ set -euo pipefail
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 PLUGIN_NAME="discord-voice"
-REPO_URL="https://github.com/Capslockb/gemini-live-discord-bridge.git"
+REPO_URL="https://github.com/Capslockb/hermes-live-discord-agent-plugin.git"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PLUGINS_DIR="$HERMES_HOME/plugins"
 INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
@@ -242,4 +242,3 @@ echo "Next steps:"
 echo "  1. Restart the Hermes gateway so it picks up the new plugin:"
 echo "       systemctl --user restart hermes-gateway"
 echo "  2. From Discord, run:   /voice-live"
-echo
