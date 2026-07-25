@@ -31,6 +31,6 @@ The full recipe is in the `silence-detect-sfx-cutting` skill.
 
 ## License
 
-The source videos are published by **Brand Name Audio** and are widely used as YouTube royalty-free SFX. The exact license terms should be confirmed on the source videos before commercial use. For personal / open-source use (this plugin's intended audience), the clips are credited here and can be swapped out by users with their own audio.
+The source videos are published by **Brand Name Audio** and are commonly presented as royalty-free SFX, but the exact terms must be confirmed on each source video before use, redistribution, or commercial deployment. This repository does not currently include a standalone license that grants reuse rights to the bundled clips. Users should replace them with audio they are licensed to use when in doubt.
 
-If you're a rights holder and want these clips removed from the repo, please open an issue at https://github.com/Capslockb/gemini-live-discord-bridge/issues.
+If you're a rights holder and want these clips removed from the repository, please open an issue at https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues.
