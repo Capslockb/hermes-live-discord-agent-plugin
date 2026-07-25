@@ -27,12 +27,14 @@ From Discord, join a voice channel, then in any text channel:
 /voice-live-leave    # leave
 ```
 
-That's it. The bridge will:
+The bridge will:
 
-1. Connect to your voice channel (Discord CDN quirk: first attempt takes ~27s — this is normal, do not restart the gateway)
-2. Handshake with Gemini Live
-3. Play the `transition` sfx
-4. Wait for you to speak — first turn is muted by design
+1. Ask Discord to connect to your voice channel with reconnect enabled and a 60-second connection timeout.
+2. Handshake with Gemini Live.
+3. Play the `transition` sfx.
+4. Wait for you to speak — first-turn output is suppressed by an `audioStreamEnd` signal.
+
+Startup duration depends on Discord and network conditions. The current code does not establish that the first five handshakes always fail or that every connection succeeds after roughly 27–30 seconds.
 
 ## Verify
 
@@ -40,12 +42,12 @@ That's it. The bridge will:
 curl -s http://127.0.0.1:18943/health | python3 -m json.tool
 ```
 
-You should see `"voice_connected": true`, `"running": true`, and a non-zero `audio_in_chunks` after you speak.
+After a successful session starts, the response should show `"voice_connected": true` and `"running": true`. `audio_in_chunks` should become non-zero after accepted voice audio is received.
 
 ## Common pitfalls
 
-- **"Bridge failed to start"** — wait ~30s. The first 5 voice WebSocket handshakes are rejected by the Discord CDN; the bridge retries.
-- **First-turn hallucination** ("I see you're sharing your screen") — the system prompt has the guard, but if you see this, the audioStreamEnd mute is missing. Check `bridge.py` for `await self._gemini._ws.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))` right after `connect()`.
+- **"Bridge failed to start"** — allow the command to finish its connection attempt, then inspect `journalctl --user -u hermes-gateway -n 100 --no-pager`. The bridge returns failure if `channel.connect()` or the Gemini handshake raises; it does not guarantee a later automatic success.
+- **First-turn hallucination** ("I see you're sharing your screen") — the current bridge sends `audioStreamEnd` immediately after the Gemini setup completes. Check the gateway log for `sent initial mute audioStreamEnd`; avoid relying on a source-code line-number check.
 - **No audio in voice** — check `~/.hermes/voice-users/sfx/` exists and the four WAV files are present.
 - **No video/frame input** — the bundled frame clients are currently blocked by the CLI and authentication defects tracked in [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
 
