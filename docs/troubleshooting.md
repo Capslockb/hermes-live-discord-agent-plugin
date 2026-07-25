@@ -4,7 +4,7 @@ Common bridge failures and how to fix them.
 
 ## "Bridge failed to start"
 
-Most common cause: **Discord CDN handshake quirk** (criterion #38, see `AGENTS.md`). The voice WebSocket endpoint rejects the first 5 handshakes with code 4006 before accepting. A single `channel.connect()` takes ~27 seconds of internal retries.
+Most common cause: **Discord CDN handshake quirk**. The voice WebSocket endpoint rejects the first 5 handshakes with code 4006 before accepting. A single `channel.connect()` takes ~27 seconds of internal retries.
 
 **Do not** restart the gateway repeatedly to "retry" — each restart resets the retry clock and you'll hit the rate limit harder.
 
@@ -18,7 +18,7 @@ If a previous bridge is in `_active_bridges` but `vc.is_connected()` is False, t
 
 ## First-turn "I see you're sharing your screen" hallucination
 
-Two root causes (criterion #34):
+Two root causes:
 1. The system prompt told the model "if someone shares their screen..." — Gemini hallucinated this as an implied task on every connect.
 2. The first-turn mute (`audioStreamEnd` after setup) wasn't being sent.
 
