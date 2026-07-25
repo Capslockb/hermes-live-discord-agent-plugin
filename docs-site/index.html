@@ -46,8 +46,8 @@
     </nav>
 
     <div class="sidebar-foot">
-      <a href="https://github.com/Capslockb/gemini-live-discord-bridge">GitHub →</a><br>
-      MIT licensed · Hermes Agent plugin
+      <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">GitHub →</a><br>
+      No standalone license · Hermes Agent plugin
     </div>
   </aside>
 
@@ -69,7 +69,7 @@
           <div class="hero-mark">H</div>
           <div class="hero-tag">🎙️ Discord voice agent · Gemini Multimodal Live</div>
           <h1 class="hero-title">Hermes Live</h1>
-          <p class="hero-sub">A real-time, multimodal AI you can drop into any Discord voice channel. Open source, self-hostable, MIT.</p>
+          <p class="hero-sub">A real-time, multimodal AI you can drop into any Discord voice channel. Self-hostable as a Hermes Agent plugin.</p>
           <div class="hero-meta">
             <span class="hero-pill good">v0.3.4.2</span>
             <span class="hero-pill accent">VOPI build</span>
@@ -135,7 +135,7 @@
         <div class="card">
           <div class="icon">control</div>
           <h3>Sidecar HTTP API</h3>
-          <p>Local on 127.0.0.1:18943. <code>/health</code>, <code>/frame</code>, <code>/say</code>, <code>/leave</code>, <code>/notify</code>.</p>
+          <p>Loopback-only on <code>127.0.0.1:18943</code>. <code>/health</code> is anonymous and read-only; <code>/stop</code>, <code>/frame</code>, <code>/say</code>, and <code>/notify</code> require the per-process API secret. <code>/notes</code> is anonymous and may expose stored voice events or reconstructed transcripts.</p>
         </div>
       </div>
 
@@ -143,8 +143,8 @@
 
       <p>Five commands, two minutes.</p>
 <pre><code class="lang-bash"># 1. Clone
-git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
-cd gemini-live-discord-bridge
+ git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+ cd hermes-live-discord-agent-plugin
 
 # 2. Install (prompts for env: DISCORD_BOT_TOKEN, GEMINI_API_KEY, user ID)
 ./install.sh
@@ -228,10 +228,10 @@ curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre>
       </div>
 
       <h2 id="cost">Cost</h2>
-      <p>~<strong>$0.03–0.06 / hour</strong> of voice on Gemini's Flex tier. Calls cost tokens; a 30-min voice session runs roughly the cost of a long text chat with a generous model.</p>
+      <p>Usage incurs provider charges. Verify the current Gemini Live pricing and quota terms before relying on any cost estimate.</p>
 
-      <h2 id="license">License</h2>
-      <p>MIT. See top of <code>bridge.py</code> for full text. Free to fork, host, and extend.</p>
+      <h2 id="license">License status</h2>
+      <p>This repository does not currently include a standalone license file. Source availability alone does not grant permission to copy, modify, or redistribute the software.</p>
 
       <div class="pager">
         <a class="prev" href="quickstart.html">
@@ -242,7 +242,7 @@ curl -s http://127.0.0.1:18943/health | python3 -m json.tool</code></pre>
       </div>
 
       <div class="foot">
-        Hermes Live v0.3.4.2 · MIT · <a href="https://github.com/Capslockb/gemini-live-discord-bridge">github.com/Capslockb/gemini-live-discord-bridge</a>
+        Hermes Live v0.3.4.2 · no standalone license · <a href="https://github.com/Capslockb/hermes-live-discord-agent-plugin">github.com/Capslockb/hermes-live-discord-agent-plugin</a>
       </div>
 
     </article>
