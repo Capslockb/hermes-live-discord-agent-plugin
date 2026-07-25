@@ -5,7 +5,7 @@
 > **Drop a real-time multimodal AI into any Discord voice channel.**
 > Full-duplex audio · vision · function calling · multi-CLI delegation · proactive notifications · post-call transcripts.
 > Built on **Google Gemini Multimodal Live**, packaged as a self-hostable **Hermes Agent** plugin.
-> Open source. MIT. Yours.
+> Source available. Self-hosted. Inspectable.
 
 ---
 
@@ -83,7 +83,7 @@ Discord Voice → Opus Decode → 48kHz PCM → 16kHz Mono → Gemini WSS → Mo
      └──────────── 24kHz PCM ← Gemini WSS ← 48kHz Stereo ← Discord AudioSource
 ```
 
-Lies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WSS). The bridge runs **in-process** inside the Hermes gateway — no separate services, no queues, no message buses. Full architecture doc: [`docs/architecture.md`](docs/architecture.md).
+Relies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WSS). The bridge runs **in-process** inside the Hermes gateway — no separate services, no queues, no message buses. Full architecture doc: [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
@@ -196,4 +196,4 @@ See `CHANGELOG.md` for the full release history.
 
 ## License
 
-MIT. See top of `bridge.py` for full text.
+No standalone `LICENSE` file is currently included. Until the repository owner adds one, do not assume reuse or redistribution rights from README wording alone.
