@@ -14,7 +14,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, `local_sfx_test`, env vars, adding your own clips |
 | [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, license, processing recipe |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
-| [`video.md`](video.md) | `/frame` HTTP endpoint, video-state detection, feeder |
+| [`video.md`](video.md) | `/frame` HTTP endpoint and current client blockers tracked in Issue #9 |
 | [`env-vars.md`](env-vars.md) | Every `DISCORD_VOICE_LIVE_*` env var, defaults, descriptions |
 | [`troubleshooting.md`](troubleshooting.md) | Common bridge failures, the Discord CDN handshake quirk, log locations |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Release history |
@@ -22,8 +22,8 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 ## Quick reference
 
 ```bash
-# Install
-./install.sh
+# Install this cloned checkout
+./install.sh --from-local
 
 # Uninstall
 ./install.sh --uninstall
@@ -40,6 +40,8 @@ journalctl --user -u hermes-gateway -f
 /voice-live-leave        # leave
 ```
 
+After cloning the repository, use `--from-local`. Plain `./install.sh` uses the installer's configured remote clone target rather than the current checkout; its repository correction is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7).
+
 ## Sidecar control API boundary
 
 The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public API.
@@ -47,6 +49,7 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - `/stop`, `/say`, `/frame`, and `/notify` are mutating routes protected by a per-process `X-API-Secret`. They are normally called through the plugin's internal handlers rather than copied as unauthenticated `curl` commands.
 - `/health` is anonymous and read-only.
 - `/notes` is anonymous on loopback and can return stored voice events and reconstructed transcript text. Do not publish, proxy, or expose port `18943` beyond the local machine.
+- The bundled `/frame` clients do not currently complete the required authenticated request path; see [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
 
 ## What this plugin does NOT do
 
