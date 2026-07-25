@@ -6,8 +6,8 @@ Five commands, two minutes.
 
 ```bash
 # 1. Clone
-git clone https://github.com/Capslockb/gemini-live-discord-bridge.git
-cd gemini-live-discord-bridge
+git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
+cd hermes-live-discord-agent-plugin
 
 # 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
 ./install.sh
