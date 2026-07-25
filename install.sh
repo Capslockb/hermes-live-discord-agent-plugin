@@ -242,3 +242,4 @@ echo "Next steps:"
 echo "  1. Restart the Hermes gateway so it picks up the new plugin:"
 echo "       systemctl --user restart hermes-gateway"
 echo "  2. From Discord, run:   /voice-live"
+echo
