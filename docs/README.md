@@ -54,4 +54,4 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - It does not guarantee that text transcripts are ephemeral. Voice events are written under `DISCORD_VOICE_LIVE_NOTES_DIR` (default: `~/.hermes/voice-live-notes`), and `/notes` can return that stored content.
 - It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
 
-For the "why" of design decisions, see `../AGENTS.md` and the per-file docstrings.
+For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
