@@ -28,7 +28,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 # Uninstall
 ./install.sh --uninstall
 
-# Check bridge health
+# Check bridge health (read-only, loopback only)
 curl -s http://127.0.0.1:18943/health | jq
 
 # Restart gateway to pick up plugin changes
@@ -38,17 +38,20 @@ journalctl --user -u hermes-gateway -f
 # Use from Discord
 /voice-live              # join your voice channel
 /voice-live-leave        # leave
-
-# Sidecar control API
-curl "http://127.0.0.1:18943/say?text=hello+from+sidecar"
-curl -X POST -F "image=@frame.jpg" "http://127.0.0.1:18943/frame?force=true"
-curl -X POST -H "Content-Type: application/json" -d '{"text":"inbox is huge","mode":"dm"}' "http://127.0.0.1:18943/notify"
 ```
+
+## Sidecar control API boundary
+
+The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public API.
+
+- `/stop`, `/say`, `/frame`, and `/notify` are mutating routes protected by a per-process `X-API-Secret`. They are normally called through the plugin's internal handlers rather than copied as unauthenticated `curl` commands.
+- `/health` is anonymous and read-only.
+- `/notes` is anonymous on loopback and can return stored voice events and reconstructed transcript text. Do not publish, proxy, or expose port `18943` beyond the local machine.
 
 ## What this plugin does NOT do
 
-- It does not record calls or persist transcripts to long-term storage (notes are ephemeral unless `DISCORD_VOICE_LIVE_NOTES_DIR` is set, and even then, only manual notes)
-- It does not run a separate HTTP server for production traffic — the sidecar on 18943 is for `__init__.py` handlers and the optional `video-frame-feeder.py`, not public use
-- It does not implement auth — it relies on the Hermes gateway's existing Discord user/role permissions
+- It does not expose a production HTTP service. The sidecar is intended only for local plugin components and trusted local integrations.
+- It does not guarantee that text transcripts are ephemeral. Voice events are written under `DISCORD_VOICE_LIVE_NOTES_DIR` (default: `~/.hermes/voice-live-notes`), and `/notes` can return that stored content.
+- It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
 
 For the "why" of design decisions, see `../AGENTS.md` and the per-file docstrings.
