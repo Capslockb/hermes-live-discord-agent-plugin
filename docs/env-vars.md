@@ -16,7 +16,7 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 |---|---|---|
 | `GEMINI_MODEL` | `gemini-3.1-flash-live-preview` | Primary Gemini Live model |
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
-| `DISCORD_VOICE_LIVE_VOICE` | `en-US-JennyNeural` | TTS voice (criterion #3 — high-pitched female) |
+| `DISCORD_VOICE_LIVE_VOICE` | `en-US-JennyNeural` | Configured TTS voice |
 | `DISCORD_VOICE_LIVE_PORT` | `18943` | Sidecar HTTP control port |
 | `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated list of user IDs the bridge accepts audio from. Empty = listen to the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
@@ -73,15 +73,17 @@ Slots: `TOOL_INIT`, `ERROR`, `NOTIFICATION`, `TRANSITION`.
 
 ## Video
 
+These variables configure server-side frame handling. They do not make either current frame client operational; see [`video.md`](video.md) and [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
+
 | Var | Default | Description |
 |---|---|---|
-  - `DISCORD_VOICE_LIVE_VIDEO_MAX_FPS` | `1` | Hard cap on feeder frame rate. Gemini rejects faster anyway. |
-  - `DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES` | `524288` | Per-frame JPEG size cap (512 KB). |
-  - `DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS` | `8` | Drop frames if no voice activity in the last N seconds. |
-  - `DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S` | `30` | Webhook announce fires only when a frame is accepted after at least this many seconds of silence. |
-  - `DISCORD_VOICE_LIVE_VIDEO_ENABLED` | `true` | Allow video frame input |
-  - `DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION` | `true` | Auto-react to video enable/disable |
-  - `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval for video state changes |
+| `DISCORD_VOICE_LIVE_VIDEO_MAX_FPS` | `1` | Server-side cap on accepted feeder frame rate |
+| `DISCORD_VOICE_LIVE_VIDEO_MAX_BYTES` | `524288` | Per-frame JPEG size cap (512 KB) |
+| `DISCORD_VOICE_LIVE_VIDEO_WHEN_RECENT_AUDIO_SECONDS` | `8` | Drop frames if no voice activity occurred in the last N seconds |
+| `DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S` | `30` | Webhook announce fires only when a frame is accepted after at least this many seconds of silence |
+| `DISCORD_VOICE_LIVE_VIDEO_ENABLED` | `true` | Enable server-side video frame input |
+| `DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION` | `true` | Auto-react to video enable/disable |
+| `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval for video state changes |
 
 ## Tool enable/disable
 
