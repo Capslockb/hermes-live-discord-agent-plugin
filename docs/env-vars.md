@@ -16,13 +16,13 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 |---|---|---|
 | `GEMINI_MODEL` | `gemini-3.1-flash-live-preview` | Primary Gemini Live model |
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
-| `DISCORD_VOICE_LIVE_VOICE` | `en-US-JennyNeural` | Configured TTS voice |
+| `DISCORD_VOICE_LIVE_VOICE` | `Kore` | Gemini Live voice name |
 | `DISCORD_VOICE_LIVE_PORT` | `18943` | Sidecar HTTP control port |
-| `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated list of user IDs the bridge accepts audio from. Empty = listen to the channel. |
+| `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated user IDs whose audio is accepted. Empty allows all non-bot speakers in the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
-| `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `30` | Don't auto-leave within the first 30s of a session (avoids killing right after start) |
+| `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `120` | Minimum session uptime before auto-leave is allowed |
 | `DISCORD_VOICE_LIVE_LEAVE_PHRASES` | (built-in list) | Phrases that trigger `/voice-live-leave` (e.g. "stop", "hang up", "bye", "exit voice") |
-| `DISCORD_VOICE_LIVE_GREETING` | — | Optional greeting text on first turn |
+| `DISCORD_VOICE_LIVE_GREETING` | `I'm here.` | Initial greeting text configured for the bridge |
 | `DISCORD_VOICE_LIVE_CLEAR_ON_INTERRUPT` | `true` | When user interrupts the model, clear the audio queue |
 | `DISCORD_VOICE_LIVE_NOTES_DIR` | `~/.hermes/voice-live-notes/` | Where to write per-call notes |
 | `DISCORD_VOICE_LIVE_KEEP_AUTOSTART_FILE` | `false` | If true, the autostart file is not deleted after use |
@@ -36,17 +36,17 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 | Var | Default | Description |
 |---|---|---|
 | `GEMINI_AUDIO_STREAM_IDLE_END_SECONDS` | `0.25` | Time of audio silence before the model considers the user turn ended |
-| `DISCORD_VOICE_LIVE_OUTPUT_PREROLL_MS` | `200` | Pre-roll audio before first byte lands in Discord |
-| `DISCORD_VOICE_LIVE_OUTPUT_TAIL_PAD_MS` | `120` | Tail padding after last byte (prevents click on natural ends) |
-| `DISCORD_VOICE_LIVE_OUTPUT_FADE_IN_MS` | `60` | Fade-in on each chunk (prevents click on joins) |
-| `DISCORD_VOICE_LIVE_OUTPUT_READ_WAIT_SECONDS` | `0.05` | How long `LiveAudioSource.read()` blocks waiting for the next chunk |
+| `DISCORD_VOICE_LIVE_OUTPUT_PREROLL_MS` | `320` | Pre-roll audio before first byte lands in Discord |
+| `DISCORD_VOICE_LIVE_OUTPUT_TAIL_PAD_MS` | `240` | Tail padding after last byte (prevents click on natural ends) |
+| `DISCORD_VOICE_LIVE_OUTPUT_FADE_IN_MS` | `0` | Fade-in applied to output chunks; disabled by default |
+| `DISCORD_VOICE_LIVE_OUTPUT_READ_WAIT_SECONDS` | `0.005` | How long `LiveAudioSource.read()` blocks waiting for the next chunk |
 
 ## Idle prompts
 
 | Var | Default | Description |
 |---|---|---|
 | `DISCORD_VOICE_LIVE_IDLE_PROMPT_SECONDS` | `120` | Seconds of inactivity before the model generates a nudge |
-| `DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS` | `30` | Initial grace period after session start before nudging |
+| `DISCORD_VOICE_LIVE_IDLE_PROMPT_GRACE_SECONDS` | `60` | Initial grace period after session start before nudging |
 | `DISCORD_VOICE_LIVE_IDLE_PROMPT_TEXT` | (built-in) | The nudge prompt injected after idle timeout |
 
 ## SFX library
@@ -100,11 +100,11 @@ These variables configure server-side frame handling. They do not make either cu
 
 ## Webhooks
 
-See `webhooks.md`. One env var per event class, all start with `DISCORD_VOICE_LIVE_WEBHOOK_<CLASS>`.
+See [`webhooks.md`](webhooks.md) for the exact event classes, delivery semantics, and privacy boundary.
 
 | Var | Default | Description |
 |---|---|---|
-| `DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS` | `60` | Default throttle window when `throttle_key` is set |
+| `DISCORD_VOICE_LIVE_WEBHOOK_THROTTLE_SECONDS` | `2` | Shared throttle window for events with a built-in or explicit throttle key |
 
 ## Email brief
 
