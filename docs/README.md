@@ -9,7 +9,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`architecture.md`](architecture.md) | End-to-end audio path, threading model, lifecycle |
 | [`personality.md`](personality.md) | System prompt shape, ping-pong rhythm, boredom switch, vocal expression |
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
-| [`notification.md`](notification.md) | `local_notify` / `local_notify_schedule` / `POST /notify` / AFK pings |
+| [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13) and [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14) |
 | [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
 | [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, `local_sfx_test`, env vars, adding your own clips |
 | [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, license, processing recipe |
@@ -50,12 +50,14 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - `/health` is anonymous and read-only.
 - `/notes` is anonymous on loopback and can return stored voice events and reconstructed transcript text. Do not publish, proxy, or expose port `18943` beyond the local machine.
 - The bundled `/frame` clients do not currently complete the required authenticated request path; see [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
+- The internal `/notify` helper also omits the required control header; keep route protection enabled and track the authenticated-call correction in [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14).
 
 ## What this plugin does NOT do
 
 - It does not expose a production HTTP service. The sidecar is intended only for local plugin components and trusted local integrations.
 - It does not guarantee that text transcripts are ephemeral. Voice events are written under `DISCORD_VOICE_LIVE_NOTES_DIR` (default: `~/.hermes/voice-live-notes`), and `/notes` can return that stored content.
 - It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
+- It does not currently provide restart-safe, retry-safe scheduled notifications. Live runtime objects are passed into JSON persistence, failed attempts are removed after one try, and recipient fallback is not explicit; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
 - It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, scheduled routing has an embedded user fallback, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
 
 For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
