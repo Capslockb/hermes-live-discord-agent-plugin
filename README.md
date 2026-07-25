@@ -13,7 +13,7 @@
 
 You've used chatbots. You've used voice assistants that feel like phone trees. **This is neither.**
 
-Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, sees your screen, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No SaaS, no relay, no vendor lock-in. Just your gateway, your keys, your hardware.
+Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, sees your screen, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No project-hosted relay: it runs in your gateway and connects directly to Discord, Gemini, and any optional integrations using your credentials. Those external services remain subject to their own availability, pricing, and data-handling terms.
 
 **What it feels like:**
 - You join a voice channel. The agent greets you by name and recalls last week's debugging session.
@@ -69,7 +69,7 @@ The installer handles venv, symlinks, env prompts, and SFX directory creation. S
 | 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
 | 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
 | 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
-| 🪶 **Self-hostable** | No SaaS, no third-party relay. Runs in your existing Hermes gateway's asyncio loop |
+| 🪶 **Self-hosted bridge** | Runs in your existing Hermes gateway's asyncio loop; Discord, Gemini, and optional integrations remain external services |
 | 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/frame`, `/say`, `/leave` |
 
 ---
@@ -163,7 +163,7 @@ See [`docs/personality.md`](docs/personality.md) for the section index and how t
 
 ## Cost
 
-~**$0.03–0.06 / hour** of voice on Gemini's Flex tier. Calls cost tokens; a 30-min voice session runs roughly the cost of a long text chat with a generous model.
+Gemini Live usage is billed according to the selected model or service tier and current provider pricing. Session duration, audio and vision volume, context size, and tool use can affect cost; optional integrations may charge separately. Check current provider pricing before deployment.
 
 ---
 
