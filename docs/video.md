@@ -4,7 +4,7 @@
 
 ## Current status
 
-> **Blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).** The checked-in feeder currently conflicts with argparse's reserved `-h/--help` option, and neither the feeder nor the in-process `voice_live_frame` client sends the `X-API-Secret` required by `/frame`. Do not treat either path as operational until the executable fix and its tests are reviewed.
+> **Frame delivery is blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).** The checked-in feeder currently conflicts with argparse's reserved `-h/--help` option, and neither the feeder nor the in-process `voice_live_frame` client sends the `X-API-Secret` required by `/frame`. Do not treat either path as operational until the executable fix and its tests are reviewed.
 
 The control server binds to `127.0.0.1`. A direct Tailscale or other remote URL is not a supported feeder endpoint in the current runtime.
 
@@ -15,7 +15,15 @@ Discord bots cannot see a user's native Discord screen share or camera stream. T
 After Issue #9 is fixed, the supported flow should remain:
 
 - **Frame path:** local display capture → authenticated loopback HTTP POST → bridge → Gemini Live.
-- **Not a frame path:** Discord screen share → bot. The bot receives awareness state only, not the Discord video stream.
+- **Not a frame path:** Discord screen share or camera → bot. Discord supplies voice-state awareness flags, not the video stream.
+
+## Voice-state awareness status
+
+`_video_state_watcher()` polls Discord voice-state flags so the agent can be told that screen sharing or a camera was switched on or off. These events carry no image content.
+
+Screen-share start/stop calls currently await the awareness helper. Camera-on and camera-off calls do not await that async helper, so the intended Gemini nudge, Honcho write, and notification path are skipped. This runtime defect is tracked in [Issue #10](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/10).
+
+Fixing Issue #10 will restore state notifications only; it will not make Discord camera or screen-share pixels available to the bot.
 
 ## Installation
 
@@ -62,6 +70,7 @@ The feeder first asks FFmpeg for an 8×8 raw grayscale thumbnail: 64 pixels and 
 - **Argument conflict mentioning `-h`:** this is the known startup blocker in Issue #9. It occurs before any capture or HTTP request.
 - **`401 Unauthorized`:** the current clients omit the required `X-API-Secret`. Copying `~/.hermes/control.secret` is not a valid workaround: the runtime defaults to `~/.hermes/voice-live-control-secret`, and the feeder reads neither file on the current head.
 - **Remote/Tailscale endpoint fails:** the sidecar listens only on loopback. Keep it loopback-only; any remote transport needs a separately reviewed authenticated tunnel or proxy design.
+- **Camera state changes produce no awareness message:** this is Issue #10. It is independent of frame capture and authentication.
 - **Black frames or no content-selected frames after the runtime fix:** test with `--stddev-min 0` or `--no-content-filter`.
 - **Too many frames or high CPU after the runtime fix:** increase `--min-change`, for example to `8` or `12`.
 - **`x11 not found` or `Unable to get screen`:** run the feeder on a machine with a usable physical or virtual display and the appropriate FFmpeg capture backend.
@@ -70,3 +79,4 @@ The feeder first asks FFmpeg for an 8×8 raw grayscale thumbnail: 64 pixels and 
 
 - `voice_live_frame`: currently blocked by the same missing-auth propagation tracked in Issue #9.
 - `voice_live_video_status`: read-only status inspection; it does not repair or authenticate frame delivery.
+- Issue #10: camera state-awareness coroutine calls are not awaited.
