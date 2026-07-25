@@ -13,11 +13,11 @@
 
 You've used chatbots. You've used voice assistants that feel like phone trees. **This is neither.**
 
-Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, sees your screen, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No project-hosted relay: it runs in your gateway and connects directly to Discord, Gemini, and any optional integrations using your credentials. Those external services remain subject to their own availability, pricing, and data-handling terms.
+Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No project-hosted relay: it runs in your gateway and connects directly to Discord, Gemini, and any optional integrations using your credentials. Those external services remain subject to their own availability, pricing, and data-handling terms.
 
 **What it feels like:**
 - You join a voice channel. The agent greets you by name and recalls last week's debugging session.
-- You share your screen. It watches, understands, and talks you through the fix in real time.
+- You describe what is on screen and it talks you through the fix; bundled frame delivery is currently blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
 - You say "ship it" — it delegates to Codex, tracks the PR, and pings you when CI passes.
 - You go AFK. It emails you a 3-bucket digest of what happened while you were gone.
 - You come back. The conversation picks up exactly where it left off.
@@ -34,15 +34,13 @@ If you prefer raw markdown, every page is also in [`docs/`](docs/).
 
 ---
 
-## Quick start — 3 commands, 2 minutes
+## Quick start — local checkout
 
 ```bash
-# 1. Install
+# 1. Install this checkout
 git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin
-./install.sh                 # full install (prompts for env)
-./install.sh --from-local    # use the current working dir
-./install.sh --uninstall     # remove
+./install.sh --from-local    # link this checkout into Hermes and prompt for env
 
 # 2. Restart the gateway
 systemctl --user restart hermes-gateway
@@ -52,7 +50,9 @@ systemctl --user restart hermes-gateway
 /voice-live-leave    # leave
 ```
 
-The installer handles venv, symlinks, env prompts, and SFX directory creation. See `install.sh` for details.
+After cloning, use `--from-local`. Plain `./install.sh` ignores the current checkout and uses the installer's configured remote clone target; correction of that executable path is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7). To remove the installation later, run `./install.sh --uninstall` from the checkout.
+
+The installer handles the Hermes venv, plugin symlink, env prompts, and SFX directory creation. See `install.sh` for details.
 
 ---
 
@@ -61,7 +61,7 @@ The installer handles venv, symlinks, env prompts, and SFX directory creation. S
 | | |
 |---|---|
 | 🎙️ **Full-duplex voice** | Sub-second latency, Discord UDP → Opus → 16 kHz mono → Gemini WSS |
-| 👁️ **Vision + frame feed** | Send images or stream 1 fps screenshare — the model sees what you see |
+| 👁️ **Vision + frame feed** | The frame endpoint and feeder are present, but both bundled client paths are blocked on current `main` by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9). |
 | 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
 | 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
 | 📣 **Proactive notifications** | Voice, DM, channel, webhook, or auto — fires on long-task completion, AFK pings, scheduled alerts |
@@ -98,7 +98,7 @@ Relies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WS
 | **Email brief** | [`docs/email-brief.md`](docs/email-brief.md) | Scheduled inbox digest, important/fyi/auto buckets, AFK delivery |
 | **SFX library** | [`docs/sfx-library.md`](docs/sfx-library.md) | 4 slots, env-driven paths, `local_sfx_test` tool |
 | **Webhooks** | [`docs/webhooks.md`](docs/webhooks.md) | 9 event classes, throttle keys, per-class env-var config |
-| **Video awareness** | [`docs/architecture.md`](docs/architecture.md) | `/frame` HTTP endpoint, auto-react to video enable/disable |
+| **Video awareness** | [`docs/video.md`](docs/video.md) | `/frame` route and video-state plumbing; bundled clients remain blocked by Issue #9 |
 | **Onboarding** | — | First-run Q&A for new users, persisted to `~/.hermes/voice-users/<id>.yaml` |
 | **Honcho context** | — | Per-user peer memory injected into the system prompt |
 | **GitHub tools** | — | 6 voice tools to manage repos / issues / PRs via the `gh` CLI |
@@ -118,7 +118,8 @@ Mid-conversation, it can:
 - 📬 Check your email and summarize
 - 🎵 Queue Spotify, dim the lights (Home Assistant)
 - 🧠 Delegate and track **Codex / OpenCode / NumaSec / Hermes (API)** sessions
-- 👁️ See your screenshare and walk you through a bug
+
+Current frame delivery is tracked separately in [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9) and should not be treated as an operational release capability yet.
 
 **Built in one session. One developer. Shipped.**
 
@@ -145,7 +146,7 @@ Runs on `127.0.0.1:18943`:
 | Route | Method | Description |
 |---|---|---|
 | `/health` | GET | Bridge health JSON |
-| `/frame` | POST | Send a JPEG/PNG frame (`?force=true` bypasses audio-gate) |
+| `/frame` | POST | Send a JPEG/PNG frame (`?force=true` bypasses audio-gate); bundled clients are currently blocked by Issue #9 |
 | `/stop` | GET | Stop the bridge |
 | `/say` | GET | Inject text into Gemini (`?text=...`) |
 | `/notes` | GET | Recent transcript events (`?limit=50`) |
