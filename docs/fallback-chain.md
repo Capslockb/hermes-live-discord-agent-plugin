@@ -1,101 +1,88 @@
 # Fallback chain — multi-CLI delegation with health registry
 
-The voice agent delegates coding tasks to a pool of CLIs (opencode, codex, gemini, numasec, hermes-api). When one is broken, the agent shouldn't be stuck — `execute_with_fallback` automatically reroutes to a healthy neighbor.
+The voice agent can delegate work to opencode, codex, gemini, numasec, or the Hermes API. `execute_with_fallback()` can reroute a request when the requested platform is already marked unhealthy, fails before launch, or produces an early log signature that is classified as a platform failure.
+
+Execution-time fallback is not a general availability check. It reads the persisted health registry and early process output; it does not consult the in-memory hourly rate-limit counters before starting the requested platform.
 
 ## The pool
 
 Defined in `delegation_agent.py:PLATFORMS`:
 
-| Platform | Binary | Best for | Tokens | Rate limit |
-|---|---|---|---|---|
-| opencode | `~/.local/bin/opencode` | code/refactor/test/debug | 126k | 100/h |
-| codex | `~/.npm-global/bin/codex` | reasoning/multi-file refactors | 195k | 50/h |
-| gemini | `~/.npm-global/bin/gemini` | huge context/vision/audio | 900k | 1M tok |
-| numasec | `~/.npm-global/bin/numasec` | security/review | 120k | 60/h |
-| hermes-api | HTTP 127.0.0.1:8088 | general | — | 200/h |
+| Platform | Current executable or endpoint | Intended use | Declared limit |
+|---|---|---|---|
+| opencode | `/home/caps/.local/bin/opencode` | code, refactoring, tests, debugging | 100 requests/hour |
+| codex | `/home/caps/.npm-global/bin/codex` | reasoning and multi-file refactors | 50 requests/hour |
+| gemini | `/home/caps/.npm-global/bin/gemini` | large context, vision, and audio | 1,000,000 tokens/hour |
+| numasec | `/home/caps/.npm-global/bin/numasec` | security analysis and review | 60 requests/hour |
+| hermes-api | `API_SERVER_HOST` and `API_SERVER_PORT`, defaulting to `127.0.0.1:8088` | general Hermes tasks | 200 dispatches/hour |
+
+The four CLI paths are currently hard-coded for one home directory. They are not portable `~`-based defaults and do not have environment-variable overrides on the current head.
 
 ## The chain
 
-Defined in `delegation_agent.py:FALLBACK_CHAIN`:
+Defined in `delegation_agent.py:_FALLBACK_CHAIN`:
 
 ```python
-FALLBACK_CHAIN = {
-    "codex":    ["opencode", "hermes-api", "gemini"],
-    "opencode": ["codex", "hermes-api", "gemini"],
-    "numasec":  ["opencode", "codex", "hermes-api"],
-    "gemini":   ["opencode", "codex", "hermes-api"],
+_FALLBACK_CHAIN = {
+    "codex":      ["opencode", "hermes-api", "gemini"],
+    "opencode":   ["codex", "hermes-api", "gemini"],
+    "numasec":    ["opencode", "codex", "hermes-api"],
+    "gemini":     ["opencode", "codex", "hermes-api"],
     "hermes-api": ["opencode", "codex", "gemini"],
 }
 ```
 
-The chain is **bidirectional** between opencode/codex (they substitute for each other most often) and falls through to gemini last (because it has the most tokens but is also the most likely to be rate-limited).
+`choose_fallback()` returns the first neighbor that is absent from the persisted unhealthy-platform snapshot. It does not check whether the neighbor binary exists or whether its hourly counter is currently exhausted.
 
 ## Health registry
 
-Broken platforms are persisted to `~/.hermes/voice-platform-health.json` with a TTL (default 600s = 10 min). After TTL expires, the platform is automatically considered healthy again — the assumption being that transient failures (rate limits, OAuth expiry) clear themselves.
+Broken-platform state is stored in `~/.hermes/voice-platform-health.json`. The default TTL is 600 seconds. Persisted entries use wall-clock timestamps:
 
 ```json
 {
   "codex": {
-    "marked_broken_at": 1749312456.7,
-    "reason": "rate_limit: 429 from openai.com",
+    "reason": "rate limit response in early log output",
+    "marked_at": 1749312456.7,
+    "expires_at": 1749313056.7,
     "ttl_seconds": 600
   }
 }
 ```
 
-`is_platform_healthy(platform)` reads this file. `mark_platform_broken(platform, reason, ttl)` writes it. `clear_platform_health(platform=None)` wipes one or all entries.
-
-## `execute_with_fallback(prompt, platform, ...)`
-
-The wrapper that every `local_delegate_execute` call goes through:
-
-1. **Pre-check** — if the platform is already in the broken registry, recurse to the first healthy neighbor with `fallback_from=<original>` and `requested_platform=<original>`.
-2. **Spawn** — call the platform's `_run_<name>` executor (each is fire-and-forget, returns the tmux window name + log file).
-3. **Poll the log** for ~5 seconds for break-signals:
-   - HTTP 401 / 403 / 429 / 5xx
-   - "rate limit", "rate-limit", "quota"
-   - "command not found"
-   - "auth", "auth fail", "unauthorized"
-   - "connection refused", "timeout", "ollama", "Ollama"
-   - Python "Traceback"
-4. **If a break-signal is detected**: mark the platform broken, recurse to the first healthy neighbor, return a merged result with `fallback_from` and `fallback_reason` populated.
-5. **Otherwise**: return the original result with `fallback_from=null` and `active_platform == requested_platform`.
-
-## `local_delegate_health` tool
-
-Lets the agent (or `__init__.py` handlers) inspect and reset the registry without touching the file directly.
+`mark_platform_broken(platform, reason, ttl_seconds=600)` writes an entry. `clear_platform_health(platform=None)` clears one platform or the entire registry. `get_health_snapshot()` prunes expired entries and returns a reduced view:
 
 ```json
-// local_delegate_health(action="list")
 {
-  "result": {
-    "health": {
-      "codex": {"marked_broken_at": "...", "reason": "...", "ttl_seconds": 600, "seconds_remaining": 432}
-    }
+  "codex": {
+    "reason": "rate limit response in early log output",
+    "expires_in_seconds": 432
   }
 }
-
-// local_delegate_health(action="clear", platform="codex")
-{"result": {"cleared": ["codex"]}}
 ```
 
-## Why defense in depth
+## `execute_with_fallback(prompt, platform, session_id, ...)`
 
-`execute_with_fallback` is the safe wrapper, but `suggest_platform` is also called from elsewhere (e.g. for ETA estimation, voice narration). It also filters broken platforms out of `available_platforms` before scoring. Two layers, no single point of failure.
+The execution wrapper follows this sequence:
 
-## Smoke test
+1. **Persisted-health pre-check** — if the requested platform is marked unhealthy, recursively try the first healthy neighbor.
+2. **Launch** — call `execute_delegation()` for the selected CLI or Hermes API endpoint.
+3. **Immediate error handling** — if launch returns an `error`, mark that platform unhealthy and try a neighbor.
+4. **Early-log inspection** — when a `log_path` is returned, sleep for `health_check_delay` (default 5 seconds), then inspect the first 4096 bytes.
+5. **Detected failure** — mark the platform unhealthy and recursively start the first healthy neighbor. The result includes `requested_platform`, `active_platform`, and fallback metadata.
+6. **No detected failure** — return the original launch result. This does not prove the delegated task later completed successfully.
 
-The fallback chain has a real-execution smoke test (see `delegation_agent.py` docstring):
+Early-log detection currently covers HTTP 401/403/429/5xx, rate-limit wording, missing commands or files, permission errors, authentication or credential failures, connection refusal, Ollama/OpenRouter availability errors, free-tier or quota exhaustion, and Python tracebacks. Generic timeout text is not one of the configured patterns.
 
-```bash
-~/.hermes/hermes-agent/venv/bin/python -c "
-import sys; sys.path.insert(0, '.')
-from delegation_agent import mark_platform_broken, suggest_platform, execute_with_fallback, get_health_snapshot
-mark_platform_broken('codex', 'rate_limit', ttl=60)
-print(suggest_platform('complex refactor'))  # should NOT return 'codex'
-print(execute_with_fallback('test', 'codex'))  # should route to opencode
-"
-```
+## `local_delegate_health`
 
-The smoke test was the test that caught the `fallback_from` metadata bug in pre-emptive branching (see git log around 1bd8906).
+The tool exposes health-registry inspection and clearing. List output reflects `get_health_snapshot()`, so active entries contain `reason` and `expires_in_seconds`; it does not return the persisted `marked_at`, `expires_at`, or `ttl_seconds` fields.
+
+## Rate-limit boundary
+
+`get_all_rate_limits()` and platform suggestion use separate in-memory counters. Those counters reset when the process restarts. `execute_with_fallback()` does not call `_check_rate_limit()` before launch, so a platform can still be selected at execution time unless it has also been marked unhealthy or emits a recognized early failure.
+
+## Validation safety
+
+Do not use `execute_with_fallback()` as a harmless documentation smoke test. It can create tmux sessions, run local CLIs, write logs under `/tmp`, or call the Hermes API endpoint.
+
+Implementation tests should isolate the health file and mock `execute_delegation()`, `detect_broken_log()`, sleeping, tmux/subprocess calls, and HTTP dispatch. Tests should also cover pre-marked platforms, immediate launch errors, early-log failures, no healthy neighbor, metadata preservation, and the separate rate-limit boundary.
