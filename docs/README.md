@@ -17,7 +17,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`video.md`](video.md) | `/frame` HTTP endpoint, video-state detection, feeder |
 | [`env-vars.md`](env-vars.md) | Every `DISCORD_VOICE_LIVE_*` env var, defaults, descriptions |
 | [`troubleshooting.md`](troubleshooting.md) | Common bridge failures, the Discord CDN handshake quirk, log locations |
-| [`changelog.md`](changelog.md) | Release history (full changelog is `../CHANGELOG.md`) |
+| [`../CHANGELOG.md`](../CHANGELOG.md) | Release history |
 
 ## Quick reference
 
