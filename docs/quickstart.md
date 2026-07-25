@@ -9,12 +9,14 @@ Five commands, two minutes.
 git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin
 
-# 2. Install — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
-./install.sh
+# 2. Install this checkout — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
+./install.sh --from-local
 
 # 3. Restart the gateway so the plugin loads
 systemctl --user restart hermes-gateway
 ```
+
+Use `--from-local` after cloning. Plain `./install.sh` ignores the current checkout and uses the installer's configured remote clone target; correction of that executable path is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7).
 
 ## First session
 
@@ -45,6 +47,7 @@ You should see `"voice_connected": true`, `"running": true`, and a non-zero `aud
 - **"Bridge failed to start"** — wait ~30s. The first 5 voice WebSocket handshakes are rejected by the Discord CDN; the bridge retries.
 - **First-turn hallucination** ("I see you're sharing your screen") — the system prompt has the guard, but if you see this, the audioStreamEnd mute is missing. Check `bridge.py` for `await self._gemini._ws.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))` right after `connect()`.
 - **No audio in voice** — check `~/.hermes/voice-users/sfx/` exists and the four WAV files are present.
+- **No video/frame input** — the bundled frame clients are currently blocked by the CLI and authentication defects tracked in [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
 
 ## Next
 
