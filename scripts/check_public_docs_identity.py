@@ -34,6 +34,14 @@ FORBIDDEN_CLAIMS = (
         "claims an MIT license although this repository has no standalone LICENSE file",
     ),
     ForbiddenClaim(
+        re.compile(r"\bOpen source,\s*self-hostable,\s*MIT\.?", re.IGNORECASE),
+        "publishes an unsupported first-party MIT license claim",
+    ),
+    ForbiddenClaim(
+        re.compile(r"\bMIT\.\s*See top of bridge\.py for full text\.?", re.IGNORECASE),
+        "points to bridge.py as license text although it contains architecture documentation",
+    ),
+    ForbiddenClaim(
         re.compile(r"·\s*MIT\s*·", re.IGNORECASE),
         "publishes an unsupported MIT footer claim",
     ),
@@ -48,6 +56,7 @@ def iter_public_surfaces() -> list[Path]:
     """Return deterministic user-facing files covered by this guard."""
     paths = [
         ROOT / "README.md",
+        ROOT / "CHANGELOG.md",
         ROOT / "install.sh",
         ROOT / "scripts" / "build_docs_site.py",
     ]
