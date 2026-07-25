@@ -10,7 +10,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`personality.md`](personality.md) | System prompt shape, ping-pong rhythm, boredom switch, vocal expression |
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
 | [`notification.md`](notification.md) | `local_notify` / `local_notify_schedule` / `POST /notify` / AFK pings |
-| [`email-brief.md`](email-brief.md) | `local_email_brief` tool, scheduler, important/fyi/auto buckets |
+| [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
 | [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, `local_sfx_test`, env vars, adding your own clips |
 | [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, license, processing recipe |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
@@ -56,5 +56,6 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - It does not expose a production HTTP service. The sidecar is intended only for local plugin components and trusted local integrations.
 - It does not guarantee that text transcripts are ephemeral. Voice events are written under `DISCORD_VOICE_LIVE_NOTES_DIR` (default: `~/.hermes/voice-live-notes`), and `/notes` can return that stored content.
 - It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
+- It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, scheduled routing has an embedded user fallback, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
 
 For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
