@@ -12,7 +12,7 @@ Environment variables read by the plugin. Defaults shown in **bold**.
 
 For a single-owner installation, also set `VOICE_OWNER_DISCORD_ID` explicitly before enabling owner-only profile tools. Current `main` otherwise falls back to a repository-embedded owner ID; this authorization boundary is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
-Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already persisted with `is_owner: true`. Existing profile YAML is authorization state, not a cache: do not assume an environment-variable change revokes old owner grants, and do not apply an unreviewed bulk migration. Issue #18 requires deterministic, human-reviewed handling for profiles whose ownership cannot be proven.
+Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already persisted with `is_owner: true`. Existing profile YAML is authorization state, not a cache. Issue #18 now selects the migration rule: preserve profile data, but recompute effective owner authorization at load time and grant owner-only capabilities only when the profile ID matches an explicitly configured `VOICE_OWNER_DISCORD_ID`. That runtime change is not implemented yet, so do not assume an environment-variable change revokes an existing grant on current `main`.
 
 ## Core
 
@@ -22,7 +22,7 @@ Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already pe
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
 | `DISCORD_VOICE_LIVE_VOICE` | `Kore` | Gemini Live voice name |
 | `DISCORD_VOICE_LIVE_PORT` | `18943` | Loopback sidecar HTTP control port |
-| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | File used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
+| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | Current file used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file. Issue #17 selects replacement with an ephemeral process-scoped secret that rotates on every start and is handed only to trusted in-process clients; that security-sensitive change is not implemented yet. |
 | `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated user IDs whose audio is accepted. Empty allows all non-bot speakers in the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `120` | Minimum session uptime before auto-leave is allowed |
@@ -160,7 +160,7 @@ See `email-brief.md`.
 | Var | Default | Description |
 |---|---|---|
 | `VOICE_USERS_DIR` | `~/.hermes/voice-users/` | Per-user profile directory |
-| `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe and tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). Changing it does not currently demote a persisted `is_owner: true` profile. |
+| `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that currently receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe. Issue #18 selects removal of the fallback and load-time recomputation so persisted `is_owner` state is effective only for a profile whose ID matches the explicit configured owner; that runtime migration is not implemented yet. |
 | `HERMES_PYTHON` | `python3` | Python interpreter for subprocess calls |
 | `GOOGLE_API_BIN` | (auto-detected) | Path to `google_api.py` for email + Google Workspace |
 | `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
