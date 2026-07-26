@@ -1,17 +1,19 @@
 # SFX library — multi-slot UI sound effects
 
-A small slot-based system for playing UI sound effects into the active voice session. Each slot maps to a 24kHz mono PCM16 WAV file and fires on a specific bridge event.
+A small slot-based system for playing UI sound effects through a registered voice output source. Each slot maps to a 24 kHz mono PCM16 WAV file and is invoked from specific bridge events.
 
 ## The four slots
 
 | Slot | Triggered by | Typical sound |
 |---|---|---|
-| `tool_init` | First tool call of a session (one-shot per session) | Soft chime — "I'm ready to work" |
-| `error` | Uncaught exception in `_run_local_tool` | Sharp beep — "something went wrong" |
-| `notification` | Successful `local_notify` delivery (incl. email brief) | Light ping — "you have a message" |
+| `tool_init` | First local tool call after the gateway process starts | Soft chime — "I'm ready to work" |
+| `error` | Uncaught exception escaping `_run_local_tool`'s inner dispatch | Sharp beep — "something went wrong" |
+| `notification` | Completion of a `local_notify` attempt, regardless of confirmed delivery | Light ping — "a notification path ran" |
 | `transition` | Session start (after `vc.play()` succeeds) | Pop/swoosh — "we're connected" |
 
-The `tool_init` sfx uses a one-shot guard (`_run_local_tool._tool_init_played`) so it doesn't replay on every tool call.
+The `tool_init` guard is stored on the module-level `_run_local_tool` function as `_tool_init_played`. It is process-global and is not reset for each Discord user or voice session; restarting the gateway resets it.
+
+A notification sound is not a delivery receipt. The current code calls `play_sfx("notification")` after `_notify_deliver()` returns without requiring a successful, acknowledged, or subscriber-backed result.
 
 ## File layout
 
@@ -29,9 +31,9 @@ All four files are **24 kHz mono PCM16**. The loader auto-resamples if you give 
 
 ## Where the clips came from
 
-Cut from a YouTube playlist ("UI Sound Effects for App & Game Development" by Brand Name Audio) using `ffmpeg silencedetect=noise=-30dB:d=0.2`. See `silencedetect` log lines for the `silence_end` timestamps that anchor each cut.
+Cut from a YouTube playlist ("UI Sound Effects for App & Game Development" by Brand Name Audio) using `ffmpeg silencedetect=noise=-30dB:d=0.2`. See [`sfx-credits.md`](sfx-credits.md) for the recorded provenance and current licensing boundary.
 
-To re-cut or add new slots, see the recipe in `silence-detect-sfx-cutting` skill.
+To re-cut or add new slots, see the recipe in the `silence-detect-sfx-cutting` skill.
 
 ## Environment variables
 
@@ -67,7 +69,7 @@ DISCORD_VOICE_LIVE_SFX_DIR=/custom/sfx/dir
 
 ## `local_sfx_test` tool
 
-The agent can play any slot in the current voice session:
+The agent can ask the SFX module to play a slot through its implicit active-source registry:
 
 ```json
 // play a slot
@@ -91,7 +93,20 @@ Returns:
 }}}
 ```
 
-If no voice session is active, returns `{"status": "no_active_source"}` — the sfx library is voice-only.
+With an empty registry, playback returns `{"status": "no_active_source"}`. That result does not reliably prove that no Discord voice session is active, because the registry's current lifecycle and selection behavior is defective.
+
+## Current session-routing limitation
+
+`GeminiLiveBridge` registers each output source under a session identifier, but the registry currently stores both a weak reference and a strong reference to the same source. The strong reference prevents the advertised garbage-collection cleanup, and bridge disconnect does not explicitly unregister the entry.
+
+`pick_active_source()` also returns the first live dictionary entry; it does not track or select the most recently active session. `local_sfx_test`, `tool_init`, `notification`, and local-tool error paths call `play_sfx()` without an explicit source. In a multi-user process, or after a stale source remains registered, a sound can therefore be fed to an older or unrelated voice session.
+
+Until [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/15) is fixed:
+
+- treat implicit SFX playback as single-active-session only;
+- do not use a sound as evidence that a notification reached its intended recipient;
+- restart the gateway to clear stale in-memory source registrations;
+- avoid `local_sfx_test` while multiple voice sessions are active.
 
 ## Adding a new slot
 
