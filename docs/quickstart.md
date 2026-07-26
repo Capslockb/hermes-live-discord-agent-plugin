@@ -1,6 +1,6 @@
 # Quick start
 
-Five commands, two minutes.
+A minimal local-checkout setup.
 
 ## Install
 
@@ -9,7 +9,8 @@ Five commands, two minutes.
 git clone https://github.com/Capslockb/hermes-live-discord-agent-plugin.git
 cd hermes-live-discord-agent-plugin
 
-# 2. Install this checkout — prompts for DISCORD_BOT_TOKEN, GEMINI_API_KEY, your Discord user ID
+# 2. Install this checkout — prompts for DISCORD_BOT_TOKEN and GEMINI_API_KEY,
+#    then offers an optional DISCORD_VOICE_LIVE_USER_ID prompt
 ./install.sh --from-local
 
 # 3. Restart the gateway so the plugin loads
@@ -17,6 +18,8 @@ systemctl --user restart hermes-gateway
 ```
 
 Use `--from-local` after cloning. Plain `./install.sh` ignores the current checkout and uses the installer's configured remote clone target; correction of that executable path is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7).
+
+Do not treat the optional identity prompt as optional for a normal single-user setup. Set `DISCORD_VOICE_LIVE_USER_ID` explicitly in `~/.hermes/.env` for slash-command channel inference and default recipient routing. If owner-only profile tools are expected, also set `VOICE_OWNER_DISCORD_ID`; the installer does not prompt for it. Current executable fallbacks can otherwise select a repository-embedded account, as tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 ## First session
 
