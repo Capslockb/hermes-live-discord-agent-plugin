@@ -113,7 +113,7 @@ The scheduler obtains the current bridge and adapter through `get_bridge_fn`. Re
 2. `DISCORD_VOICE_LIVE_USER_ID`;
 3. a repository-embedded Discord user ID.
 
-The final fallback is not a safe multi-user default. Keep scheduled briefs disabled unless the intended recipient is explicitly configured and verified. Issue #12 tracks removing the embedded account fallback.
+The final fallback is not a safe multi-user default. Keep scheduled briefs disabled unless the intended recipient is explicitly configured and verified. Email-brief backend, delivery-state, privacy, and de-duplication work remains tracked in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12); the shared executable identity fallback and fail-closed recipient/owner migration are tracked canonically in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 ## When to use
 
