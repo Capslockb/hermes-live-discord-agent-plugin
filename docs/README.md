@@ -2,6 +2,8 @@
 
 The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. Beyond basic voice I/O it ships a personality system, a fallback chain for multi-CLI delegation, a proactive notification system, an email brief scheduler, and a slot-based UI sfx library.
 
+> **Documentation authority:** this Markdown index and the files under `docs/` are canonical for the current tree. The generated HTML under `docs-site/` is stale and still contains pre-correction repository-identity, licensing, and capability wording. Do not publish or cite the generated site as authoritative until the generator and regeneration work in [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6) is complete.
+
 ## Index
 
 | Doc | What it covers |
