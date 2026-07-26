@@ -11,7 +11,7 @@ from pathlib import Path
 DOC_NAMES={"README.md","SECURITY.md","CONTRIBUTING.md","AGENTS.md"}
 DOC_DIR_PARTS={"docs","doc","website","site","public"}
 DOC_EXTS={".md",".mdx",".rst",".txt"}
-ALLOW_PROMPT_CONFIG=re.compile(r"(?i)(example|sample|template|user-facing|user configurable|configuration|configures? the assistant)")
+ALLOW_PROMPT_CONFIG=re.compile(r"(?i)(example|sample|template|user-facing|user configurable|configuration|configures? the assistant|public documentation safety|security-sensitive automation details|intentionally not published|reported as security issues)")
 PATTERNS=[
  ("model-directed imperative prose", re.compile(r"(?i)\b(ignore|disregard|override)\b.{0,80}\b(previous|above|system|developer|policy|instruction)s?\b")),
  ("automation-control disclosure", re.compile(r"(?i)\b(private control plane|controller policy|trusted author|mutation policy|approved explicit command marker|command marker|guard value|stop condition|tool permission|completion contract)\b")),
