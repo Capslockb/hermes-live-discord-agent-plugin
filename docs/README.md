@@ -1,6 +1,6 @@
 # docs/ — discord-voice plugin documentation
 
-The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. Beyond basic voice I/O it ships a personality system, a fallback chain for multi-CLI delegation, a proactive notification system, an email brief scheduler, and a slot-based UI sfx library.
+The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. Beyond basic voice I/O it ships a personality system, a fallback chain for multi-CLI delegation, a proactive notification system, an email brief scheduler, and optional slot-based SFX support for operator-supplied original or explicitly licensed assets.
 
 > **Documentation authority:** this Markdown index and the files under `docs/` are canonical for the current tree. The generated HTML under `docs-site/` is stale and still contains pre-correction repository-identity, licensing, and capability wording. Do not publish or cite the generated site as authoritative until the generator and regeneration work in [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6) is complete.
 
@@ -13,7 +13,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
 | [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17) |
 | [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
-| [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, trigger semantics, `local_sfx_test`, and the cross-session routing blocker in Issue #15 |
+| [`sfx-library.md`](sfx-library.md) | Optional slot-based SFX support, trigger semantics, `local_sfx_test`, operator-supplied asset requirements, and the cross-session routing blocker in Issue #15 |
 | [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, the current licensing boundary, and the accepted removal/replacement direction in Issue #16 |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
 | [`video.md`](video.md) | `/frame` HTTP endpoint and current client blockers tracked in Issue #9 |
