@@ -11,8 +11,8 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
 | [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13) and [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14) |
 | [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
-| [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, `local_sfx_test`, env vars, adding your own clips |
-| [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, license, processing recipe |
+| [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, trigger semantics, `local_sfx_test`, and the cross-session routing blocker in Issue #15 |
+| [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, current licensing boundary, processing recipe |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
 | [`video.md`](video.md) | `/frame` HTTP endpoint and current client blockers tracked in Issue #9 |
 | [`env-vars.md`](env-vars.md) | Every `DISCORD_VOICE_LIVE_*` env var, defaults, descriptions |
@@ -59,5 +59,6 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
 - It does not currently provide restart-safe, retry-safe scheduled notifications. Live runtime objects are passed into JSON persistence, failed attempts are removed after one try, and recipient fallback is not explicit; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
 - It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, scheduled routing has an embedded user fallback, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
+- It does not currently guarantee that implicit SFX playback reaches the initiating user or most recent voice session. Source entries can remain strongly retained after lifecycle end, and the fallback selector returns the first registered source; see [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/15).
 
 For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
