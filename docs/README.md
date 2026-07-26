@@ -12,10 +12,10 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17) |
 | [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
 | [`sfx-library.md`](sfx-library.md) | Slot-based sfx library, trigger semantics, `local_sfx_test`, and the cross-session routing blocker in Issue #15 |
-| [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, current licensing boundary, processing recipe |
+| [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, current licensing boundary, and the owner decision required in Issue #16 |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
 | [`video.md`](video.md) | `/frame` HTTP endpoint and current client blockers tracked in Issue #9 |
-| [`env-vars.md`](env-vars.md) | Every `DISCORD_VOICE_LIVE_*` env var, defaults, descriptions |
+| [`env-vars.md`](env-vars.md) | Environment variables, defaults, and the identity/owner migration boundary in Issue #18 |
 | [`troubleshooting.md`](troubleshooting.md) | Common bridge failures, the Discord CDN handshake quirk, log locations |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Release history |
 
@@ -62,5 +62,7 @@ The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public 
 - It does not currently provide restart-safe, retry-safe scheduled notifications. Live runtime objects are passed into JSON persistence, failed attempts are removed after one try, and recipient fallback is not explicit; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
 - It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, scheduled routing has an embedded user fallback, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
 - It does not currently guarantee that implicit SFX playback reaches the initiating user or most recent voice session. Source entries can remain strongly retained after lifecycle end, and the fallback selector returns the first registered source; see [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/15).
+- It does not establish redistribution rights for the bundled WAV files. Use original or explicitly licensed replacements, or disable SFX, until the owner decision and evidence work in [Issue #16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16) is complete.
+- It does not fail closed when identity variables are absent: executable fallbacks can infer, authorize, or route to a repository-embedded account, and previously persisted `is_owner: true` profiles require an explicit migration decision; see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
