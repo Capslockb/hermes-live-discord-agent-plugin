@@ -17,7 +17,8 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 | `GEMINI_MODEL` | `gemini-3.1-flash-live-preview` | Primary Gemini Live model |
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
 | `DISCORD_VOICE_LIVE_VOICE` | `Kore` | Gemini Live voice name |
-| `DISCORD_VOICE_LIVE_PORT` | `18943` | Sidecar HTTP control port |
+| `DISCORD_VOICE_LIVE_PORT` | `18943` | Loopback sidecar HTTP control port |
+| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | File used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file; see [Issue #16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16). |
 | `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated user IDs whose audio is accepted. Empty allows all non-bot speakers in the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `120` | Minimum session uptime before auto-leave is allowed |
@@ -25,7 +26,7 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 | `DISCORD_VOICE_LIVE_GREETING` | `I'm here.` | Initial greeting text configured for the bridge |
 | `DISCORD_VOICE_LIVE_CLEAR_ON_INTERRUPT` | `true` | When user interrupts the model, clear the audio queue |
 | `DISCORD_VOICE_LIVE_NOTES_DIR` | `~/.hermes/voice-live-notes/` | Where to write per-call notes |
-| `DISCORD_VOICE_LIVE_KEEP_AUTOSTART_FILE` | `false` | If true, the autostart file is not deleted after use |
+| `DISCORD_VOICE_LIVE_KEEP_AUTOSTART_FILE` | `true` | If true, the autostart file is not deleted after use |
 | `DISCORD_VOICE_LIVE_AUTOSTART` | `false` | Auto-join the channel in `voice-live-autostart.json` on gateway boot |
 | `DISCORD_VOICE_LIVE_AUTOSTART_FILE` | `~/.hermes/voice-live-autostart.json` | Path to the autostart file |
 | `DISCORD_VOICE_LIVE_GUILD_ID` | — | Guild ID for autostart; required if autostart is enabled |
@@ -67,7 +68,7 @@ Slots: `TOOL_INIT`, `ERROR`, `NOTIFICATION`, `TRANSITION`.
 | Var | Default | Description |
 |---|---|---|
 | `DISCORD_VOICE_LIVE_TYPING_SOUND` | `true` | Enable the keyboard click sfx on tool calls |
-| `DISCORD_VOICE_LIVE_TYPING_SFX` | `~/.hermes/voice-live-typing.wav` | Path to the WAV |
+| `DISCORD_VOICE_LIVE_TYPING_SFX` | empty | Optional WAV path; an empty value does not select `~/.hermes/voice-live-typing.wav` automatically |
 | `DISCORD_VOICE_LIVE_TYPING_SFX_VOLUME` | `0.35` | Volume |
 | `DISCORD_VOICE_LIVE_TYPING_SYNTH_FALLBACK` | `false` | If true and the WAV is missing, generate a synthetic click instead of going silent |
 
@@ -83,7 +84,7 @@ These variables configure server-side frame handling. They do not make either cu
 | `DISCORD_VOICE_LIVE_VIDEO_INITIALIZED_QUIET_THRESHOLD_S` | `30` | Webhook announce fires only when a frame is accepted after at least this many seconds of silence |
 | `DISCORD_VOICE_LIVE_VIDEO_ENABLED` | `true` | Enable server-side video frame input |
 | `DISCORD_VOICE_LIVE_VIDEO_STATE_DETECTION` | `true` | Auto-react to video enable/disable |
-| `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval for video state changes |
+| `DISCORD_VOICE_LIVE_VIDEO_STATE_POLL_INTERVAL` | `5` | Poll interval in seconds for video state changes. The implementation does not read the older `_SECONDS` spelling. |
 
 ## Tool enable/disable
 
@@ -128,7 +129,7 @@ See `email-brief.md`.
 
 | Var | Default | Description |
 |---|---|---|
-| `DISCORD_VOICE_LIVE_NOTIFY_TIMEOUT` | `10` | HTTP timeout for webhook delivery (s) |
+| `DISCORD_VOICE_LIVE_NOTIFY_TIMEOUT` | `5` | Timeout used by sidecar notification HTTP calls and synchronous Discord send waits; it is not the webhook dispatch timeout |
 
 ## Honcho integration
 
