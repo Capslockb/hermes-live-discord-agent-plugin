@@ -1,6 +1,6 @@
 # Environment variables
 
-All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**.
+Environment variables read by the plugin. Defaults shown in **bold**.
 
 ## Required
 
@@ -8,7 +8,9 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 |---|---|
 | `DISCORD_BOT_TOKEN` | Discord bot token |
 | `GEMINI_API_KEY` | Google Gemini API key |
-| `DISCORD_VOICE_LIVE_USER_ID` | Your Discord snowflake — the bridge listens to this user |
+| `DISCORD_VOICE_LIVE_USER_ID` | Your Discord snowflake. It is required for slash-command channel inference and is also used as a default recipient by several background paths. The installer currently lets this prompt be skipped, while current runtime code falls back to a repository-embedded ID; set it explicitly and see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). |
+
+For a single-owner installation, also set `VOICE_OWNER_DISCORD_ID` explicitly before enabling owner-only profile tools. Current `main` otherwise falls back to a repository-embedded owner ID; this authorization boundary is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 ## Core
 
@@ -156,7 +158,7 @@ See `email-brief.md`.
 | Var | Default | Description |
 |---|---|---|
 | `VOICE_USERS_DIR` | `~/.hermes/voice-users/` | Per-user profile directory |
-| `VOICE_OWNER_DISCORD_ID` | (env) | Used for owner-only commands |
+| `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe and tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). |
 | `HERMES_PYTHON` | `python3` | Python interpreter for subprocess calls |
 | `GOOGLE_API_BIN` | (auto-detected) | Path to `google_api.py` for email + Google Workspace |
 | `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
