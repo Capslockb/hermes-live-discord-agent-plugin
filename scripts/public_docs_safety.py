@@ -29,6 +29,24 @@ def changed_files():
   if files: return files
  return [str(x) for x in Path('.').rglob('*') if x.is_file() and is_public_doc(str(x))]
 
+def changed_added_lines(files):
+ p=subprocess.run(['git','diff','--unified=0','origin/'+default_branch()+'...HEAD','--']+files, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+ if p.returncode!=0 or not p.stdout.strip(): return None
+ out={}
+ cur=None; new_line=None
+ for line in p.stdout.splitlines():
+  if line.startswith('+++ b/'):
+   cur=line[6:]; out.setdefault(cur,set())
+  elif line.startswith('@@') and cur:
+   m=re.search(r'\+(\d+)(?:,(\d+))?', line)
+   if m: new_line=int(m.group(1))
+  elif cur and new_line is not None:
+   if line.startswith('+') and not line.startswith('+++'):
+    out.setdefault(cur,set()).add(new_line); new_line+=1
+   elif not line.startswith('-'):
+    new_line+=1
+ return out
+
 def default_branch():
  p=subprocess.run(['git','symbolic-ref','refs/remotes/origin/HEAD'], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
  if p.returncode==0 and '/' in p.stdout: return p.stdout.strip().rsplit('/',1)[-1]
@@ -42,11 +60,15 @@ def is_public_doc(path):
 def main():
  ap=argparse.ArgumentParser(); ap.add_argument('--all', action='store_true'); args=ap.parse_args()
  files=[str(x) for x in Path('.').rglob('*') if x.is_file() and is_public_doc(str(x))] if args.all else [f for f in changed_files() if is_public_doc(f)]
+ added=None if args.all else changed_added_lines(files)
  findings=[]
  for f in files:
   try: lines=Path(f).read_text(encoding='utf-8', errors='ignore').splitlines()
   except Exception as e: findings.append((f,1,'uncertain-read-failure',str(e))); continue
-  for i,line in enumerate(lines,1):
+  scan_lines=range(1,len(lines)+1) if added is None else sorted(added.get(f,set()))
+  for i in scan_lines:
+   if i<1 or i>len(lines): continue
+   line=lines[i-1]
    for label,rx in PATTERNS:
     if rx.search(line) and not ALLOW_PROMPT_CONFIG.search(line): findings.append((f,i,label,line.strip()[:220]))
    if UNCERTAIN.search(line) and not ALLOW_PROMPT_CONFIG.search(line): findings.append((f,i,'uncertain automation instruction',line.strip()[:220]))
