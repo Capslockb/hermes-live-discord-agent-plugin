@@ -12,6 +12,8 @@ Environment variables read by the plugin. Defaults shown in **bold**.
 
 For a single-owner installation, also set `VOICE_OWNER_DISCORD_ID` explicitly before enabling owner-only profile tools. Current `main` otherwise falls back to a repository-embedded owner ID; this authorization boundary is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
+Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already persisted with `is_owner: true`. Existing profile YAML is authorization state, not a cache: do not assume an environment-variable change revokes old owner grants, and do not apply an unreviewed bulk migration. Issue #18 requires deterministic, human-reviewed handling for profiles whose ownership cannot be proven.
+
 ## Core
 
 | Var | Default | Description |
@@ -158,7 +160,7 @@ See `email-brief.md`.
 | Var | Default | Description |
 |---|---|---|
 | `VOICE_USERS_DIR` | `~/.hermes/voice-users/` | Per-user profile directory |
-| `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe and tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). |
+| `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe and tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). Changing it does not currently demote a persisted `is_owner: true` profile. |
 | `HERMES_PYTHON` | `python3` | Python interpreter for subprocess calls |
 | `GOOGLE_API_BIN` | (auto-detected) | Path to `google_api.py` for email + Google Workspace |
 | `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
