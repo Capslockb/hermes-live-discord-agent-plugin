@@ -2,6 +2,10 @@
 
 The default sfx files shipped in `sfx/` are short transformed excerpts from the YouTube sources listed below. The repository records their provenance and processing steps, but it does not preserve or independently verify the source license terms and does not include a standalone license granting reuse or redistribution of the bundled clips. Resampling, cutting, gain adjustment, fading, or other transformation does not by itself create reuse rights. Users should replace the clips with audio they are licensed to use before redistribution or commercial deployment unless they have independently verified permission.
 
+## Owner decision
+
+Issue #16 selects removal of bundled WAV files that lack auditable redistribution permission. SFX remains optional through operator-supplied original or explicitly licensed files, and missing SFX must be handled as a controlled no-op. The current media and installer paths have not yet been changed; removal, replacement, release, and validation work must use a focused reviewed pull request and is not eligible for documentation-only approval.
+
 ## Source
 
 Playlist: **"UI Sound Effects for App & Game Development"** by **Brand Name Audio** on YouTube  
