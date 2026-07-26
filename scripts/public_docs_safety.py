@@ -23,9 +23,10 @@ UNCERTAIN=re.compile(r"(?i)\b(agent|automation|controller|worker|model|llm)\b.{0
 def changed_files():
  p=subprocess.run(['git','diff','--name-only','origin/'+default_branch()+'...HEAD'], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
  if p.returncode==0 and p.stdout.strip(): return p.stdout.splitlines()
- p=subprocess.run(['git','diff','--name-only','--cached'], text=True, stdout=subprocess.PIPE)
- files=p.stdout.splitlines()
- if files: return files
+ p=subprocess.run(['git','diff','--name-only','--cached'], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+ if p.returncode==0:
+  files=p.stdout.splitlines()
+  if files: return files
  return [str(x) for x in Path('.').rglob('*') if x.is_file() and is_public_doc(str(x))]
 
 def default_branch():
