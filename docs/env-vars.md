@@ -18,7 +18,7 @@ All `DISCORD_VOICE_LIVE_*` env vars the plugin reads. Defaults shown in **bold**
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
 | `DISCORD_VOICE_LIVE_VOICE` | `Kore` | Gemini Live voice name |
 | `DISCORD_VOICE_LIVE_PORT` | `18943` | Loopback sidecar HTTP control port |
-| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | File used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file; see [Issue #16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16). |
+| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | File used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
 | `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated user IDs whose audio is accepted. Empty allows all non-bot speakers in the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `120` | Minimum session uptime before auto-leave is allowed |
