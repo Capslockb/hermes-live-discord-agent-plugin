@@ -52,7 +52,7 @@ systemctl --user restart hermes-gateway
 
 After cloning, use `--from-local`. Plain `./install.sh` ignores the current checkout and uses the installer's configured remote clone target; correction of that executable path is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7). To remove the installation later, run `./install.sh --uninstall` from the checkout.
 
-The installer handles the Hermes venv, plugin symlink, env prompts, and SFX directory creation. See `install.sh` for details.
+The installer handles the Hermes venv, dependency installation, environment prompts, and SFX directory creation. `--from-local` links the current checkout into Hermes; remote mode clones into the plugin directory instead. The `DISCORD_VOICE_LIVE_USER_ID` prompt can currently be skipped and `VOICE_OWNER_DISCORD_ID` is not prompted at all, so configure both explicitly for a normal single-owner setup; see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 ---
 
@@ -127,15 +127,23 @@ Current frame delivery is tracked separately in [Issue #9](https://github.com/Ca
 
 ## Environment variables
 
-The minimum required:
+Minimum for normal single-user operation:
 
 ```bash
 DISCORD_BOT_TOKEN=***
 GEMINI_API_KEY=***
-DISCORD_VOICE_LIVE_USER_ID=1474100257762578597   # your Discord snowflake
+DISCORD_VOICE_LIVE_USER_ID=<your-discord-snowflake>
 ```
 
-Full list of every `DISCORD_VOICE_LIVE_*` env var: [`docs/env-vars.md`](docs/env-vars.md).
+For owner-only profile tools, also configure:
+
+```bash
+VOICE_OWNER_DISCORD_ID=<your-discord-snowflake>
+```
+
+Set both identity values explicitly. Current executable fallbacks can otherwise infer, authorize, or route to a repository-embedded account; removal and migration are tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
+
+Full list of every environment variable: [`docs/env-vars.md`](docs/env-vars.md).
 
 ---
 
