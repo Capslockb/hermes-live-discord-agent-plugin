@@ -10,6 +10,7 @@ from pathlib import Path
 
 DOC_NAMES={"README.md","SECURITY.md","CONTRIBUTING.md","AGENTS.md"}
 DOC_DIR_PARTS={"docs","doc","website","site","public"}
+EXCLUDE_PARTS={"i18n","CHANGELOG.md"}
 DOC_EXTS={".md",".mdx",".rst",".txt"}
 ALLOW_PROMPT_CONFIG=re.compile(r"(?i)(example|sample|template|user-facing|user configurable|configuration|configures? the assistant|public documentation safety|security-sensitive automation details|intentionally not published|reported as security issues|custom guardrails register|fail-open|opt-out|guardrail|route guard tiers|manage-scope|guardrails framework|prompt injection guard|instruction leak|fail-closed|system override|previous instructions|resilience|self-healing|system prompt|global system|schema notes|api key|scope type|management routes|api/mcp|cli-tools|strict-loopback|budget|cost|token limit|combo defaults|provider override|fallback|service port|environment|src/lib/services|registry model|arena|ranking|plural formats|pwa|i18n|locale|format must|must maintain|structure|don't always match|uses)")
 PATTERNS=[
@@ -55,7 +56,7 @@ def default_branch():
 def is_public_doc(path):
  parts=set(Path(path).parts)
  name=Path(path).name
- return name in DOC_NAMES or Path(path).suffix.lower() in DOC_EXTS and bool(parts & DOC_DIR_PARTS)
+ return not (parts & EXCLUDE_PARTS) and (name in DOC_NAMES or Path(path).suffix.lower() in DOC_EXTS and bool(parts & DOC_DIR_PARTS))
 
 def main():
  ap=argparse.ArgumentParser(); ap.add_argument('--all', action='store_true'); args=ap.parse_args()
