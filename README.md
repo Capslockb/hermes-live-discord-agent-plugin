@@ -13,16 +13,16 @@
 
 You've used chatbots. You've used voice assistants that feel like phone trees. **This is neither.**
 
-Hermes Live puts a *genuinely conversational* AI into your Discord voice channel — one that hears you, uses your tools, remembers what you talked about last week, and can spin up a Codex session to fix the bug you just described. Sub-second latency. Hour-long sessions. No project-hosted relay: it runs in your gateway and connects directly to Discord, Gemini, and any optional integrations using your credentials. Those external services remain subject to their own availability, pricing, and data-handling terms.
+Hermes Live puts a conversational AI into your Discord voice channel — one that hears you, can use configured tools, and can receive bounded Honcho peer context when that integration is available. Latency, memory continuity, and tool delivery depend on the selected providers, network, and optional integrations; the project does not guarantee an exact replay of a previous session. No project-hosted relay is required: it runs in your gateway and connects directly to Discord, Gemini, and any optional integrations using your credentials. Those external services remain subject to their own availability, pricing, and data-handling terms.
 
 **What it feels like:**
-- You join a voice channel. The agent greets you by name and recalls last week's debugging session.
+- You join a voice channel. When Honcho is configured and a peer representation exists, the agent can receive a bounded set of facts and context about you; it does not load a separate recent-session transcript.
 - You describe what is on screen and it talks you through the fix; bundled frame delivery is currently blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
-- You say "ship it" — it delegates to Codex, tracks the PR, and pings you when CI passes.
-- You go AFK. It emails you a 3-bucket digest of what happened while you were gone.
-- You come back. The conversation picks up exactly where it left off.
+- You ask it to delegate through Codex or another configured CLI. Automated follow-up and proactive delivery are best-effort and remain subject to [Issues #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17).
+- You request an email brief. It can build the three-bucket summary, but backend-state, retry/de-duplication, privacy, and recipient-routing defects remain open in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
+- You reconnect later. Any continuity comes from the current configured context sources; the prior voice session is not resumed verbatim.
 
-This isn't a demo. It's the voice layer your infrastructure has been waiting for.
+This is a working self-hosted integration, not a claim that every optional path is production-ready. Current limitations are linked below.
 
 ---
 
@@ -63,7 +63,7 @@ The installer handles the Hermes venv, dependency installation, environment prom
 | 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
 | 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
 | 📣 **Proactive notifications** | Six modes: voice, DM, channel, webhook, `auto`, and `all`. Delivery is best-effort; scheduled persistence/retry and the internal `/notify` fallback remain blocked by [Issues #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
-| 📧 **Email brief** | Scheduled Gmail digest, 3-bucket importance scoring, AFK delivery |
+| 📧 **Email brief** | **Partial:** builds a three-bucket inbox summary, but backend failure can look like an empty inbox, failed delivery can consume de-duplication state, and recipient/privacy boundaries remain open in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12). |
 | 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
 | 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
 | 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
@@ -107,7 +107,7 @@ Relies on `discord-ext-voice-recv` (audio RX) and Gemini Multimodal Live API (WS
 
 ## Why this release matters
 
-Hermes can now **hold a real conversation with you in voice**. Not a 30-second demo — sub-second latency, hour-long sessions, remembers what you talked about last time via Honcho memory.
+Hermes can hold a real conversation with you in voice. Latency and session duration depend on the provider and network. When Honcho is configured and available, each session can receive a bounded peer representation and card conclusions; it does not automatically restore a prior session transcript.
 
 Mid-conversation, it can:
 
