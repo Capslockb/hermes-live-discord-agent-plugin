@@ -64,13 +64,13 @@ The installer handles the Hermes venv, plugin symlink, env prompts, and SFX dire
 | 👁️ **Vision + frame feed** | The frame endpoint and feeder are present, but both bundled client paths are blocked on current `main` by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9). |
 | 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
 | 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
-| 📣 **Proactive notifications** | Voice, DM, channel, webhook, or auto — fires on long-task completion, AFK pings, scheduled alerts |
+| 📣 **Proactive notifications** | Six modes: voice, DM, channel, webhook, `auto`, and `all`. Delivery is best-effort; scheduled persistence/retry and the internal `/notify` fallback remain blocked by [Issues #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
 | 📧 **Email brief** | Scheduled Gmail digest, 3-bucket importance scoring, AFK delivery |
 | 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
 | 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
 | 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
 | 🪶 **Self-hosted bridge** | Runs in your existing Hermes gateway's asyncio loop; Discord, Gemini, and optional integrations remain external services |
-| 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/frame`, `/say`, `/leave` |
+| 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/notes`, `/frame`, `/say`, `/stop`, and `/notify`; mutating routes require `X-API-Secret`. |
 
 ---
 
@@ -141,16 +141,16 @@ Full list of every `DISCORD_VOICE_LIVE_*` env var: [`docs/env-vars.md`](docs/env
 
 ## Sidecar HTTP control API
 
-Runs on `127.0.0.1:18943`:
+Runs on `127.0.0.1:18943`. Keep this port loopback-only. `/health` and `/notes` are anonymous read-only routes; `/notes` can return stored transcript content. `/frame`, `/stop`, `/say`, and `/notify` are mutating routes and require `X-API-Secret`. Current secret-file safety and lifecycle are unresolved in [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17), and the built-in `/notify` fallback cannot yet authenticate under [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14).
 
 | Route | Method | Description |
 |---|---|---|
-| `/health` | GET | Bridge health JSON |
-| `/frame` | POST | Send a JPEG/PNG frame (`?force=true` bypasses audio-gate); bundled clients are currently blocked by Issue #9 |
-| `/stop` | GET | Stop the bridge |
-| `/say` | GET | Inject text into Gemini (`?text=...`) |
-| `/notes` | GET | Recent transcript events (`?limit=50`) |
-| `/notify` | GET/POST | Proactive notification breakout |
+| `/health` | GET | Anonymous bridge health JSON on loopback |
+| `/frame` | POST | Authenticated JPEG/PNG frame input (`?force=true` bypasses the audio gate); bundled clients are currently blocked by Issue #9 |
+| `/stop` | GET | Authenticated bridge stop |
+| `/say` | GET | Authenticated text injection into Gemini (`?text=...`) |
+| `/notes` | GET | Anonymous recent transcript events (`?limit=50`) on loopback |
+| `/notify` | GET/POST | Authenticated proactive notification breakout; built-in fallback blocked by Issues #14 and #17 |
 
 ---
 
