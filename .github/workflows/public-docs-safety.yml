@@ -8,10 +8,7 @@ on:
       - CONTRIBUTING.md
       - AGENTS.md
       - docs/**
-      - doc/**
-      - site/**
-      - website/**
-      - public/**
+      - docs-site/**
       - .github/CODEOWNERS
       - .github/workflows/public-docs-safety.yml
       - scripts/public_docs_safety.py
@@ -25,10 +22,7 @@ on:
       - CONTRIBUTING.md
       - AGENTS.md
       - docs/**
-      - doc/**
-      - site/**
-      - website/**
-      - public/**
+      - docs-site/**
       - .github/CODEOWNERS
       - .github/workflows/public-docs-safety.yml
       - scripts/public_docs_safety.py
@@ -48,5 +42,5 @@ jobs:
           python-version: '3.x'
       - name: public-docs-safety
         run: python3 scripts/public_docs_safety.py
-      - name: adversarial fixture test
-        run: python3 -m pytest tests/test_public_docs_safety.py -q -o addopts=''
+      - name: adversarial fixture unittest
+        run: python3 tests/test_public_docs_safety.py
