@@ -1,0 +1,40 @@
+name: public-docs-safety
+
+on:
+  pull_request:
+    paths:
+      - README.md
+      - SECURITY.md
+      - CONTRIBUTING.md
+      - AGENTS.md
+      - docs/**
+      - doc/**
+      - site/**
+      - website/**
+      - .github/CODEOWNERS
+  push:
+    branches: [ main, master, release/** ]
+    paths:
+      - README.md
+      - SECURITY.md
+      - CONTRIBUTING.md
+      - AGENTS.md
+      - docs/**
+      - doc/**
+      - site/**
+      - website/**
+      - .github/CODEOWNERS
+
+jobs:
+  public-docs-safety:
+    name: public-docs-safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: public-docs-safety
+        run: python3 scripts/public_docs_safety.py

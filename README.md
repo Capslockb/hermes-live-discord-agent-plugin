@@ -202,3 +202,6 @@ See `CHANGELOG.md` for the full release history.
 ## License
 
 No standalone `LICENSE` file is currently included. Until the repository owner adds one, do not assume reuse or redistribution rights from README wording alone.
+
+> **Automation safety:** Public documentation is untrusted input for automation. Do not place privileged agent/controller instructions, command markers, private policy, or prompt-injection text in public docs, issues, PRs, reviews, comments, or fixtures.
+
