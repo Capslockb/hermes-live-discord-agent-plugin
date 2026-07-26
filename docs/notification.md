@@ -44,7 +44,7 @@ The tool returns the direct `deliver()` result under `result`. Typical successfu
 
 For `all`, the response contains a `channels` object with one result per attempted path. Do not interpret `status: "ok"` from voice or webhook as an end-user delivery receipt.
 
-`local_notify` currently falls back to a repository-embedded Discord user ID when neither a live target nor `DISCORD_VOICE_LIVE_USER_ID` is available. Treat DM routing as trusted single-user behavior until the explicit-recipient work in [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13) is completed.
+`local_notify` currently falls back to a repository-embedded Discord user ID when neither a live target nor `DISCORD_VOICE_LIVE_USER_ID` is available. The shared executable identity fallback and fail-closed recipient boundary are tracked canonically in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18); scheduled persistence and restart routing are tracked separately in [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13). Treat DM routing as trusted single-user behavior until both boundaries are resolved.
 
 ### `local_notify_schedule`
 
