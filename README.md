@@ -3,7 +3,7 @@
 ![Hermes Live Banner](docs/banner.png)
 
 > **Drop a real-time multimodal AI into any Discord voice channel.**
-> Full-duplex audio · vision · function calling · multi-CLI delegation · proactive notifications · post-call transcripts.
+> Full-duplex audio · function calling · multi-CLI delegation · proactive notifications · JSONL voice-event logs.
 > Built on **Google Gemini Multimodal Live**, packaged as a self-hostable **Hermes Agent** plugin.
 > Source available. Self-hosted. Inspectable.
 
@@ -58,14 +58,14 @@ The installer handles the Hermes venv, dependency installation, environment prom
 
 | | |
 |---|---|
-| 🎙️ **Full-duplex voice** | Sub-second latency, Discord UDP → Opus → 16 kHz mono → Gemini WSS |
+| 🎙️ **Full-duplex voice** | Streaming Discord UDP → Opus → 16 kHz mono → Gemini WSS; end-to-end latency depends on provider, network, host load, and buffering settings. |
 | 👁️ **Vision + frame feed** | The frame endpoint and feeder are present, but both bundled client paths are blocked on current `main` by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9). |
 | 🛠️ **Function calling** | 30+ voice tools (calendar, mail, Home Assistant, GitHub, Spotify, files, search) |
 | 🔁 **Multi-CLI delegation** | `opencode / codex / numasec / gemini / hermes-api` with health registry + automatic fallback |
 | 📣 **Proactive notifications** | Six modes: voice, DM, channel, webhook, `auto`, and `all`. Delivery is best-effort; scheduled persistence/retry and the internal `/notify` fallback remain blocked by [Issues #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
 | 📧 **Email brief** | **Partial:** builds a three-bucket inbox summary, but backend failure can look like an empty inbox, failed delivery can consume de-duplication state, and recipient/privacy boundaries remain open in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12). |
 | 😴 **Idle hangup** | Two-phase: prompt after N seconds of silence, then auto-leave |
-| 📝 **JSONL transcripts** | Word-level transcripts with tool calls, turns, and idle events |
+| 📝 **JSONL voice records** | Timestamped input/output transcript segments, tool calls, turns, and idle events; no word-level timing is recorded. |
 | 🎵 **Bundled sfx library** | 4 slots (tool-init / error / notification / transition), env-driven paths |
 | 🪶 **Self-hosted bridge** | Runs in your existing Hermes gateway's asyncio loop; Discord, Gemini, and optional integrations remain external services |
 | 🩺 **Health + control API** | Local HTTP on `127.0.0.1:18943` — `/health`, `/notes`, `/frame`, `/say`, `/stop`, and `/notify`; mutating routes require `X-API-Secret`. |
