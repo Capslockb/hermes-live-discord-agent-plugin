@@ -21,6 +21,8 @@ Use `--from-local` after cloning. Plain `./install.sh` ignores the current check
 
 Do not treat the optional identity prompt as optional for a normal single-user setup. Set `DISCORD_VOICE_LIVE_USER_ID` explicitly in `~/.hermes/.env` for slash-command channel inference and default recipient routing. If owner-only profile tools are expected, also set `VOICE_OWNER_DISCORD_ID`; the installer does not prompt for it. Current executable fallbacks can otherwise select a repository-embedded account, as tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
+Changing `VOICE_OWNER_DISCORD_ID` does not currently revoke owner access from a profile already persisted with `is_owner: true`. Treat `~/.hermes/voice-users/*.yaml` as security-sensitive state, do not assume an environment-variable change demotes an existing owner, and use the explicit human-reviewed migration required by Issue #18 rather than applying an unverified bulk edit.
+
 ## First session
 
 From Discord, join a voice channel, then in any text channel:
