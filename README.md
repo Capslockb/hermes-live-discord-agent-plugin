@@ -26,11 +26,9 @@ This isn't a demo. It's the voice layer your infrastructure has been waiting for
 
 ---
 
-## 📖 [Documentation →](docs-site/index.html)
+## 📖 Documentation
 
-A proper website is now available in [`docs-site/`](docs-site/index.html) — built from the source markdown in `docs/`. Open `docs-site/index.html` in a browser, or serve it with any static host (`python3 -m http.server` works). 13 pages covering architecture, personality, fallback chain, notifications, email brief, SFX library, webhooks, video feeder, env vars, troubleshooting, and the changelog.
-
-If you prefer raw markdown, every page is also in [`docs/`](docs/).
+The generated static site in [`docs-site/`](docs-site/index.html) is currently stale and still contains pre-correction repository-identity, licensing, and capability wording. Treat the Markdown under [`docs/`](docs/) and this README as canonical until the generator and regeneration work in [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6) is complete. The static site may still be opened locally for layout preview, but it should not be published as authoritative documentation yet.
 
 ---
 
@@ -178,11 +176,9 @@ Gemini Live usage is billed according to the selected model or service tier and 
 
 ## Documentation
 
-**📖 [Open the docs website →](docs-site/index.html)**
+The authoritative documentation is the Markdown under [`docs/`](docs/) plus this README. The generated `docs-site/` copy currently trails those corrections and still includes stale repository-identity, licensing, and capability text. Do not publish it as canonical until [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6) regenerates it from corrected sources and validates drift.
 
-A proper, designed docs site lives in `docs-site/`. It's a static site built from the markdown in `docs/`, so you can host it on GitHub Pages, Vercel, or just `python3 -m http.server` from the repo.
-
-Individual pages (also browseable as raw markdown):
+Individual pages:
 
 - [`docs/architecture.md`](docs/architecture.md) — end-to-end audio path, threading, lifecycle
 - [`docs/personality.md`](docs/personality.md) — system prompt shape and behavioral contracts
