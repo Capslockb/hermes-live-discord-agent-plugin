@@ -58,9 +58,9 @@ The private mapping `delegation_agent.py:_FALLBACK_CHAIN` defines the first fall
 
 `choose_fallback()` checks the persisted health registry only. It does not verify the neighbor's binary path or hourly rate-limit counter before selecting it. The current CLI paths are also hard-coded under `/home/caps`, so another installation may fail immediately until portability is addressed.
 
-Use `local_delegate_health(action="list")` or inspect `~/.hermes/voice-platform-health.json`. Tool list output uses `expires_in_seconds`; persisted entries contain `marked_at`, `expires_at`, and `ttl_seconds`. See [Fallback chain](fallback-chain.html) for the exact schemas and execution boundary.
+Use `local_delegate_health(action="list")` or inspect `~/.hermes/voice-platform-health.json`. Tool list output uses `expires_in_seconds`; persisted entries contain `marked_at`, `expires_at`, and `ttl_seconds`. See [Fallback chain](fallback-chain.md) for the exact schemas and execution boundary.
 
-## Sfx not playing
+## SFX not playing
 
 1. Check the WAV files exist: `ls -la ~/.hermes/voice-users/sfx/`
 2. Check the volumes: `DISCORD_VOICE_LIVE_SFX_<SLOT>_VOLUME=0.5` (default)
@@ -87,7 +87,7 @@ The current brief converts total backend failure into an empty result rather tha
 - `channel` — delivery requires a configured channel and send permission.
 - `webhook` — delivery requires a matching configured webhook subscriber.
 
-See [Notifications](notification.html) for the current `auto` ordering, scheduled-delivery path, and authentication limitations.
+See [Notifications](notification.md) for the current `auto` ordering, scheduled-delivery path, and authentication limitations.
 
 ## Log locations
 
