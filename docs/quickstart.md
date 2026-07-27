@@ -36,7 +36,7 @@ The bridge will:
 
 1. Ask Discord to connect to your voice channel with reconnect enabled and a 60-second connection timeout.
 2. Handshake with Gemini Live.
-3. Play the `transition` sfx when an available configured file can be used.
+3. Play the `transition` SFX when an available configured file can be used.
 4. Wait for you to speak — first-turn output is suppressed by an `audioStreamEnd` signal.
 
 Startup duration depends on Discord and network conditions. The current code does not establish that the first five handshakes always fail or that every connection succeeds after roughly 27–30 seconds.
@@ -58,6 +58,6 @@ After a successful session starts, the response should show `"voice_connected": 
 
 ## Next
 
-- [Architecture](architecture.html) — understand the audio path and threading model.
-- [Environment variables](env-vars.html) — every `DISCORD_VOICE_LIVE_*` env var.
-- [Troubleshooting](troubleshooting.html) — what to do when it doesn't work.
+- [Architecture](architecture.md) — understand the audio path and threading model.
+- [Environment variables](env-vars.md) — every `DISCORD_VOICE_LIVE_*` env var.
+- [Troubleshooting](troubleshooting.md) — what to do when it doesn't work.
