@@ -86,11 +86,11 @@ See [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/is
 
 `/notify` is a mutating route on the loopback control API. Current `main` requires the `X-API-Secret` header.
 
-The secret is not currently strictly process-scoped. `__init__.py` loads or writes `DISCORD_VOICE_LIVE_SECRET_FILE` (default `~/.hermes/voice-live-control-secret`), so the same value can survive gateway and process restarts. Existing file ownership, type, symlink status, and mode are not revalidated before reading; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). Do not assume that restarting the gateway rotates or invalidates the credential.
+The secret is not currently strictly process-scoped. `__init__.py` loads or writes `DISCORD_VOICE_LIVE_SECRET_FILE` (default `~/.hermes/voice-live-control-secret`), so the same value can survive gateway and process restarts. Existing file ownership, type, symlink status, and mode are not revalidated before reading; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). Do not assume that restarting the gateway rotates or invalidates the credential on the current implementation.
 
-Do not use the old unauthenticated `curl` example: it returns `401 Unauthorized`. The internal `notification.sidecar_notify()` helper also omits the required header, so its fallback path remains blocked by [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). The accepted authentication fix must resolve the current secret according to the lifecycle selected in Issue #17 rather than caching or assuming a process-only value.
+Do not use the old unauthenticated `curl` example: it returns `401 Unauthorized`. The internal `notification.sidecar_notify()` helper also omits the required header, so its fallback path remains blocked by [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). The accepted fix must resolve Issue #17's selected ephemeral process secret through a narrow in-process handoff, rotate it on every start, avoid stale caching, and fail closed when current credential state is unavailable or unsafe.
 
-Keep port `18943` on loopback. Protect the configured secret file and do not place the credential in a URL, query string, JSON body, repository file, shell history, log, returned error, or persisted notification entry. External callers need a reviewed trusted-local credential handoff; route protection must not be weakened to make an example work.
+Keep port `18943` on loopback. Do not place the credential in a URL, query string, JSON body, repository file, shell history, log, returned error, or persisted notification entry. External callers need a separately reviewed trusted-local credential handoff; route protection must not be weakened to make an example work.
 
 ## AFK and background delivery
 
@@ -127,5 +127,5 @@ See [`sfx-library.md`](sfx-library.md).
 - Do not use scheduled notifications for urgent or one-shot reminders until Issue #13 is resolved and exact-head tests prove retry-safe delivery.
 - Do not treat voice queueing or webhook enqueue counts as delivery receipts.
 - Do not expose `/notify` without its control secret or publish the sidecar beyond loopback.
-- Do not assume a restart rotates the current secret until Issue #17 has an implemented owner-selected lifecycle.
+- Do not assume a restart rotates the current secret until Issue #17's selected ephemeral lifecycle is implemented and exact-head security tests pass.
 - For task results already returned to Gemini, prefer the tool result unless an additional trusted delivery channel is intentionally required.

@@ -2,6 +2,8 @@
 
 A small slot-based system for playing UI sound effects through a registered voice output source. Each slot maps to a 24 kHz mono PCM16 WAV file and is invoked from specific bridge events.
 
+> **Media boundary:** the current tree still contains four legacy WAV files whose redistribution rights are not established. Issue [#16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16) records the accepted direction: remove files without auditable permission and keep SFX optional through operator-supplied original or explicitly licensed assets. Until that reviewed media/installer change lands, do not redistribute or treat the bundled files as licensed project assets; configure replacement paths or set `DISCORD_VOICE_LIVE_SFX_ENABLED=false`.
+
 ## The four slots
 
 | Slot | Triggered by | Typical sound |
@@ -17,23 +19,25 @@ A notification sound is not a delivery receipt. The current code calls `play_sfx
 
 ## File layout
 
-Default directory: `~/.hermes/voice-users/sfx/`
+Current runtime default directory: `~/.hermes/voice-users/sfx/`
 
-```
+```text
 ~/.hermes/voice-users/sfx/
-├── tool_init.wav       # chime (e.g. UI Notification Chimes Pack, first chime)
-├── error.wav           # 4x chain of a sharp beep (~2.8s total)
-├── notification.wav    # mobile-OS style ping
-└── transition.wav      # pop / whoosh
+├── tool_init.wav
+├── error.wav
+├── notification.wav
+└── transition.wav
 ```
+
+These filenames are runtime slots, not a grant to use or redistribute the legacy files currently present in the repository. Populate them only with assets you created or are explicitly licensed to use and redistribute where applicable.
 
 All four files are **24 kHz mono PCM16**. The loader auto-resamples if you give it a different format, but cutting directly to the target format keeps the loader's resample path simple.
 
-## Where the clips came from
+## Legacy bundled-file provenance
 
-Cut from a YouTube playlist ("UI Sound Effects for App & Game Development" by Brand Name Audio) using `ffmpeg silencedetect=noise=-30dB:d=0.2`. See [`sfx-credits.md`](sfx-credits.md) for the recorded provenance and current licensing boundary.
+The files currently checked into the repository were cut from a YouTube playlist ("UI Sound Effects for App & Game Development" by Brand Name Audio) using `ffmpeg silencedetect=noise=-30dB:d=0.2`. That provenance does not establish redistribution permission. See [`sfx-credits.md`](sfx-credits.md) and Issue [#16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16) for the rights boundary and accepted removal direction.
 
-To re-cut or add new slots, see the recipe in the `silence-detect-sfx-cutting` skill.
+Do not re-cut, repackage, publish, or release those source-derived clips without auditable permission. For new slots, use original or explicitly redistributable media.
 
 ## Environment variables
 
@@ -58,8 +62,10 @@ DISCORD_VOICE_LIVE_SFX_TRANSITION_VOLUME=0.60
 Global enable:
 
 ```bash
-DISCORD_VOICE_LIVE_SFX_ENABLED=true    # default
+DISCORD_VOICE_LIVE_SFX_ENABLED=true    # current runtime default
 ```
+
+Set this to `false` when no approved operator-supplied assets are configured.
 
 Global SFX directory (overrides the default `~/.hermes/voice-users/sfx/`):
 
@@ -110,10 +116,10 @@ Until [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/
 
 ## Adding a new slot
 
-1. Add a `sfx_<slot>.wav` file to the sfx dir
-2. In `sfx.py`, add the slot name to `DEFAULT_SFX_PATHS` and `DEFAULT_SFX_VOLUMES`
-3. Call `play_sfx("<slot>")` from the bridge event you want it to fire on
-4. Add the slot name to the `local_sfx_test` tool declaration enum
+1. Add an original or explicitly licensed `sfx_<slot>.wav` file to the SFX directory.
+2. In `sfx.py`, add the slot name to `DEFAULT_SFX_PATHS` and `DEFAULT_SFX_VOLUMES`.
+3. Call `play_sfx("<slot>")` from the bridge event you want it to fire on.
+4. Add the slot name to the `local_sfx_test` tool declaration enum.
 
 No need to restart the gateway for step 1 if the cache is invalidated, but steps 2-4 require a gateway restart.
 
