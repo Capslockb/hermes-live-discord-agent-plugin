@@ -103,7 +103,7 @@ def scan_file(path: str, line_numbers) -> list[tuple[str, int, str]]:
                 continue
             if rule_id in {"PDS001", "PDS002"} and quoted_example:
                 continue
-            if rule_id == "PDS003" and (human_guidance or BENIGN_PRODUCT.search(line)):
+            if rule_id == "PDS003" and human_guidance:
                 continue
             findings.append((path, i, rule_id))
         if UNCERTAIN.search(line) and not BENIGN_UNCERTAIN.search(line) and not human_guidance:
