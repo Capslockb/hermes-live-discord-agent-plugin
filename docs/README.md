@@ -9,7 +9,7 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | Doc | What it covers |
 |---|---|
 | [`architecture.md`](architecture.md) | End-to-end audio path, threading model, lifecycle |
-| [`personality.md`](personality.md) | System prompt shape, ping-pong rhythm, boredom switch, vocal expression |
+| [`personality.md`](personality.md) | User-visible voice persona, turn-taking, video-awareness boundaries, and optional Honcho context |
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
 | [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17) |
 | [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
