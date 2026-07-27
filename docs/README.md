@@ -12,8 +12,8 @@ The plugin is a Discord voice bridge backed by the Gemini Multimodal Live API. B
 | [`personality.md`](personality.md) | User-visible voice persona, turn-taking, video-awareness boundaries, and optional Honcho context |
 | [`fallback-chain.md`](fallback-chain.md) | Multi-CLI delegation health registry, `execute_with_fallback`, `local_delegate_health` |
 | [`notification.md`](notification.md) | `local_notify`, scheduling, `/notify`, and the current persistence/authentication blockers in Issues [#13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17) |
-| [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in Issue #12 |
-| [`sfx-library.md`](sfx-library.md) | Optional slot-based SFX support, trigger semantics, `local_sfx_test`, operator-supplied asset requirements, and the cross-session routing blocker in Issue #15 |
+| [`email-brief.md`](email-brief.md) | `local_email_brief`, scheduler, buckets, and current delivery/privacy blockers in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12) |
+| [`sfx-library.md`](sfx-library.md) | Optional slot-based SFX support, trigger semantics, `local_sfx_test`, operator-supplied asset requirements, and the cross-session routing blocker in [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/15) |
 | [`sfx-credits.md`](sfx-credits.md) | YouTube source provenance, the current licensing boundary, and the accepted removal/replacement direction in Issue #16 |
 | [`webhooks.md`](webhooks.md) | Event classes, emit helpers, env-var configuration |
 | [`video.md`](video.md) | `/frame` HTTP endpoint and current client blockers tracked in Issue #9 |
