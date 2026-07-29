@@ -24,6 +24,8 @@ An empty or missing variable disables fanout for that class. `email.received` an
 
 Current frame clients are blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9), so configuring `bridge.video` does not make frame delivery operational.
 
+The dispatcher also has unresolved queue and throttle-state defects: explicit tuple throttle keys lose their second component, selected target URLs are not preserved in the queued envelope, and a queue-full drop can still consume the throttle window. Until [Issue #11](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/11) is fixed, the target count returned at enqueue time and the URLs later selected by the worker can diverge.
+
 ## Payload shape
 
 The dispatcher sends a Discord embed and disables automatic mention parsing:
