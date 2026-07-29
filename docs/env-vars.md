@@ -162,6 +162,7 @@ See `email-brief.md`.
 | `VOICE_USERS_DIR` | `~/.hermes/voice-users/` | Per-user profile directory |
 | `VOICE_OWNER_DISCORD_ID` | repository-embedded ID | Identifies the account that currently receives `is_owner=true` and owner-only tools. Set this explicitly; the current executable fallback is unsafe. Issue #18 selects removal of the fallback and load-time recomputation so persisted `is_owner` state is effective only for a profile whose ID matches the explicit configured owner; that runtime migration is not implemented yet. |
 | `HERMES_PYTHON` | `python3` | Python interpreter for subprocess calls |
-| `GOOGLE_API_BIN` | (auto-detected) | Path to `google_api.py` for email + Google Workspace |
 | `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
 | `HASS_TOKEN` | — | Home Assistant long-lived access token |
+
+`GOOGLE_API_BIN` is not currently read as an environment variable. `email_brief.py` constructs the Google Workspace helper path under `~/.hermes/hermes-agent/skills/productivity/google-workspace/scripts/google_api.py`, regardless of `HERMES_HOME`. Custom Hermes roots and alternate helper installations therefore remain unsupported without a runtime change; see [Issue #24](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/24).
