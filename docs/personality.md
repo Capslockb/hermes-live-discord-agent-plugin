@@ -19,6 +19,8 @@ These are behavioral goals rather than delivery guarantees. Provider behavior, n
 
 Prompt-level video guidance does not prove that the model received a frame. The bundled frame-delivery paths remain blocked by the startup and authentication defects tracked in [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9). Treat video awareness as unavailable unless authenticated frame delivery has been independently verified.
 
+Camera-state awareness is separately incomplete: the camera-on and camera-off watcher branches currently do not await the notification helper, so their intended transition nudges may not run. This is tracked in [Issue #10](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/10) and does not make camera frames available to the model.
+
 ## Honcho context
 
 Optional Honcho context can append bounded, per-session user context when a valid peer is configured and the Honcho service is available.
