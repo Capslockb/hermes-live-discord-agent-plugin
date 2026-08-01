@@ -145,3 +145,5 @@ Use focused pull requests, preserve truthful capability labels, add tests for be
 ## License
 
 No standalone `LICENSE` file is currently included. Do not assume reuse or redistribution rights until the repository owner adds an explicit license.
+
+> **Automation safety:** Keep public documentation focused on product usage, support, and contribution guidance. Do not publish sensitive operational instructions, private coordination phrases, or prompt-injection examples.

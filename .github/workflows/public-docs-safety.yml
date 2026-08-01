@@ -1,0 +1,34 @@
+name: public-docs-safety
+
+on:
+  pull_request: {}
+  push:
+    branches: [ main, master, release/** ]
+    paths:
+      - README.md
+      - SECURITY.md
+      - CONTRIBUTING.md
+      - AGENTS.md
+      - docs/**
+      - docs-site/**
+      - .github/CODEOWNERS
+      - .github/workflows/public-docs-safety.yml
+      - scripts/public_docs_safety.py
+      - tests/test_public_docs_safety.py
+      - tests/fixtures/public-docs/**
+
+jobs:
+  public-docs-safety:
+    name: public-docs-safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: public-docs-safety
+        run: python3 scripts/public_docs_safety.py
+      - name: adversarial fixture unittest
+        run: python3 tests/test_public_docs_safety.py
