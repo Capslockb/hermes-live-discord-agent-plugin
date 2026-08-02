@@ -73,8 +73,9 @@ class TestEphemeralControlSecret(unittest.TestCase):
     def test_legacy_file_presence_has_no_auth_effect(self):
         with tempfile.TemporaryDirectory() as td:
             legacy_file = Path(td) / "voice-live-control-secret"
-            legacy_secret = "legacy-value-should-not-be-loaded"
-            legacy_file.write_text(legacy_secret)
+            # Deliberately a fixture placeholder — not a real credential.
+            legacy_fixture = "legacy-value-should-not-be-loaded"
+            legacy_file.write_text(legacy_fixture)
 
             # Even with the file present, the module must generate a fresh secret.
             mod = _fresh_init_module()
@@ -82,11 +83,11 @@ class TestEphemeralControlSecret(unittest.TestCase):
 
             self.assertNotEqual(
                 actual_secret,
-                legacy_secret,
+                legacy_fixture,
                 "Module must not load the legacy persistent file",
             )
             self.assertNotIn(
-                legacy_secret,
+                legacy_fixture,
                 actual_secret,
                 "Legacy file value must have no auth effect",
             )
