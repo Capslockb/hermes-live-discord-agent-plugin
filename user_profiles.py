@@ -304,19 +304,22 @@ def _update_index(discord_id: str) -> None:
 def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> UserProfile:
     """Load a profile from disk, or create a new one with safe defaults.
 
-    The OWNER discord ID is read from VOICE_OWNER_DISCORD_ID (default: B's snowflake).
-    Owners get the destructive tools enabled by default.
+    The OWNER discord ID is read from VOICE_OWNER_DISCORD_ID. If that variable
+    is unset or empty, no account matches owner and owner-only capabilities are
+    not granted (fail-closed).
     """
     discord_id = _safe_discord_id(discord_id)
-    owner_id = _safe_discord_id(os.getenv("VOICE_OWNER_DISCORD_ID", "1474100257762578597"))
+    owner_id = _safe_discord_id(os.getenv("VOICE_OWNER_DISCORD_ID", ""))
     path = VOICE_USERS_DIR / f"{discord_id}.yaml"
     data = _read_yaml(path)
     is_new = False
     if not data:
         data = _default_profile_yaml(discord_id)
         is_new = True
-    # Owner gets the full toolset
-    if force_owner or discord_id == owner_id:
+    # Owner gets the full toolset only when a valid, explicitly configured
+    # owner ID is present AND it matches the requesting user. An unset or
+    # non-numeric owner ID resolves to "anonymous" and matches nothing.
+    if force_owner or (owner_id != "anonymous" and discord_id == owner_id):
         data["is_owner"] = True
         # Owner gets the full toolset: ensure all never-auto-enabled tools
         # are removed from disabled_tools AND added to enabled_tools.

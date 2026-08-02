@@ -3174,7 +3174,7 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
                 _uid = (
                     _bridge_user_id(_bridge)
-                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
                 )
                 payload = build_and_notify(
                     limit=limit,
@@ -3615,7 +3615,7 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
                 _user_id = (
                     _bridge_user_id(_bridge)
-                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
                 )
                 result = _notify_deliver(
                     text=args.get("text", ""),
@@ -3669,7 +3669,7 @@ def _run_local_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 _adapter = getattr(_bridge, "_adapter", None) if _bridge is not None else None
                 _user_id = (
                     (_bridge._target_user_id if _bridge is not None else None)
-                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+                    or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
                 )
                 result = _notify_schedule(
                     fire_at=fire_at,
@@ -4868,7 +4868,7 @@ class VoiceLiveBridge:
         self._vc = None
         self._adapter = discord_adapter
         self._guild_id = voice_channel.guild.id
-        self._target_user_id = target_user_id or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+        self._target_user_id = target_user_id or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
         self._user_profile = user_profile
         self._audio_source = LiveAudioSource()
         self._listener = None

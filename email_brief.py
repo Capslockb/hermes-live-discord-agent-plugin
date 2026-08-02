@@ -57,7 +57,14 @@ AUTO_LABEL_HINTS = {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES"
 # ── Backend fetchers ──────────────────────────────────────────────────────
 
 def _google_api_path() -> Optional[Path]:
-    p = (Path.home() / ".hermes" / "hermes-agent" / "skills" / "productivity"
+    # 1. Explicit override: operator set DISCORD_VOICE_LIVE_GOOGLE_API_BIN.
+    explicit = os.getenv("DISCORD_VOICE_LIVE_GOOGLE_API_BIN", "")
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_file() else None
+    # 2. Derive from HERMES_HOME (falls back to ~/.hermes when unset).
+    hermes_home = Path(os.getenv("HERMES_HOME", str(Path.home() / ".hermes")))
+    p = (hermes_home / "hermes-agent" / "skills" / "productivity"
          / "google-workspace" / "scripts" / "google_api.py")
     return p if p.exists() else None
 
@@ -382,7 +389,7 @@ def _brief_loop(get_bridge_fn, interval: float) -> None:
             adapter = getattr(bridge, "_adapter", None) if bridge is not None else None
             user_id = (
                 getattr(bridge, "_target_user_id", None) if bridge is not None else None
-            ) or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+            ) or os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
             build_and_notify(bridge=bridge, adapter=adapter, user_id=user_id, source="email_brief_scheduler")
         except Exception as exc:
             logger.debug("email brief tick failed: %s", exc)

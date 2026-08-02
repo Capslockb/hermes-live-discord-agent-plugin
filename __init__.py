@@ -16,34 +16,22 @@ logger = logging.getLogger("discord-voice-plugin")
 
 PLUGIN_DIR = Path(__file__).parent
 CONTROL_PORT = int(os.getenv("DISCORD_VOICE_LIVE_PORT", "18943"))
-DEFAULT_USER_ID = os.getenv("DISCORD_VOICE_LIVE_USER_ID", "1474100257762578597")
+DEFAULT_USER_ID = os.getenv("DISCORD_VOICE_LIVE_USER_ID", "")
 DEFAULT_GUILD_ID = os.getenv("DISCORD_VOICE_LIVE_GUILD_ID", "")
 DEFAULT_CHANNEL_ID = os.getenv("DISCORD_VOICE_LIVE_CHANNEL_ID", "")
 
-# Shared secret for the HTTP control API. Generated once at module import
-# (so it survives across requests in the same process) and exported on this
-# module so bridge.py can pick it up via sys.modules lookups. Hardcoding a
-# default would be a vuln — secrets.token_urlsafe(32) gives ~256 bits.
-_CONTROL_SECRET_FILE = Path(os.getenv(
-    "DISCORD_VOICE_LIVE_SECRET_FILE",
-    str(Path.home() / ".hermes" / "voice-live-control-secret"),
-))
-try:
-    if _CONTROL_SECRET_FILE.exists():
-        CONTROL_API_SECRET = _CONTROL_SECRET_FILE.read_text().strip() or secrets.token_urlsafe(32)
-    else:
-        CONTROL_API_SECRET = secrets.token_urlsafe(32)
-        try:
-            _CONTROL_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _CONTROL_SECRET_FILE.write_text(CONTROL_API_SECRET)
-            _CONTROL_SECRET_FILE.chmod(0o600)
-        except OSError:
-            # If we can't persist it, the in-memory secret still works for
-            # this process lifetime. Just log so we know it's not sticky.
-            logger.warning("VoiceLive: could not persist control secret to %s", _CONTROL_SECRET_FILE)
-except Exception as _exc:  # pragma: no cover — defensive
-    logger.warning("VoiceLive: control secret init failed, generating ephemeral: %s", _exc)
-    CONTROL_API_SECRET = secrets.token_urlsafe(32)
+# Shared secret for the HTTP control API.
+#
+# The secret is ephemeral: a fresh cryptographically strong value is generated
+# on every process start so that restarting the bridge invalidates any stale
+# caller that held the previous secret. The legacy persisted file
+# (voice-live-control-secret) is intentionally not read; operators should
+# delete it after confirming the new process is healthy.
+#
+# The value is exported on this module so bridge.py can obtain it via
+# sys.modules lookups. It must never appear in URLs, query strings, JSON
+# bodies, log lines, exception messages, returned payloads, or shell history.
+CONTROL_API_SECRET: str = secrets.token_urlsafe(32)
 
 
 def _env_bool(key: str, default: bool) -> bool:
