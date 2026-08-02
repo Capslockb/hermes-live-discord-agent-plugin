@@ -157,14 +157,6 @@ else
   echo "  WARNING: feeder source not found at $FEEDER_SRC"
 fi
 
-# Create control.secret if missing (used for bridge auth)
-SECRET_FILE="$HERMES_HOME/control.secret"
-if [ ! -f "$SECRET_FILE" ]; then
-  echo "  generating $SECRET_FILE..."
-  "$PYTHON_BIN" -c "import secrets; print(secrets.token_urlsafe(32))" > "$SECRET_FILE"
-  chmod 0600 "$SECRET_FILE"
-fi
-
 echo "Video frame feeder installed: $HERMES_HOME/scripts/video-frame-feeder.py"
 
 # ── Run e2e tests (post-fix regression gate) ─────────────────────────────

@@ -65,9 +65,8 @@ import struct
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Optional, Tuple
-
-import requests
 
 
 _running = True
@@ -80,6 +79,35 @@ def _signal_handler(signum, frame):
 
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
+
+
+# ── Secret resolution ──────────────────────────────────────────────────────
+
+
+def _resolve_api_secret() -> str:
+    """Return the bridge control-API secret for X-API-Secret authentication.
+
+    Resolution order (first non-empty value wins):
+      1. DISCORD_VOICE_LIVE_API_SECRET environment variable.
+      2. File at DISCORD_VOICE_LIVE_SECRET_FILE env var path, stripped of
+         trailing whitespace.
+      3. Default file path: ~/.hermes/voice-live-control-secret.
+      4. Empty string (feeder will send no auth header; bridge will return 401).
+
+    The secret is never printed in startup output, log lines, or error messages.
+    """
+    env_secret = os.environ.get("DISCORD_VOICE_LIVE_API_SECRET", "").strip()
+    if env_secret:
+        return env_secret
+
+    secret_file_path = os.environ.get(
+        "DISCORD_VOICE_LIVE_SECRET_FILE",
+        str(Path.home() / ".hermes" / "voice-live-control-secret"),
+    )
+    try:
+        return Path(secret_file_path).read_text(encoding="utf-8").strip()
+    except (OSError, IOError):
+        return ""
 
 
 # ── ffmpeg pipeline construction ───────────────────────────────────────────
@@ -288,23 +316,38 @@ def should_send(
 # ── HTTP POST ──────────────────────────────────────────────────────────────
 
 
-def post_frame(endpoint: str, data: bytes, force: bool = False, source_label: str = "") -> dict:
+def post_frame(
+    endpoint: str,
+    data: bytes,
+    force: bool = False,
+    source_label: str = "",
+    api_secret: str = "",
+) -> dict:
+    """POST a frame to the bridge /frame endpoint.
+
+    api_secret is sent as X-API-Secret if non-empty. The value is never
+    included in the URL, query string, or any log output.
+    """
+    import requests as _requests  # late import — allows --help without requests installed
+
     url = f"{endpoint}?force=true" if force else endpoint
     if source_label:
         sep = "&" if "?" in url else "?"
-        # urllib-style safe quoting; requests will accept this verbatim
         from urllib.parse import quote
         url = f"{url}{sep}source={quote(source_label, safe='')}"
+    req_headers = {"Content-Type": "image/jpeg"}
+    if api_secret:
+        req_headers["X-API-Secret"] = api_secret
     try:
-        resp = requests.post(
+        resp = _requests.post(
             url,
             data=data,
-            headers={"Content-Type": "image/jpeg"},
+            headers=req_headers,
             timeout=5,
         )
         resp.raise_for_status()
         return resp.json()
-    except requests.RequestException as e:
+    except _requests.RequestException as e:
         return {"accepted": False, "reason": f"http_error: {e}"}
 
 
@@ -338,7 +381,7 @@ def main():
         "--width", "-w", type=int, default=768, help="Capture width (Gemini-native default: 768)",
     )
     parser.add_argument(
-        "--height", "-h", type=int, default=768, help="Capture height (Gemini-native default: 768)",
+        "--height", type=int, default=768, help="Capture height (Gemini-native default: 768)",
     )
     parser.add_argument(
         "--force", action="store_true",
@@ -376,12 +419,14 @@ def main():
     thumb_cmd = get_thumb_cmd(args.source, args.x, args.y, args.width, args.height, display=args.display)
     source_label = args.source_label or args.source
     content_filter = not args.no_content_filter
+    api_secret = _resolve_api_secret()
 
     print(f"Feeder started — endpoint: {args.endpoint}")
     print(f"Capture: {args.source} @ {args.width}x{args.height}, {interval}s interval")
     print(f"Content filter: {'ON' if content_filter else 'OFF'} "
           f"(stddev>={args.stddev_min}, hamming>={args.min_change})")
     print(f"Source label for webhook: {source_label}")
+    print(f"Auth: {'configured' if api_secret else 'not configured (bridge will reject with 401)'}")
     print(f"ffmpeg full: {' '.join(full_cmd[:8])} ...")
     print(f"ffmpeg thumb: {' '.join(thumb_cmd[:8])} ...")
 
@@ -410,7 +455,7 @@ def main():
                     break
                 time.sleep(interval)
                 continue
-            result = post_frame(args.endpoint, frame, force=args.force, source_label=source_label)
+            result = post_frame(args.endpoint, frame, force=args.force, source_label=source_label, api_secret=api_secret)
             if result.get("accepted"):
                 stats["sent"] += 1
                 print(f"✅ Sent {len(frame)}B (thumbnail fallback)")
@@ -457,7 +502,7 @@ def main():
             time.sleep(interval)
             continue
 
-        result = post_frame(args.endpoint, frame, force=args.force, source_label=source_label)
+        result = post_frame(args.endpoint, frame, force=args.force, source_label=source_label, api_secret=api_secret)
         if result.get("accepted"):
             stats["sent"] += 1
             print(f"✅ Sent {len(frame)}B — {reason} [hash=0x{h:016x}]")

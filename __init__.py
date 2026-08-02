@@ -22,16 +22,18 @@ DEFAULT_CHANNEL_ID = os.getenv("DISCORD_VOICE_LIVE_CHANNEL_ID", "")
 
 # Shared secret for the HTTP control API.
 #
-# The secret is ephemeral: a fresh cryptographically strong value is generated
-# on every process start so that restarting the bridge invalidates any stale
-# caller that held the previous secret. The legacy persisted file
-# (voice-live-control-secret) is intentionally not read; operators should
-# delete it after confirming the new process is healthy.
+# Resolution order (first non-empty value wins):
+#   1. DISCORD_VOICE_LIVE_API_SECRET env var — allows external clients such as
+#      the video-frame-feeder to authenticate without relying on a persisted
+#      file. Set the same value in both the gateway and feeder environments.
+#   2. Ephemeral: a fresh cryptographically strong value generated at import,
+#      valid only for the lifetime of this process. In-process callers
+#      (voice_live_frame tool) use CONTROL_API_SECRET directly and always have
+#      the right value; external feeders need the env var path (option 1).
 #
-# The value is exported on this module so bridge.py can obtain it via
-# sys.modules lookups. It must never appear in URLs, query strings, JSON
-# bodies, log lines, exception messages, returned payloads, or shell history.
-CONTROL_API_SECRET: str = secrets.token_urlsafe(32)
+# The value must never appear in URLs, query strings, log lines, exception
+# messages, returned payloads, or shell history.
+CONTROL_API_SECRET: str = os.getenv("DISCORD_VOICE_LIVE_API_SECRET", "").strip() or secrets.token_urlsafe(32)
 
 
 def _env_bool(key: str, default: bool) -> bool:
@@ -584,6 +586,7 @@ async def _control_post_frame(data: bytes, mime: str, force: bool = False, query
             f"Host: 127.0.0.1\r\n"
             f"Content-Type: {mime}\r\n"
             f"Content-Length: {len(data)}\r\n"
+            f"X-API-Secret: {CONTROL_API_SECRET}\r\n"
             f"Connection: close\r\n\r\n"
         )
         writer.write(headers.encode("utf-8") + data)
