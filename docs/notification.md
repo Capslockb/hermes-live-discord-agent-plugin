@@ -44,7 +44,7 @@ The tool returns the direct `deliver()` result under `result`. Typical successfu
 
 For `all`, the response contains a `channels` object with one result per attempted path. Do not interpret `status: "ok"` from voice or webhook as an end-user delivery receipt.
 
-`local_notify` currently falls back to a repository-embedded Discord user ID when neither a live target nor `DISCORD_VOICE_LIVE_USER_ID` is available. The shared executable identity fallback and fail-closed recipient boundary are tracked canonically in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18); scheduled persistence and restart routing are tracked separately in [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13). Treat DM routing as trusted single-user behavior until both boundaries are resolved.
+`local_notify` now selects a recipient only from the current live bridge target or the explicit `DISCORD_VOICE_LIVE_USER_ID` setting. The former repository-embedded fallback has been removed. When neither source provides a recipient, DM delivery can fail while `auto` may continue to another available route. Issue [#18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18) still tracks the stricter requirement for recipientless background work to return a metadata-only skip instead of passing an empty identifier downstream; scheduled persistence and restart routing are tracked separately in [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
 
 ### `local_notify_schedule`
 
@@ -78,7 +78,7 @@ Scheduled notifications are not currently reliable enough to describe as restart
 - the tool passes live bridge and Discord adapter objects into the JSON persistence layer, which can make scheduling fail because those objects are not serializable;
 - persisted entries cannot restore those runtime objects after restart;
 - every due entry is removed after one attempt, including exceptions and unsuccessful delivery results;
-- recipient fallback is not explicit.
+- recipient selection can still be empty rather than producing an explicit skipped result.
 
 See [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13). Until it is fixed, verify that the schedule entry was actually created and do not rely on this path for urgent, safety-critical, or one-shot reminders.
 
@@ -86,11 +86,11 @@ See [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/is
 
 `/notify` is a mutating route on the loopback control API. Current `main` requires the `X-API-Secret` header.
 
-The secret is not currently strictly process-scoped. `__init__.py` loads or writes `DISCORD_VOICE_LIVE_SECRET_FILE` (default `~/.hermes/voice-live-control-secret`), so the same value can survive gateway and process restarts. Existing file ownership, type, symlink status, and mode are not revalidated before reading; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). Do not assume that restarting the gateway rotates or invalidates the credential on the current implementation.
+Current `main` generates a fresh process-scoped `CONTROL_API_SECRET` with `secrets.token_urlsafe(32)` when the plugin process starts. Restarting the process rotates the value. The runtime no longer reads or writes `DISCORD_VOICE_LIVE_SECRET_FILE` or the historical `~/.hermes/voice-live-control-secret` file, so existing file contents do not authenticate the sidecar. The remaining lifecycle and trusted-client handoff work is tracked in [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17).
 
-Do not use the old unauthenticated `curl` example: it returns `401 Unauthorized`. The internal `notification.sidecar_notify()` helper also omits the required header, so its fallback path remains blocked by [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). The accepted fix must resolve Issue #17's selected ephemeral process secret through a narrow in-process handoff, rotate it on every start, avoid stale caching, and fail closed when current credential state is unavailable or unsafe.
+Do not use the old unauthenticated `curl` example: it returns `401 Unauthorized`. The internal `notification.sidecar_notify()` helper also omits the required header, so its fallback path remains blocked by [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). The smallest accepted correction is a narrow in-process resolver that obtains the exact current credential at call time and attaches it only as `X-API-Secret`, without weakening route authentication or caching the value across process lifetimes.
 
-Keep port `18943` on loopback. Do not place the credential in a URL, query string, JSON body, repository file, shell history, log, returned error, or persisted notification entry. External callers need a separately reviewed trusted-local credential handoff; route protection must not be weakened to make an example work.
+Keep port `18943` on loopback. Do not place the credential in a URL, query string, JSON body, command-line argument, repository file, shell history, log, returned error, or persisted notification entry. External callers do not currently have an approved credential handoff; they require a separately reviewed trusted-local design.
 
 ## AFK and background delivery
 
@@ -127,5 +127,5 @@ See [`sfx-library.md`](sfx-library.md).
 - Do not use scheduled notifications for urgent or one-shot reminders until Issue #13 is resolved and exact-head tests prove retry-safe delivery.
 - Do not treat voice queueing or webhook enqueue counts as delivery receipts.
 - Do not expose `/notify` without its control secret or publish the sidecar beyond loopback.
-- Do not assume a restart rotates the current secret until Issue #17's selected ephemeral lifecycle is implemented and exact-head security tests pass.
+- Do not assume built-in sidecar callers can authenticate merely because the process secret now rotates; the current `/notify` helper still lacks the trusted in-process handoff tracked in Issues #14 and #17.
 - For task results already returned to Gemini, prefer the tool result unless an additional trusted delivery channel is intentionally required.
