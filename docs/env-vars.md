@@ -8,11 +8,11 @@ Environment variables read by the plugin. Defaults shown in **bold**.
 |---|---|
 | `DISCORD_BOT_TOKEN` | Discord bot token |
 | `GEMINI_API_KEY` | Google Gemini API key |
-| `DISCORD_VOICE_LIVE_USER_ID` | Your Discord snowflake. It is required for slash-command channel inference and is also used as a default recipient by several background paths. The installer currently lets this prompt be skipped, while current runtime code falls back to a repository-embedded ID; set it explicitly and see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). |
+| `DISCORD_VOICE_LIVE_USER_ID` | Explicit Discord recipient identity for non-interactive paths that cannot obtain a current bridge target. Current `main` has no repository-embedded fallback. A missing value can leave background DM or channel routing without a recipient; the metadata-only skip requirement is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). |
 
-For a single-owner installation, also set `VOICE_OWNER_DISCORD_ID` explicitly before enabling owner-only profile tools. Current `main` otherwise falls back to a repository-embedded owner ID; this authorization boundary is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
+For a single-owner installation, set `VOICE_OWNER_DISCORD_ID` explicitly before enabling owner-only profile tools. Current `main` no longer embeds an owner ID, and an unset value does not select an account automatically.
 
-Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already persisted with `is_owner: true`. Existing profile YAML is authorization state, not a cache. Issue #18 now selects the migration rule: preserve profile data, but recompute effective owner authorization at load time and grant owner-only capabilities only when the profile ID matches an explicitly configured `VOICE_OWNER_DISCORD_ID`. That runtime change is not implemented yet, so do not assume an environment-variable change revokes an existing grant on current `main`.
+Owner authorization is only partially fail-closed on current `main`: historical profile fields can still influence loaded access, the current ID normalizer is more permissive than a strict Discord snowflake validator, `force_owner=True` can bypass explicit matching configuration, and stored profile identity is not yet fully constrained to the validated request/path identity. Draft [PR #27](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/27) and [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18) track those remaining authorization corrections.
 
 ## Core
 
@@ -22,7 +22,7 @@ Changing `VOICE_OWNER_DISCORD_ID` does not currently demote a profile already pe
 | `GEMINI_LIVE_MODEL_FALLBACKS` | — | Comma-separated fallback models, tried in order if primary fails |
 | `DISCORD_VOICE_LIVE_VOICE` | `Kore` | Gemini Live voice name |
 | `DISCORD_VOICE_LIVE_PORT` | `18943` | Loopback sidecar HTTP control port |
-| `DISCORD_VOICE_LIVE_SECRET_FILE` | `~/.hermes/voice-live-control-secret` | Current file used to load or persist the sidecar control secret. Current `main` reuses an existing value across restarts and applies mode `0600` only when creating a new file. Issue #17 selects replacement with an ephemeral process-scoped secret that rotates on every start and is handed only to trusted in-process clients; that security-sensitive change is not implemented yet. |
+| `DISCORD_VOICE_LIVE_SECRET_FILE` | ignored | Legacy setting. Current `main` generates a fresh process-scoped `CONTROL_API_SECRET` at process start and does not read or write this variable's historical `~/.hermes/voice-live-control-secret` path. Restarting rotates the current value. Trusted built-in clients still need the narrow in-process handoff tracked in Issues [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14) and [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). |
 | `DISCORD_VOICE_LIVE_ALLOWED_SPEAKERS` | empty | Comma-separated user IDs whose audio is accepted. Empty allows all non-bot speakers in the channel. |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_QUIET_SECONDS` | `900` | Idle timeout (15 min) before the bridge auto-leaves |
 | `DISCORD_VOICE_LIVE_AUTO_LEAVE_MIN_UPTIME_SECONDS` | `120` | Minimum session uptime before auto-leave is allowed |
@@ -160,7 +160,7 @@ See `email-brief.md`.
 | Var | Default | Description |
 |---|---|---|
 | `VOICE_USERS_DIR` | `~/.hermes/voice-users/` | Per-user profile directory |
-| `VOICE_OWNER_DISCORD_ID` | — | Identifies the account that receives `is_owner=true` and owner-only tools. Must be set explicitly; if unset or empty, no account matches owner and owner-only capabilities are not granted (fail-closed). |
+| `VOICE_OWNER_DISCORD_ID` | — | Explicit owner identity. Current `main` does not embed a fallback. Remaining strict validation, `force_owner`, persisted-state, and canonical-identity gaps are tracked in Issue #18 and draft PR #27. |
 | `HERMES_PYTHON` | `python3` | Python interpreter for subprocess calls |
 | `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
 | `HASS_TOKEN` | — | Home Assistant long-lived access token |
