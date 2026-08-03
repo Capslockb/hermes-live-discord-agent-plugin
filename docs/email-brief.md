@@ -79,7 +79,7 @@ The final score is clamped to 0–100. Buckets are:
 
 `fetch(limit, prefer)` tries the preferred backend and then the other backend:
 
-- Google uses `~/.hermes/hermes-agent/skills/productivity/google-workspace/scripts/google_api.py` and can include Gmail labels and snippets.
+- Google uses `DISCORD_VOICE_LIVE_GOOGLE_API_BIN` when it points to a regular file; otherwise it derives `${HERMES_HOME:-$HOME/.hermes}/hermes-agent/skills/productivity/google-workspace/scripts/google_api.py`. The explicit path requires a regular file, while the derived path currently checks only for existence. A directory named `google_api.py` can therefore reach subprocess execution; [Issue #24](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/24) tracks that validation mismatch.
 - Himalaya uses the `himalaya` CLI and returns envelope data without snippets or Gmail labels.
 
 If both backends fail, `fetch()` currently returns an empty list with backend `"none"`. `build_brief()` then reports `status: "ok"`, `count: 0`, and the same text used for a genuinely empty inbox.
@@ -107,13 +107,12 @@ The email-brief state is separate from the bridge's per-email reminder state, so
 
 `email_brief.py:start_brief_scheduler(get_bridge_fn, interval)` starts a daemon thread. The default interval is 30 minutes and is configured with `DISCORD_VOICE_LIVE_EMAIL_BRIEF_INTERVAL_SECONDS`.
 
-The scheduler obtains the current bridge and adapter through `get_bridge_fn`. Recipient selection currently falls back in this order:
+The scheduler obtains the current bridge and adapter through `get_bridge_fn`. Recipient selection currently uses, in order:
 
 1. the live bridge's `_target_user_id`;
-2. `DISCORD_VOICE_LIVE_USER_ID`;
-3. a repository-embedded Discord user ID.
+2. the explicit `DISCORD_VOICE_LIVE_USER_ID` setting.
 
-The final fallback is not a safe multi-user default. Keep scheduled briefs disabled unless the intended recipient is explicitly configured and verified. Email-brief backend, delivery-state, privacy, and de-duplication work remains tracked in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12); the shared executable identity fallback and fail-closed recipient/owner migration are tracked canonically in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
+Current `main` has no repository-embedded recipient fallback. When neither source provides a recipient, the scheduler still calls the notification path with an empty identifier instead of returning the required metadata-only skipped result. Keep scheduled briefs disabled unless the intended recipient is explicitly configured and verified. Email-brief backend, delivery-state, privacy, and de-duplication work remains tracked in [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12); the shared recipientless-background skip boundary is tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 
 ## When to use
 
