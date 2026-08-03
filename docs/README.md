@@ -42,29 +42,29 @@ journalctl --user -u hermes-gateway -f
 /voice-live-leave        # leave
 ```
 
-After cloning the repository, use `--from-local`. Plain `./install.sh` uses the installer's configured remote clone target rather than the current checkout; its repository correction is under review in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7).
+After cloning the repository, use `--from-local` so the installer uses the current checkout. Plain `./install.sh` uses the canonical remote clone target now present on `main`; owner-merged [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7) corrected that executable install path. Current-main clean-install, rerun, uninstall-boundary, and custom-`HERMES_HOME` validation are still required under Issue #6.
 
 ## Sidecar control API boundary
 
 The listener on `127.0.0.1:18943` is an internal loopback sidecar, not a public API.
 
 - `/stop`, `/say`, `/frame`, and `/notify` are mutating routes protected by `X-API-Secret`. They are normally called through the plugin's internal handlers rather than copied as unauthenticated `curl` commands.
-- The credential is loaded from or persisted to `DISCORD_VOICE_LIVE_SECRET_FILE` (default `~/.hermes/voice-live-control-secret`), so current `main` can reuse it across restarts. Existing file type, ownership, symlink status, and mode are not revalidated; see [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). Do not assume a gateway restart rotates the secret on the current implementation.
+- Current `main` generates a fresh process-scoped `CONTROL_API_SECRET` at process start. Restarting rotates the value. The runtime ignores the historical `DISCORD_VOICE_LIVE_SECRET_FILE` setting and `~/.hermes/voice-live-control-secret` file; existing file contents do not authenticate the sidecar. Issue [#17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17) tracks the remaining trusted-client handoff and fail-closed client behavior.
 - `/health` is anonymous and read-only.
 - `/notes` is anonymous on loopback and can return stored voice events and reconstructed transcript text. Do not publish, proxy, or expose port `18943` beyond the local machine.
 - The bundled `/frame` clients do not currently complete the required authenticated request path; see [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
-- The internal `/notify` helper also omits the required control header; keep route protection enabled and track the authenticated-call correction in [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). That fix must implement Issue #17's accepted ephemeral process-scoped secret, restart rotation, narrow in-process handoff, and fail-closed behavior.
+- The internal `/notify` helper also omits the required control header; keep route protection enabled and track the narrow in-process credential handoff in [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14). Do not restore a persisted shared-secret default or weaken the route to make the helper work.
 
 ## What this plugin does NOT do
 
 - It does not expose a production HTTP service. The sidecar is intended only for local plugin components and trusted local integrations.
 - It does not guarantee that text transcripts are ephemeral. Voice events are written under `DISCORD_VOICE_LIVE_NOTES_DIR` (default: `~/.hermes/voice-live-notes`), and `/notes` can return that stored content.
-- It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal shared secret, while `/health` and `/notes` remain anonymous on loopback.
-- It does not yet implement the accepted process-start rotation contract. Issue #17 selects an ephemeral process-scoped secret that rotates on every start, is handed only to trusted in-process clients, and fails closed when credential state is unavailable or unsafe.
-- It does not currently provide restart-safe, retry-safe scheduled notifications. Live runtime objects are passed into JSON persistence, failed attempts are removed after one try, and recipient fallback is not explicit; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
-- It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, scheduled routing has an embedded user fallback, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
+- It does not rely only on Discord user/role permissions for sidecar mutations: mutating HTTP routes also require the internal process secret, while `/health` and `/notes` remain anonymous on loopback.
+- It does not yet provide a complete trusted-client credential handoff. Process-start rotation is implemented, but the built-in `/notify` and `/frame` clients still omit the exact current credential and external callers have no approved handoff contract; see Issues #9, #14, and #17.
+- It does not currently provide restart-safe, retry-safe scheduled notifications. Live runtime objects are passed into JSON persistence, failed attempts are removed after one try, and missing recipient state does not yet produce the required explicit skipped result; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
+- It does not currently provide truthful email-brief delivery receipts or backend-failure reporting. Failed notification attempts can consume de-duplication state, recipientless background work still needs a metadata-only skip contract, and bucket payloads can expose email snippets to model-visible history; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
 - It does not currently guarantee that implicit SFX playback reaches the initiating user or most recent voice session. Source entries can remain strongly retained after lifecycle end, and the fallback selector returns the first registered source; see [Issue #15](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/15).
 - It does not establish redistribution rights for the bundled WAV files. Issue #16 selects removal of files without auditable permission and optional operator-supplied original or explicitly licensed replacements; the media, installer, and release changes still require a reviewed PR.
-- It does not yet implement Issue #18's accepted identity migration. Embedded identity fallbacks must be removed; persisted profile data is preserved, but owner authorization must be recomputed at load time and is effective only when the profile ID matches an explicitly configured `VOICE_OWNER_DISCORD_ID`. Background delivery must skip rather than guess a recipient.
+- It does not fully complete Issue #18's identity migration. Owner-merged PR #26 removed repository-embedded recipient and owner-ID fallbacks, but strict snowflake validation, `force_owner` constraints, canonical persisted identity, historical owner-state revocation, authenticated invoker context, and recipientless background skip behavior remain under review in draft PR #27 and Issue #18.
 
 For implementation details and design context, see [`architecture.md`](architecture.md) and the per-file docstrings.
