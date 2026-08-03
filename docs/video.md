@@ -6,6 +6,8 @@
 
 > **Frame delivery is blocked by [Issue #9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).** The checked-in feeder currently conflicts with argparse's reserved `-h/--help` option, and neither the feeder nor the in-process `voice_live_frame` client sends the `X-API-Secret` required by `/frame`. Do not treat either path as operational until the executable fix and its tests are reviewed.
 
+Current `main` generates a fresh process-scoped control secret whenever the plugin process starts. The runtime intentionally ignores the old `voice-live-control-secret` file, and the installer's separate `control.secret` file is not used by the bridge. The in-process frame client can obtain the current credential without persistence, but the standalone feeder still needs a separately reviewed secure handoff before it can authenticate.
+
 After Issue #9 is fixed, the bundled feeder will still mirror filtering defects owned by the canonical [`Capslockb/video-frame-feeder`](https://github.com/Capslockb/video-frame-feeder) implementation: average hash can miss global brightness transitions, and failed capture or delivery attempts advance comparison state before the bridge accepts a frame. Canonical runtime fixes belong in video-frame-feeder Issues [#11](https://github.com/Capslockb/video-frame-feeder/issues/11) and [#12](https://github.com/Capslockb/video-frame-feeder/issues/12); Hermes Live [Issue #19](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/19) tracks only the bundled-copy synchronization or backport contract.
 
 The control server binds to `127.0.0.1`. A direct Tailscale or other remote URL is not a supported feeder endpoint in the current runtime.
@@ -31,19 +33,21 @@ Fixing Issue #10 will restore state notifications only; it will not make Discord
 
 ### Automatic
 
-`install.sh` copies the feeder to `~/.hermes/scripts/video-frame-feeder.py` and marks it executable. This copy step does **not** make frame delivery operational while Issue #9 remains unresolved.
+`install.sh` copies the feeder to `${HERMES_HOME:-$HOME/.hermes}/scripts/video-frame-feeder.py` and marks it executable. This copy step does **not** make frame delivery operational while Issue #9 remains unresolved.
+
+The installer currently also creates `${HERMES_HOME:-$HOME/.hermes}/control.secret`. The current runtime does not read that file, so it must not be presented as a working frame credential. Existing files should not be deleted automatically; installer cleanup and migration behavior require a focused reviewed change.
 
 ### Manual
 
 ```bash
-mkdir -p ~/.hermes/scripts/
-cp scripts/video-frame-feeder.py ~/.hermes/scripts/video-frame-feeder.py
-chmod +x ~/.hermes/scripts/video-frame-feeder.py
+mkdir -p "${HERMES_HOME:-$HOME/.hermes}/scripts/"
+cp scripts/video-frame-feeder.py "${HERMES_HOME:-$HOME/.hermes}/scripts/video-frame-feeder.py"
+chmod +x "${HERMES_HOME:-$HOME/.hermes}/scripts/video-frame-feeder.py"
 ```
 
 ## Usage and CLI flags
 
-There is no supported working launch command on the current head. In particular, do not work around the parser conflict by disabling standard help, and do not expose port `18943` remotely to bypass authentication.
+There is no supported working launch command on the current head. In particular, do not work around the parser conflict by disabling standard help, do not place a secret in a URL or command-line argument, and do not expose port `18943` remotely to bypass authentication.
 
 The current script declares these options:
 
@@ -63,6 +67,16 @@ The current script declares these options:
 | `--no-content-filter` | Disable aHash and standard-deviation filtering. |
 | `--source-label` | URL-encoded into the `source` query parameter; it is not sent in an `X-Source-Label` header. |
 
+## Authentication boundary
+
+The bridge requires `X-API-Secret` on `/frame`.
+
+- The in-process `voice_live_frame` path should attach the exact current process credential at call time and only in the header. It must not write or expose the value in a URL, query string, JSON body, log, exception, returned payload, command line, or repository file.
+- The standalone feeder runs in another process and currently has no supported way to obtain the rotating credential. A secure handoff must be selected and tested before the feeder is documented as operational.
+- Neither `${HERMES_HOME:-$HOME/.hermes}/control.secret` nor the historical `~/.hermes/voice-live-control-secret` authenticates the current runtime.
+
+Control-secret lifecycle and trusted built-in client handoff are tracked in [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). The notification-side built-in client is tracked separately in [Issue #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14).
+
 ## Content-aware filtering
 
 The feeder first asks FFmpeg for an 8×8 raw grayscale thumbnail: 64 pixels and therefore 64 bytes. It computes an average hash and pixel standard deviation from that thumbnail. The full-resolution JPEG is captured only when the filter decides the frame should be sent, or when thumbnail capture fails and the fallback path is used.
@@ -79,7 +93,7 @@ Until those fixes are reviewed and synchronized, `--no-content-filter` is the on
 ## Troubleshooting
 
 - **Argument conflict mentioning `-h`:** this is the known startup blocker in Issue #9. It occurs before any capture or HTTP request.
-- **`401 Unauthorized`:** the current clients omit the required `X-API-Secret`. Copying `~/.hermes/control.secret` is not a valid workaround: the runtime defaults to `~/.hermes/voice-live-control-secret`, and the feeder reads neither file on the current head.
+- **`401 Unauthorized`:** the current clients omit the required `X-API-Secret`. Copying either `control.secret` or the historical `voice-live-control-secret` file is not a valid workaround because the bridge uses a fresh in-process credential on each start and ignores both files.
 - **Remote/Tailscale endpoint fails:** the sidecar listens only on loopback. Keep it loopback-only; any remote transport needs a separately reviewed authenticated tunnel or proxy design.
 - **Camera state changes produce no awareness message:** this is Issue #10. It is independent of frame capture and authentication.
 - **A dark/light or blank-screen transition is skipped after the runtime fix:** this is the canonical average-hash defect in video-frame-feeder #12, mirrored by Hermes Live #19. `--stddev-min 0` is already the parser default and does not fix it; use `--no-content-filter` only as a temporary diagnostic measure.
@@ -89,8 +103,9 @@ Until those fixes are reviewed and synchronized, `--no-content-filter` is the on
 
 ## See also
 
-- `voice_live_frame`: currently blocked by the same missing-auth propagation tracked in Issue #9.
+- `voice_live_frame`: currently blocked by the missing current-secret header propagation tracked in Issue #9.
 - `voice_live_video_status`: read-only status inspection; it does not repair or authenticate frame delivery.
 - Issue #10: camera state-awareness coroutine calls are not awaited.
+- Issue #17: ephemeral control-secret lifecycle and trusted in-process client handoff.
 - video-frame-feeder #11 and #12: canonical retry-state and brightness-filtering implementation.
 - Hermes Live Issue #19: bundled-copy synchronization and drift prevention.
