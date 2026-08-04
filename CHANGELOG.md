@@ -31,7 +31,7 @@ git pull
 systemctl --user restart hermes-gateway
 ```
 
-Remote installer correction and validation remain tracked in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7).
+The canonical remote clone-target correction landed through [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7). Current-main clean remote installation, rerun/no-overwrite behavior, uninstall boundaries, and custom `HERMES_HOME` validation remain tracked in [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6).
 
 ## 0.3.4 — 2026-06-09
 
@@ -94,7 +94,7 @@ Added focused smoke and regression coverage for delegation fallback, notificatio
 - Added a video-initialized webhook event.
 - Added feeder-side content-change filtering and fallback behavior.
 
-Canonical frame-filter changes and bundled-copy synchronization are tracked in [Issue #19](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/19).
+Canonical frame-filter changes and bundled-copy synchronization are tracked in [Issue #19](https://github.com/Capslockb/video-frame-feeder/issues/19).
 
 ## 0.2.7 — 2026-06-05
 
