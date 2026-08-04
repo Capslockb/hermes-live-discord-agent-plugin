@@ -6,7 +6,7 @@ Hermes Live is a self-hosted Hermes Agent plugin that connects Discord voice cha
 
 ## Project status
 
-The core Discord-to-Gemini voice path is available for self-hosted use. Several optional integrations and control paths remain under active development, including frame delivery, notification recovery, email-brief delivery guarantees, identity migration, control-secret handling, and some installer/documentation paths.
+The core Discord-to-Gemini voice path is available for self-hosted use. Several optional integrations and control paths remain under active development, including frame delivery, notification recovery, email-brief delivery guarantees, identity migration, trusted control-client authentication, and some installer/documentation paths.
 
 Review the open issues before production deployment. Keep the local control API bound to loopback and do not treat optional integrations as multi-user safe unless their authorization boundaries have been reviewed.
 
@@ -50,7 +50,7 @@ In Discord:
 
 Use `./install.sh --uninstall` to remove the plugin.
 
-Remote installer behavior is still being corrected in [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7). A local checkout with `--from-local` is the recommended installation path until that work is validated.
+The canonical clone-target correction landed through [PR #7](https://github.com/Capslockb/hermes-live-discord-agent-plugin/pull/7). A local checkout with `--from-local` remains the recommended path until clean remote installation, rerun/no-overwrite behavior, uninstall boundaries, and custom `HERMES_HOME` handling have exact-head validation; that remaining work is tracked in [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6).
 
 ## Minimum configuration
 
@@ -61,7 +61,7 @@ DISCORD_VOICE_LIVE_USER_ID=<your-discord-user-id>
 VOICE_OWNER_DISCORD_ID=<your-discord-user-id>
 ```
 
-Set both identity values explicitly. Current runtime fallback removal and persisted-owner migration remain tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). See [`docs/env-vars.md`](docs/env-vars.md) for the full configuration reference.
+Set both identity values explicitly. Repository-embedded identity defaults have been removed, while persisted-owner migration, strict identity validation, canonical identity handling, and recipientless background routing remain tracked in [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18). See [`docs/env-vars.md`](docs/env-vars.md) for the full configuration reference.
 
 ## Basic architecture
 
@@ -96,7 +96,7 @@ The bridge exposes a local HTTP interface on `127.0.0.1:18943`.
 | `/notes` | GET | Recent local transcript events |
 | `/notify` | GET/POST | Authenticated notification delivery |
 
-Keep this interface loopback-only. Mutating routes require `X-API-Secret`. The accepted design is an ephemeral secret that rotates on every process start, but current runtime work remains open in [Issue #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17). Internal notification authentication, transcript access, and frame-client compatibility are tracked in [Issues #14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14) and [#9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
+Keep this interface loopback-only. Mutating routes require `X-API-Secret`. The runtime now generates an ephemeral process-scoped control secret that rotates on every process start and ignores the historical secret files. Trusted built-in clients still need a narrow current-process credential handoff, and the standalone frame feeder requires a separate owner-reviewed design. Those remaining boundaries are tracked in [Issues #17](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/17), [#14](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/14), and [#9](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/9).
 
 ## Current limitations
 
@@ -104,7 +104,7 @@ Keep this interface loopback-only. Mutating routes require `X-API-Secret`. The a
 - Scheduled notification persistence and retry behavior are incomplete; see [Issue #13](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/13).
 - Email briefs do not yet provide complete backend, delivery, recipient, privacy, and de-duplication guarantees; see [Issue #12](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/12).
 - Generated static documentation under `docs-site/` is stale and must not be treated as authoritative; see [Issue #6](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/6).
-- Owner identity migration and repository-embedded fallback removal remain incomplete; see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
+- Persisted owner authorization, strict identity validation, canonical identity handling, and recipientless background routing remain incomplete; see [Issue #18](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/18).
 - Bundled sound-effect files do not have an established redistribution basis and are scheduled for removal. Use original or explicitly licensed operator-supplied files, or disable SFX; see [Issue #16](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/16).
 - No genuine sanitized demonstration recording is currently available; see [Issue #5](https://github.com/Capslockb/hermes-live-discord-agent-plugin/issues/5).
 
@@ -145,5 +145,3 @@ Use focused pull requests, preserve truthful capability labels, add tests for be
 ## License
 
 No standalone `LICENSE` file is currently included. Do not assume reuse or redistribution rights until the repository owner adds an explicit license.
-
-> **Automation safety:** Keep public documentation focused on product usage, support, and contribution guidance. Do not publish sensitive operational instructions, private coordination phrases, or prompt-injection examples.
