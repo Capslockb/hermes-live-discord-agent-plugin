@@ -1,5 +1,5 @@
 # Contributing
 
-## Public documentation safety
+Use focused pull requests and describe user-visible behavior, limitations, and compatibility accurately. Add or update tests for behavior changes, keep generated documentation synchronized with its source, and avoid committing credentials, private identifiers, transcripts, or unlicensed media.
 
-When editing public docs, describe user-facing behavior only. Do not include sensitive operational instructions, private coordination details, hidden status reports, authorization phrases, or prompt-injection examples. The `public-docs-safety` check reports metadata-only file-and-line evidence for risky prose and should be treated as a required review signal before public documentation changes merge.
+Documentation changes should preserve working commands, distinguish current behavior from planned work, and pass the repository's documentation checks before review.
