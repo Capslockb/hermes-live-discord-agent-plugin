@@ -20,7 +20,7 @@ import re
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -165,31 +165,25 @@ def _default_profile_yaml(discord_id: str) -> Dict[str, Any]:
     now = int(time.time())
     return {
         "discord_id": discord_id,
-        "display_name": None,            # filled in later via Discord API if available
-        "honcho_peer_name": f"discord-{discord_id}",   # isolated per-user
-        "voice_name": os.getenv("DISCORD_VOICE_LIVE_VOICE", "Kore"),  # per-user voice override; defaults to the live bridge voice
-        "enabled_tools": list(DEFAULT_ENABLED_TOOL_PREFIXES),  # safe starter set
-        "disabled_tools": list(NEVER_AUTO_ENABLED),             # never-on floor
-        "system_prompt_overrides": "",   # appended to BASE_SYSTEM_PROMPT
+        "display_name": None,
+        "honcho_peer_name": f"discord-{discord_id}",
+        "voice_name": os.getenv("DISCORD_VOICE_LIVE_VOICE", "Kore"),
+        "enabled_tools": list(DEFAULT_ENABLED_TOOL_PREFIXES),
+        "disabled_tools": list(NEVER_AUTO_ENABLED),
+        "system_prompt_overrides": "",
         "default_workdir": str(Path.home()),
         "notes_dir": str(VOICE_USERS_DIR / discord_id / "notes"),
         "opencode_tmux_session": f"opencode-voice-{discord_id}",
         "created_at": now,
         "last_seen_at": now,
-        "is_owner": False,                # owner-only tools gated on this
-        # #32: New-user onboarding Q&A
-        # When a brand-new user first joins the bridge, the plugin's
-        # voice_live handler detects onboarding_completed=False and
-        # runs an interactive Q&A flow to learn about the user. Answers
-        # are stored here and get loaded into Honcho + the system prompt
-        # so subsequent calls feel personal.
+        "is_owner": False,
         "onboarding_completed": False,
-        "onboarding_answers": {},        # {question_id: answer}
+        "onboarding_answers": {},
         "onboarding_completed_at": None,
-        "interests": [],                  # populated by Q&A; used for #30 repo recs
-        "timezone": "",                   # populated by Q&A
-        "communication_style": "",        # populated by Q&A (#28)
-        "pet_peeves": "",                  # populated by Q&A
+        "interests": [],
+        "timezone": "",
+        "communication_style": "",
+        "pet_peeves": "",
     }
 
 
@@ -214,6 +208,46 @@ def _read_yaml(path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _effective_access(
+    data: Dict[str, Any],
+    discord_id: str,
+    owner_id: str,
+    *,
+    force_owner: bool = False,
+) -> Tuple[bool, List[str], List[str]]:
+    """Derive current authorization without trusting persisted owner state.
+
+    Profile files retain historical fields, but effective owner status and the
+    owner-only tool set are recomputed from current explicit configuration on
+    every load. Missing, malformed, or non-matching owner configuration fails
+    closed even when an older profile contains owner-era values.
+    """
+    effective_is_owner = bool(
+        force_owner or (owner_id != "anonymous" and discord_id == owner_id)
+    )
+    enabled_tools = list(data.get("enabled_tools", []))
+    disabled_tools = list(data.get("disabled_tools", []))
+
+    if effective_is_owner:
+        for tool_name in NEVER_AUTO_ENABLED:
+            if tool_name not in enabled_tools:
+                enabled_tools.append(tool_name)
+        disabled_tools = [
+            tool_name for tool_name in disabled_tools
+            if tool_name not in NEVER_AUTO_ENABLED
+        ]
+    else:
+        enabled_tools = [
+            tool_name for tool_name in enabled_tools
+            if tool_name not in NEVER_AUTO_ENABLED
+        ]
+        for tool_name in NEVER_AUTO_ENABLED:
+            if tool_name not in disabled_tools:
+                disabled_tools.append(tool_name)
+
+    return effective_is_owner, enabled_tools, disabled_tools
+
+
 @dataclass
 class UserProfile:
     """Immutable snapshot of a Discord user's voice-bridge configuration."""
@@ -230,7 +264,6 @@ class UserProfile:
     is_owner: bool = False
     created_at: int = 0
     last_seen_at: int = 0
-    # #32: Onboarding Q&A state
     onboarding_completed: bool = False
     onboarding_answers: Dict[str, str] = field(default_factory=dict)
     onboarding_completed_at: Optional[int] = None
@@ -244,13 +277,7 @@ class UserProfile:
         return not self.onboarding_completed
 
     def is_tool_allowed(self, tool_name: str) -> bool:
-        """Check whether this user is allowed to invoke a given tool.
-
-        A tool is allowed if:
-          - It passes vocabulary check (known or "all" enabled)
-          - AND not in self.disabled_tools
-          - AND (self.enabled_tools contains a matching prefix / exact name / "all")
-        """
+        """Check whether this user is allowed to invoke a given tool."""
         if KNOWN_TOOL_NAMES and tool_name not in KNOWN_TOOL_NAMES and "all" not in self.enabled_tools:
             return False
         if tool_name in self.disabled_tools:
@@ -262,7 +289,6 @@ class UserProfile:
                 return True
             if entry == tool_name:
                 return True
-            # Prefix match: "spotify" matches "spotify_play", "local_" matches "local_weather"
             stripped = entry.rstrip("_")
             if tool_name == stripped or tool_name.startswith(stripped + "_"):
                 return True
@@ -302,12 +328,7 @@ def _update_index(discord_id: str) -> None:
 
 
 def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> UserProfile:
-    """Load a profile from disk, or create a new one with safe defaults.
-
-    The OWNER discord ID is read from VOICE_OWNER_DISCORD_ID. If that variable
-    is unset or empty, no account matches owner and owner-only capabilities are
-    not granted (fail-closed).
-    """
+    """Load a profile and derive current owner authorization fail-closed."""
     discord_id = _safe_discord_id(discord_id)
     owner_id = _safe_discord_id(os.getenv("VOICE_OWNER_DISCORD_ID", ""))
     path = VOICE_USERS_DIR / f"{discord_id}.yaml"
@@ -316,27 +337,20 @@ def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> User
     if not data:
         data = _default_profile_yaml(discord_id)
         is_new = True
-    # Owner gets the full toolset only when a valid, explicitly configured
-    # owner ID is present AND it matches the requesting user. An unset or
-    # non-numeric owner ID resolves to "anonymous" and matches nothing.
-    if force_owner or (owner_id != "anonymous" and discord_id == owner_id):
-        data["is_owner"] = True
-        # Owner gets the full toolset: ensure all never-auto-enabled tools
-        # are removed from disabled_tools AND added to enabled_tools.
-        for t in NEVER_AUTO_ENABLED:
-            data["disabled_tools"] = [x for x in data.get("disabled_tools", []) if x != t]
-        existing_enabled = list(data.get("enabled_tools", []))
-        for t in NEVER_AUTO_ENABLED:
-            if t not in existing_enabled:
-                existing_enabled.append(t)
-        data["enabled_tools"] = existing_enabled
+
+    effective_is_owner, effective_enabled, effective_disabled = _effective_access(
+        data,
+        discord_id,
+        owner_id,
+        force_owner=force_owner,
+    )
+
     if is_new:
         try:
             _atomic_write_yaml(path, data)
         except Exception as exc:
             logger.warning("Could not persist new profile %s: %s", path, exc)
     else:
-        # Update last_seen_at without rewriting the whole file
         data["last_seen_at"] = int(time.time())
         try:
             _atomic_write_yaml(path, data)
@@ -346,18 +360,17 @@ def get_or_create_profile(discord_id: str, *, force_owner: bool = False) -> User
     return UserProfile(
         discord_id=str(data.get("discord_id", discord_id)),
         honcho_peer_name=str(data.get("honcho_peer_name", f"discord-{discord_id}")),
-        enabled_tools=list(data.get("enabled_tools", [])),
-        disabled_tools=list(data.get("disabled_tools", [])),
+        enabled_tools=effective_enabled,
+        disabled_tools=effective_disabled,
         display_name=data.get("display_name"),
         voice_name=data.get("voice_name"),
         system_prompt_overrides=str(data.get("system_prompt_overrides", "")),
         default_workdir=str(data.get("default_workdir", str(Path.home()))),
         notes_dir=str(data.get("notes_dir", str(VOICE_USERS_DIR / discord_id / "notes"))),
         opencode_tmux_session=str(data.get("opencode_tmux_session", f"opencode-voice-{discord_id}")),
-        is_owner=bool(data.get("is_owner", False)),
+        is_owner=effective_is_owner,
         created_at=int(data.get("created_at", 0)),
         last_seen_at=int(data.get("last_seen_at", 0)),
-        # #32: Onboarding
         onboarding_completed=bool(data.get("onboarding_completed", False)),
         onboarding_answers=dict(data.get("onboarding_answers") or {}),
         onboarding_completed_at=data.get("onboarding_completed_at"),
@@ -380,21 +393,28 @@ def update_profile(discord_id: str, updates: Dict[str, Any]) -> UserProfile:
 
 
 def list_profiles() -> List[Dict[str, Any]]:
-    """Enumerate all known profiles (most recently seen first)."""
+    """Enumerate profiles with current effective authorization."""
     out: List[Dict[str, Any]] = []
     if not VOICE_USERS_DIR.exists():
         return out
+    owner_id = _safe_discord_id(os.getenv("VOICE_OWNER_DISCORD_ID", ""))
     for p in VOICE_USERS_DIR.glob("*.yaml"):
         try:
             data = _read_yaml(p) or {}
+            discord_id = _safe_discord_id(str(data.get("discord_id", p.stem)))
+            effective_is_owner, effective_enabled, _ = _effective_access(
+                data,
+                discord_id,
+                owner_id,
+            )
             out.append({
                 "discord_id": data.get("discord_id", p.stem),
                 "display_name": data.get("display_name"),
-                "is_owner": bool(data.get("is_owner", False)),
+                "is_owner": effective_is_owner,
                 "honcho_peer_name": data.get("honcho_peer_name"),
                 "last_seen_at": data.get("last_seen_at", 0),
                 "created_at": data.get("created_at", 0),
-                "enabled_tools": data.get("enabled_tools", []),
+                "enabled_tools": effective_enabled,
             })
         except Exception:
             continue
