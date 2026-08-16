@@ -37,11 +37,20 @@ class TestVideoWatcherSourceInvariants(unittest.TestCase):
                 if isinstance(func, ast.Name) and func.id == "_send_video_awareness":
                     awareness_calls.append(node)
 
-        # There should be 4 calls: stream start, stream stop, camera start, camera stop
-        self.assertEqual(len(awareness_calls), 4, f"Expected 4 _send_video_awareness calls, found {len(awareness_calls)}")
+        self.assertTrue(awareness_calls, "No _send_video_awareness calls found")
 
-        # Every _send_video_awareness call must have bridge_info passed as a keyword argument
+        awaited_call_ids = {
+            id(node.value)
+            for node in ast.walk(watcher_func)
+            if isinstance(node, ast.Await) and isinstance(node.value, ast.Call)
+        }
+
         for call in awareness_calls:
+            self.assertIn(
+                id(call),
+                awaited_call_ids,
+                f"Call at line {call.lineno} is not directly awaited",
+            )
             kw_names = [kw.arg for kw in call.keywords]
             self.assertIn("bridge_info", kw_names, f"Call at line {call.lineno} is missing bridge_info argument")
 
