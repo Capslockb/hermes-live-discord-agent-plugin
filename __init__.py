@@ -1038,7 +1038,7 @@ async def _video_state_watcher(guild_id: int) -> None:
                 # User enabled camera. Same constraint as screen share —
                 # Discord bots do NOT receive the video stream. This is
                 # an awareness ping, not a video feed.
-                _send_video_awareness(
+                await _send_video_awareness(
                     bridge_mod,
                     f"[SYSTEM EVENT] {member.display_name} turned on their camera. "
                     f"Note: I cannot see Discord camera streams automatically. "
@@ -1047,9 +1047,10 @@ async def _video_state_watcher(guild_id: int) -> None:
                     f"video-frame-feeder.py on a machine with a real camera/display "
                     f"and point it at the bridge.",
                     event_type="video_state",
+                    bridge_info=bridge_info,
                 )
             elif not current["video"] and previous["video"]:
-                _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} turned off their camera. Video feed ended.", event_type="video_ended")
+                await _send_video_awareness(bridge_mod, f"[SYSTEM EVENT] {member.display_name} turned off their camera. Video feed ended.", event_type="video_ended", bridge_info=bridge_info)
 
             last_states[mid] = current
 
